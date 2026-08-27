@@ -1,0 +1,222 @@
+<?php
+
+namespace App\Http\Controllers\Webmcp;
+
+use App\Domain\Domain;
+use App\Http\Controllers\Controller;
+use App\Models\Project;
+use App\Models\Proposal;
+use App\Services\ProposalApplicator;
+use App\Services\ProposalService;
+use App\Services\ToolCallAuditService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
+
+class ProposalController extends Controller
+{
+    public function __construct(
+        private readonly ProposalService $proposals,
+        private readonly ProposalApplicator $applicator,
+        private readonly ToolCallAuditService $audit,
+    ) {}
+
+    /**
+     * propose_cull — creates a cull proposal with items.
+     * MUST NOT change actual photographer selections.
+     */
+    public function proposeCull(Request $request, Project $project): JsonResponse
+    {
+        return $this->createProposal($request, $project, Domain::TYPE_CULL);
+    }
+
+    /**
+     * propose_retouch_plan — creates a proposal only. Does NOT apply edits.
+     */
+    public function proposeRetouchPlan(Request $request, Project $project): JsonResponse
+    {
+        return $this->createProposal($request, $project, Domain::TYPE_RETOUCH);
+    }
+
+    /**
+     * Shared creation path for PROPOSE tools.
+     */
+    private function createProposal(Request $request, Project $project, string $type): JsonResponse
+    {
+        $this->assertCanPropose($request, $project);
+        $itemRules = $this->itemRulesFor($type);
+
+        $validated = $request->validate([
+            'summary' => ['nullable', 'string', 'max:2000'],
+            'items' => ['required', 'array', 'min:1', 'max:500'],
+            'items.*.photo_id' => ['sometimes', 'integer', 'exists:photos,id'],
+            'items.*.action' => ['required', 'string', 'max:64'],
+            'items.*.rationale' => ['sometimes', 'string', 'max:2000'],
+            'items.*.params' => ['sometimes', 'array'],
+        ]);
+
+        // Cross-check every referenced photo belongs to this project.
+        $photoIds = collect($validated['items'])->pluck('photo_id')->filter();
+        $projectPhotos = $project->photos()->whereIn('id', $photoIds)->pluck('id');
+        $foreign = $photoIds->diff($projectPhotos);
+        if ($foreign->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'items.*.photo_id' => 'Photo(s) do not belong to this project: '.$foreign->implode(', '),
+            ]);
+        }
+
+        try {
+            $proposal = $this->proposals->createProposal(
+                $project,
+                $request->user(),
+                $type,
+                collect($validated['items'])->map(fn ($item) => array_merge([
+                    'kind' => $type === Domain::TYPE_CULL ? 'selection' : 'retouch_operation',
+                ], $item))->all(),
+                $validated['summary'] ?? null,
+                ['created_via' => 'webmcp', 'tool' => $type === Domain::TYPE_CULL ? 'propose_cull' : 'propose_retouch_plan'],
+            );
+        } catch (\Throwable $e) {
+            $this->audit->record(
+                $request,
+                $project,
+                $request->user(),
+                $type === Domain::TYPE_CULL ? 'propose_cull' : 'propose_retouch_plan',
+                Domain::AUTHORITY_PROPOSE,
+                $validated,
+                ['error' => $e->getMessage()],
+                Domain::RESULT_ERROR,
+            );
+
+            return response()->json(['error' => 'Proposal creation failed.'], 422);
+        }
+
+        $this->audit->record(
+            $request,
+            $project,
+            $request->user(),
+            $type === Domain::TYPE_CULL ? 'propose_cull' : 'propose_retouch_plan',
+            Domain::AUTHORITY_PROPOSE,
+            $validated,
+            ['proposal_id' => $proposal->id, 'type' => $proposal->type, 'status' => $proposal->status],
+        );
+
+        return response()->json($this->proposalPayload($proposal), 201);
+    }
+
+    /**
+     * apply_approved_plan — the ONLY execution tool.
+     *
+     * The browser only registers it while the project holds an eligible
+     * approved proposal, but eligibility is re-verified here under a row
+     * lock — the server is the authority, the browser is convenience.
+     */
+    public function execute(Request $request, Project $project, Proposal $proposal): JsonResponse
+    {
+        $this->assertCanExecute($request, $project, $proposal);
+        $start = hrtime(true);
+
+        try {
+            $executed = $this->proposals->execute($proposal, $request->user(), function (Proposal $p) {
+                $this->applicator->apply($p);
+            });
+        } catch (\LogicException $e) {
+            $this->audit->record(
+                $request,
+                $project,
+                $request->user(),
+                'apply_approved_plan',
+                Domain::AUTHORITY_EXECUTE,
+                ['proposal_id' => $proposal->id],
+                ['error' => $e->getMessage()],
+                Domain::RESULT_DENIED,
+            );
+
+            return response()->json(['error' => $e->getMessage()], 409);
+        }
+
+        $this->audit->record(
+            $request,
+            $project,
+            $request->user(),
+            'apply_approved_plan',
+            Domain::AUTHORITY_EXECUTE,
+            ['proposal_id' => $proposal->id],
+            ['status' => Domain::STATE_EXECUTED, 'items' => $executed->items->count()],
+            Domain::RESULT_COMPLETED,
+            (hrtime(true) - $start) / 1e6,
+        );
+
+        return response()->json($this->proposalPayload($executed));
+    }
+
+    /* ---------------------------------- helpers ---------------------------------- */
+
+    private function assertCanPropose(Request $request, Project $project): void
+    {
+        if (! $project->members()->where('user_id', $request->user()->id)->exists()) {
+            abort(403, 'Not a member of this project.');
+        }
+    }
+
+    private function assertCanExecute(Request $request, Project $project, Proposal $proposal): void
+    {
+        if ($proposal->project_id !== $project->id) {
+            abort(404, 'Proposal does not belong to this project.');
+        }
+
+        $member = $project->members()->where('user_id', $request->user()->id)->first();
+        if (! $member) {
+            $this->audit->record(
+                $request,
+                $project,
+                $request->user(),
+                'apply_approved_plan',
+                Domain::AUTHORITY_EXECUTE,
+                ['proposal_id' => $proposal->id],
+                ['error' => 'caller not a project member'],
+                Domain::RESULT_DENIED,
+            );
+            abort(403, 'Not a member of this project.');
+        }
+
+        if ($member->pivot->role === Domain::ROLE_VIEWER) {
+            abort(403, 'Viewer role cannot execute proposals.');
+        }
+    }
+
+    private function itemRulesFor(string $type): array
+    {
+        // item-level params are validated per action in the applicator; here
+        // we enforce the shape only (additionalProperties enforcement is a
+        // browser-side JSON Schema concern for WebMCP).
+        return [];
+    }
+
+    private function proposalPayload(Proposal $proposal): array
+    {
+        return [
+            'proposal' => [
+                'id' => $proposal->id,
+                'project_id' => $proposal->project_id,
+                'type' => $proposal->type,
+                'status' => $proposal->status,
+                'summary' => $proposal->summary,
+                'created_by' => $proposal->created_by,
+                'created_at' => $proposal->created_at?->toISOString(),
+                'reviewed_at' => $proposal->reviewed_at?->toISOString(),
+                'executed_at' => $proposal->executed_at?->toISOString(),
+                'items' => $proposal->items->map(fn ($item) => [
+                    'id' => $item->id,
+                    'photo_id' => $item->photo_id,
+                    'kind' => $item->kind,
+                    'action' => $item->action,
+                    'rationale' => $item->rationale,
+                    'params' => $item->params,
+                    'status' => $item->status,
+                ])->values(),
+            ],
+        ];
+    }
+}
