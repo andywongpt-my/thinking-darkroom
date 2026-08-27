@@ -40,3 +40,5 @@ Thumbs.db
 
 # E2E-only environment override (localhost:8091)
 .env.e2e
+# Local operational scripts (contain local DB credentials — never publish)
+/scripts/

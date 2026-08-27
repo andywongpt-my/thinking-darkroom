@@ -63,7 +63,7 @@ function removeDocument() {
 }
 
 describe('WebmcpRegistry lifecycle', () => {
-    const BASE = [
+    const SPRINT_1 = [
         'get_workspace_context',
         'list_project_photos',
         'inspect_photo',
@@ -72,7 +72,9 @@ describe('WebmcpRegistry lifecycle', () => {
         'propose_cull',
         'propose_retouch_plan',
         'run_consistency_review',
-        // Sprint 2 — Creative Room
+    ];
+
+    const SPRINT_2 = [
         'get_brainstorm_context',
         'get_creative_direction',
         'list_concepts',
@@ -83,7 +85,16 @@ describe('WebmcpRegistry lifecycle', () => {
         'propose_creative_brief',
     ];
 
-    /** Sprint 2 tools must never include any human-final authority tool. */
+    const SPRINT_3 = [
+        'get_photo_analysis',
+        'get_culling_context',
+        'analyze_project_photos',
+    ];
+
+    // Certified Sprint 3 inventory: 8 static + 8 static + 3 static = 19.
+    const BASE = [...SPRINT_1, ...SPRINT_2, ...SPRINT_3];
+
+    /** No tool may exercise final human authority (culling or creative). */
     const FORBIDDEN = [
         'adopt_creative_direction',
         'approve_concept',
@@ -91,6 +102,13 @@ describe('WebmcpRegistry lifecycle', () => {
         'set_final_creative_direction',
         'bypass_review',
         'force_adoption',
+        // Sprint 3 — culling finalization is HUMAN authority.
+        'finalize_cull',
+        'approve_own_cull',
+        'force_selection',
+        'delete_rejected_photos',
+        'delete_original',
+        'photographer_culling_decide',
     ];
 
     beforeEach(() => {
@@ -137,6 +155,13 @@ describe('WebmcpRegistry lifecycle', () => {
             expect(fake.tool(proposeTool)?.annotations?.readOnlyHint).toBe(false);
         }
         expect(fake.tool('apply_approved_plan')).toBeUndefined();
+
+        // Sprint 3 — culling annotations. get_photo_analysis / get_culling_context
+        // are genuinely read-only; analyze_project_photos persists observations.
+        for (const readTool of ['get_photo_analysis', 'get_culling_context']) {
+            expect(fake.tool(readTool)?.annotations?.readOnlyHint).toBe(true);
+        }
+        expect(fake.tool('analyze_project_photos')?.annotations?.readOnlyHint).toBe(false);
 
         // Sprint 2 — Creative Room annotations.
         for (const readTool of [
@@ -280,6 +305,22 @@ describe('WebmcpRegistry lifecycle', () => {
         };
         expect(res.ok).toBe(false);
         expect(res.error).toBeTruthy();
+    });
+
+    it('registers Sprint 3 culling tools with correct authority labels', () => {
+        const r = new WebmcpRegistry(1);
+        const snap = r.begin();
+
+        const byName = new Map(snap.registered.map((t) => [t.name, t]));
+        expect(byName.get('get_photo_analysis')?.authority).toBe('READ');
+        expect(byName.get('get_culling_context')?.authority).toBe('READ');
+        expect(byName.get('analyze_project_photos')?.authority).toBe('ANALYZE');
+
+        // Sprint 1/2 PROPOSE tools keep their label; nothing else claims ANALYZE.
+        expect(byName.get('propose_cull')?.authority).toBe('PROPOSE');
+        expect(byName.get('propose_concepts')?.authority).toBe('PROPOSE');
+        const analyze = snap.registered.filter((t) => t.authority === 'ANALYZE');
+        expect(analyze.map((t) => t.name)).toEqual(['analyze_project_photos']);
     });
 
     it('feature detection prefers document.modelContext and ignores deprecated navigator.modelContext', () => {

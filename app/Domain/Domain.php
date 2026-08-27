@@ -63,14 +63,36 @@ final class Domain
 
     /* ---------------------------- creative authority ---------------------------- */
 
-    /** Agent may act autonomously. */
+    /**
+     * The Sprint 3 authority model — five levels, one direction of power:
+     *
+     *   READ     inspect existing state
+     *   ANALYZE  derive + persist NON-FINAL observations (never selections)
+     *   PROPOSE  recommend creative decisions (proposal rows only)
+     *   EXECUTE  execute an already human-approved action
+     *   HUMAN    final creative authority (never a WebMCP tool)
+     *
+     * The agent may analyze and propose autonomously; it may execute only
+     * what the photographer approved; it may NEVER finalize culling.
+     */
     public const AUTHORITY_READ = 'READ';
+
+    /** Agent may derive + persist non-final observations (photo_observations). */
+    public const AUTHORITY_ANALYZE = 'ANALYZE';
 
     /** Agent may create a proposal but not make the final creative change. */
     public const AUTHORITY_PROPOSE = 'PROPOSE';
 
     /** Execution tool available only after photographer approval. */
     public const AUTHORITY_EXECUTE = 'EXECUTE';
+
+    /** Authority levels an agent tool may carry (HUMAN is deliberately absent). */
+    public const AGENT_AUTHORITIES = [
+        self::AUTHORITY_READ,
+        self::AUTHORITY_ANALYZE,
+        self::AUTHORITY_PROPOSE,
+        self::AUTHORITY_EXECUTE,
+    ];
 
     /* --------------------------- sprint 2: concepts --------------------------- */
 
@@ -117,6 +139,44 @@ final class Domain
     public const SELECTION_SELECTED = 'selected';
 
     public const SELECTION_CULLED = 'culled';
+
+    /* --------------------------- sprint 3: culling ---------------------------- */
+
+    /** Recommendation: keep — no reservations, serves the adopted intent well. */
+    public const CULL_RECOMMEND_KEEP = 'keep';
+
+    /** Recommendation: strong keep — both technical and creative align strongly. */
+    public const CULL_RECOMMEND_STRONG_KEEP = 'strong_keep';
+
+    /** Recommendation: review — the photographer should look at this one. */
+    public const CULL_RECOMMEND_REVIEW = 'review';
+
+    /** Recommendation: reject candidate — argue for culling, photographer decides. */
+    public const CULL_RECOMMEND_REJECT_CANDIDATE = 'reject_candidate';
+
+    /** Ordered vocabulary of culling recommendations (never final states). */
+    public const CULL_RECOMMENDATIONS = [
+        self::CULL_RECOMMEND_STRONG_KEEP,
+        self::CULL_RECOMMEND_KEEP,
+        self::CULL_RECOMMEND_REVIEW,
+        self::CULL_RECOMMEND_REJECT_CANDIDATE,
+    ];
+
+    /** Human culling decisions on a photo (photographer authority, always). */
+    public const CULLING_DECISIONS = ['keep', 'review', 'reject'];
+
+    /** photo_observations provenance values (honest analysis attribution). */
+    public const OBSERVATION_PROVIDER_DEMO = 'demo_pixel_stats';
+
+    public const OBSERVATION_PROVIDER_FIXTURE = 'fixture_synthetic';
+
+    public const OBSERVATION_PROVIDER_VLM = 'vlm_provider';
+
+    public const OBSERVATION_PROVENANCES = [
+        self::OBSERVATION_PROVIDER_DEMO => 'deterministic_on_device_pixel_analysis',
+        self::OBSERVATION_PROVIDER_FIXTURE => 'synthetic_test_fixture',
+        self::OBSERVATION_PROVIDER_VLM => 'external_vision_model',
+    ];
 
     /* ------------------------------ retouch states ------------------------------ */
 

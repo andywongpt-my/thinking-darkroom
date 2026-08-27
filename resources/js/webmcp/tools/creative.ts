@@ -14,6 +14,7 @@
 import type { ModelContextTool } from '../tool-types';
 import { webmcpApi } from '../api';
 import type { ConceptInput } from '../api';
+import { emitToolActivity } from '../events';
 
 const MAX_CONCEPTS = 3;
 
@@ -149,11 +150,16 @@ export const creativeProposeTools = (projectId: number): ModelContextTool[] => [
         annotations: { readOnlyHint: false },
         execute: (args) => {
             const concepts = (args.concepts as Record<string, unknown>[]).slice(0, MAX_CONCEPTS);
-            return webmcpApi.proposeConcepts(
+            const result = webmcpApi.proposeConcepts(
                 projectId,
                 concepts.map((c) => conceptInputFrom(c)),
                 typeof args.brainstormSessionId === 'number' ? args.brainstormSessionId : undefined,
             );
+            // Notify the hosting page so new concept cards appear without a
+            // manual refresh (covers BOTH the in-page registry and a real
+            // WebMCP host — both call this executor).
+            result.then((r) => emitToolActivity('propose_concepts', r.ok));
+            return result;
         },
     },
     {
@@ -177,13 +183,16 @@ export const creativeProposeTools = (projectId: number): ModelContextTool[] => [
             required: ['conceptId', 'title', 'content'],
         },
         annotations: { readOnlyHint: false },
-        execute: (args) =>
-            webmcpApi.proposeConceptRevision(projectId, Number(args.conceptId), {
+        execute: (args) => {
+            const result = webmcpApi.proposeConceptRevision(projectId, Number(args.conceptId), {
                 title: String(args.title),
                 summary: typeof args.summary === 'string' ? args.summary : undefined,
                 content: (args.content ?? {}) as Record<string, unknown>,
                 items: args.items as ConceptInput['items'],
-            }),
+            });
+            result.then((r) => emitToolActivity('propose_concept_revision', r.ok));
+            return result;
+        },
     },
     {
         name: 'propose_concept_merge',
@@ -220,12 +229,14 @@ export const creativeProposeTools = (projectId: number): ModelContextTool[] => [
                 concept_id: Number(s.conceptId),
                 ...(s.note !== undefined ? { note: s.note } : {}),
             }));
-            return webmcpApi.proposeConceptMerge(projectId, sources, {
+            const result = webmcpApi.proposeConceptMerge(projectId, sources, {
                 title: String(args.title),
                 summary: typeof args.summary === 'string' ? args.summary : undefined,
                 content: (args.content ?? {}) as Record<string, unknown>,
                 items: args.items as ConceptInput['items'],
             });
+            result.then((r) => emitToolActivity('propose_concept_merge', r.ok));
+            return result;
         },
     },
     {

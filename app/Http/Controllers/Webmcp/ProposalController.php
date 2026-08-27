@@ -6,6 +6,7 @@ use App\Domain\Domain;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\Proposal;
+use App\Services\Culling\ContextAwareCullingService;
 use App\Services\ProposalApplicator;
 use App\Services\ProposalService;
 use App\Services\ToolCallAuditService;
@@ -20,11 +21,19 @@ class ProposalController extends Controller
         private readonly ProposalService $proposals,
         private readonly ProposalApplicator $applicator,
         private readonly ToolCallAuditService $audit,
+        private readonly ContextAwareCullingService $culling,
     ) {}
 
     /**
      * propose_cull — creates a cull proposal with items.
      * MUST NOT change actual photographer selections.
+     *
+     * Sprint 3: context-aware. Each item may be enriched from the photo's
+     * CURRENT observation + the adopted structured Creative Brief via
+     * ContextAwareCullingService, so proposal_items carry the full decision
+     * evidence (recommendation, confidence, technical + creative fit,
+     * rationale, influenced_by, similarity group). The photographer still
+     * makes every final call — this endpoint only ever PROPOSES.
      */
     public function proposeCull(Request $request, Project $project): JsonResponse
     {
@@ -66,14 +75,54 @@ class ProposalController extends Controller
             ]);
         }
 
+        $items = collect($validated['items'])->map(function ($item) use ($type, $project) {
+            $merged = array_merge([
+                'kind' => $type === Domain::TYPE_CULL ? 'selection' : 'retouch_operation',
+            ], $item);
+
+            // Sprint 3 — context-aware enrichment for cull items: attach the
+            // structured recommendation evidence to the item's params so the
+            // photographer sees WHY, and the audit trail records WHAT moved it.
+            if ($type === Domain::TYPE_CULL && isset($item['photo_id'])) {
+                $photo = $project->photos()->where('photos.id', $item['photo_id'])->first();
+                if ($photo !== null) {
+                    $observation = $this->culling->observationFor($photo)
+                        ?? $this->observeSingle($project, $photo);
+                    if ($observation !== null) {
+                        $direction = app(\App\Services\CreativeRoomService::class)
+                            ->structuredIntentFor($project);
+                        $recommendation = $this->culling->recommend(
+                            $observation,
+                            $direction['intent'] ?? null,
+                        );
+                        $merged['params'] = array_merge($merged['params'] ?? [], [
+                            'context_aware' => true,
+                            'recommendation' => $recommendation['recommendation'],
+                            'confidence' => $recommendation['confidence'],
+                            'technical_rationale' => $recommendation['technical_rationale'],
+                            'creative_rationale' => $recommendation['creative_rationale'],
+                            'tradeoff' => $recommendation['tradeoff'],
+                            'influenced_by' => $recommendation['influenced_by'],
+                            'similarity_group' => $observation->similarityGroup,
+                            'observation_provenance' => [
+                                'technical' => 'pixel_analysis',
+                                'creative' => 'demo_sidecar_annotation',
+                                'provider' => $observation->provider,
+                            ],
+                        ]);
+                    }
+                }
+            }
+
+            return $merged;
+        })->all();
+
         try {
             $proposal = $this->proposals->createProposal(
                 $project,
                 $request->user(),
                 $type,
-                collect($validated['items'])->map(fn ($item) => array_merge([
-                    'kind' => $type === Domain::TYPE_CULL ? 'selection' : 'retouch_operation',
-                ], $item))->all(),
+                $items,
                 $validated['summary'] ?? null,
                 ['created_via' => 'webmcp', 'tool' => $type === Domain::TYPE_CULL ? 'propose_cull' : 'propose_retouch_plan'],
             );
@@ -103,6 +152,18 @@ class ProposalController extends Controller
         );
 
         return response()->json($this->proposalPayload($proposal), 201);
+    }
+
+    /**
+     * Analyze a single photo on demand (proposal path). Returns null when the
+     * photo cannot be observed; the proposal still goes through without the
+     * context-aware block rather than failing the whole propose.
+     */
+    private function observeSingle(Project $project, $photo)
+    {
+        $this->culling->analyzeProject($project);
+
+        return $this->culling->observationFor($photo);
     }
 
     /**

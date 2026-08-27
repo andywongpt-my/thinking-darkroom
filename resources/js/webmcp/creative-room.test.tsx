@@ -388,6 +388,13 @@ describe('Sprint 2 — WebMCP registry integration (Task 10)', () => {
         'propose_creative_brief',
     ];
 
+    // Sprint 3 — context-aware culling: 2 READ + 1 ANALYZE.
+    const SPRINT_3_TOOLS = [
+        'get_photo_analysis',
+        'get_culling_context',
+        'analyze_project_photos',
+    ];
+
     const FORBIDDEN = [
         'adopt_creative_direction',
         'approve_concept',
@@ -398,6 +405,13 @@ describe('Sprint 2 — WebMCP registry integration (Task 10)', () => {
         'reject_as_photographer',
         'force_adoption',
         'bypass_review',
+        // Sprint 3 — culling finalization is HUMAN authority, never a tool.
+        'finalize_cull',
+        'approve_own_cull',
+        'force_selection',
+        'delete_rejected_photos',
+        'delete_original',
+        'photographer_culling_decide',
     ];
 
     beforeEach(() => {
@@ -438,13 +452,13 @@ describe('Sprint 2 — WebMCP registry integration (Task 10)', () => {
         }
     });
 
-    it('11. the normal base registry contains EXACTLY 16 tools', async () => {
+    it('11. the normal base registry contains EXACTLY 19 tools (8 + 8 + 3 Sprint 3 culling)', async () => {
         const { WebmcpRegistry } = await import('@/webmcp/registry');
         const r = new WebmcpRegistry(7);
         const snap = r.begin();
-        expect(snap.registered).toHaveLength(16);
+        expect(snap.registered).toHaveLength(19);
         expect([...snap.registered.map((t) => t.name)].sort()).toEqual(
-            [...SPRINT_1_TOOLS, ...SPRINT_2_TOOLS].sort(),
+            [...SPRINT_1_TOOLS, ...SPRINT_2_TOOLS, ...SPRINT_3_TOOLS].sort(),
         );
     });
 
@@ -473,20 +487,20 @@ describe('Sprint 2 — WebMCP registry integration (Task 10)', () => {
         const { WebmcpRegistry } = await import('@/webmcp/registry');
         const r = new WebmcpRegistry(7);
         const base = r.begin();
-        expect(base.registered).toHaveLength(16);
+        expect(base.registered).toHaveLength(19);
         expect(base.eligibleForExecution).toBe(false);
 
         const approved = r.reconcileEligibleProposal(42);
-        expect(approved.registered).toHaveLength(17);
+        expect(approved.registered).toHaveLength(20);
         expect(approved.registered.map((t) => t.name)).toContain('apply_approved_plan');
         expect(approved.eligibleForExecution).toBe(true);
 
         const executed = r.markExecuted();
-        expect(executed.registered).toHaveLength(16);
+        expect(executed.registered).toHaveLength(19);
         expect(executed.registered.map((t) => t.name)).not.toContain('apply_approved_plan');
     });
 
-    it('14. apply_approved_plan is conditional only and is NOT part of the 16 base tools', async () => {
+    it('14. apply_approved_plan is conditional only and is NOT part of the 19 base tools', async () => {
         const { WebmcpRegistry } = await import('@/webmcp/registry');
         const r = new WebmcpRegistry(7);
         const snap = r.begin();
@@ -495,6 +509,70 @@ describe('Sprint 2 — WebMCP registry integration (Task 10)', () => {
         // Source-level guard: the dynamic tool is never part of baseTools().
         const names = r.registeredNames();
         expect(names.filter((n) => n === 'apply_approved_plan')).toHaveLength(0);
+    });
+});
+
+describe('Sprint 2 UX regression — concept cards auto-update after WebMCP propose', () => {
+    beforeEach(() => {
+        installWebmcp();
+        resetWebmcpDetection();
+        reloadSpy.mockClear();
+        vi.spyOn(console, 'error').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+        removeWebmcp();
+        vi.restoreAllMocks();
+    });
+
+    it('15. a successful propose_concepts tool execution triggers a concept list refresh (no manual reload)', async () => {
+        // The page binds its refreshList through bindConceptAutoRefresh (the
+        // exact production subscription). Drive the REAL event path end to
+        // end: emit what the WebMCP layer emits after a successful
+        // propose_concepts execution → the refresh callback must fire.
+        const apiModule = await import('@/webmcp/api');
+        const pageModule = await import('@/Pages/CreativeRoom');
+        let refreshCalls = 0;
+        const unsubscribe = pageModule.bindConceptAutoRefresh(() => {
+            refreshCalls += 1;
+        });
+
+        const { emitToolActivity } = await import('@/webmcp/events');
+        emitToolActivity('propose_concepts', true);
+        await new Promise((r) => setTimeout(r, 0));
+
+        expect(refreshCalls).toBe(1);
+        unsubscribe();
+        emitToolActivity('propose_concepts', true);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(refreshCalls).toBe(1); // unsubscribed — no further refreshes
+        void apiModule;
+    });
+
+    it('16. a FAILED propose_concepts execution does NOT trigger a refresh', async () => {
+        const apiModule = await import('@/webmcp/api');
+        const listSpy = vi.spyOn(apiModule.webmcpApi, 'listConcepts');
+        mountPage({ concepts: [] as ConceptLike[] });
+
+        const { emitToolActivity } = await import('@/webmcp/events');
+        emitToolActivity('propose_concepts', false);
+        await new Promise((r) => setTimeout(r, 0));
+
+        expect(listSpy).not.toHaveBeenCalled();
+        listSpy.mockRestore();
+    });
+
+    it('17. non-concept tool activity (e.g. propose_cull) does NOT refresh the concept list', async () => {
+        const apiModule = await import('@/webmcp/api');
+        const listSpy = vi.spyOn(apiModule.webmcpApi, 'listConcepts');
+        mountPage({ concepts: [] as ConceptLike[] });
+
+        const { emitToolActivity } = await import('@/webmcp/events');
+        emitToolActivity('propose_cull', true);
+        await new Promise((r) => setTimeout(r, 0));
+
+        expect(listSpy).not.toHaveBeenCalled();
+        listSpy.mockRestore();
     });
 });
 

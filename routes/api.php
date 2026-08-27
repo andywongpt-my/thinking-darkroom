@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Webmcp\BriefController;
 use App\Http\Controllers\Webmcp\CreativeRoomController;
+use App\Http\Controllers\Webmcp\CullingController;
 use App\Http\Controllers\Webmcp\DecisionHistoryController;
 use App\Http\Controllers\Webmcp\PhotoController;
 use App\Http\Controllers\Webmcp\ProposalController;
@@ -16,6 +17,14 @@ Route::middleware(['auth:sanctum', 'webmcp.agent-or-user'])->group(function () {
     Route::get('projects/{project}/photos/{photo}', [PhotoController::class, 'show'])->name('api.webmcp.photos.show');
     Route::get('projects/{project}/brief', [BriefController::class, 'show'])->name('api.webmcp.brief.show');
     Route::get('projects/{project}/decisions', [DecisionHistoryController::class, 'index'])->name('api.webmcp.decisions.index');
+
+    // Sprint 3 — context-aware culling READ tools.
+    Route::get('projects/{project}/culling/photos/{photo}/analysis', [CullingController::class, 'photoAnalysis'])
+        ->name('api.webmcp.culling.photo-analysis');
+    Route::get('projects/{project}/culling/context', [CullingController::class, 'cullingContext'])
+        ->name('api.webmcp.culling.context');
+    Route::post('projects/{project}/culling/analyze', [CullingController::class, 'analyzeProject'])
+        ->name('api.webmcp.culling.analyze');
 
     // Sprint 2 — Creative Room READ tools.
     Route::get('projects/{project}/creative/brainstorm', [CreativeRoomController::class, 'brainstormContext'])->name('api.webmcp.creative.brainstorm');

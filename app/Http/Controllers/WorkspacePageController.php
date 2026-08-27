@@ -131,6 +131,17 @@ class WorkspacePageController extends Controller
             'webmcp' => [
                 'available' => true,
             ],
+            // Sprint 3 — server-rendered context-aware culling state so the
+            // first paint already carries recommendations (no extra fetch).
+            // Same shape as the WebMCP get_culling_context tool response.
+            'initialCulling' => (function () use ($project) {
+                $culling = app(\App\Services\Culling\ContextAwareCullingService::class);
+                $culling->analyzeProject($project);
+                $result = $culling->recommendForProject($project);
+                $result['context'] = $culling->contextSummary($project);
+
+                return $result;
+            })(),
         ]);
     }
 

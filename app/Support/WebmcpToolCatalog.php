@@ -109,6 +109,41 @@ final class WebmcpToolCatalog
                 'description' => 'Returns the photographer decision history and proposal states for the project.',
                 'dynamic' => false,
             ],
+            // Sprint 3 — context-aware culling READ tools.
+            'get_photo_analysis' => [
+                'name' => 'get_photo_analysis',
+                'authority' => Domain::AUTHORITY_READ,
+                'method' => 'GET',
+                'path' => self::routePath('api.webmcp.culling.photo-analysis', [
+                    'project' => self::PROJECT_PLACEHOLDER,
+                    'photo' => self::PHOTO_PLACEHOLDER,
+                ]),
+                'read_only' => true,
+                'description' => 'Returns one photo\'s structured observation (technical pixel analysis + creative sidecar annotation, each with explicit provenance) and its context-aware recommendation. READ only — observations never change selections.',
+                'dynamic' => false,
+            ],
+            'get_culling_context' => [
+                'name' => 'get_culling_context',
+                'authority' => Domain::AUTHORITY_READ,
+                'method' => 'GET',
+                'path' => self::routePath('api.webmcp.culling.context', [
+                    'project' => self::PROJECT_PLACEHOLDER,
+                ]),
+                'read_only' => true,
+                'description' => 'Returns the project-wide culling picture: adopted creative intent, per-photo observations, recommendations with rationale/influenced_by, and similarity groups. READ only.',
+                'dynamic' => false,
+            ],
+            'analyze_project_photos' => [
+                'name' => 'analyze_project_photos',
+                'authority' => Domain::AUTHORITY_ANALYZE,
+                'method' => 'POST',
+                'path' => self::routePath('api.webmcp.culling.analyze', [
+                    'project' => self::PROJECT_PLACEHOLDER,
+                ]),
+                'read_only' => false,
+                'description' => 'Runs the deterministic photo analysis over unobserved photos (idempotent). Persists non-final photo_observations only — never proposals, never selection changes. ANALYZE authority: the agent may analyze autonomously, but observations are evidence, not decisions.',
+                'dynamic' => false,
+            ],
             // Sprint 2 — Creative Room READ tools.
             'get_brainstorm_context' => [
                 'name' => 'get_brainstorm_context',

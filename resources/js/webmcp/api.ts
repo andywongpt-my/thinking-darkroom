@@ -218,6 +218,105 @@ export interface DiagnosticsResponse {
     }[];
 }
 
+/* ----------------------- Sprint 3: context-aware culling ----------------------- */
+
+export interface TechnicalAssessment {
+    assessment: string;
+    confidence: number;
+}
+
+export interface PhotoObservationPayload {
+    photo_id: number;
+    technical: {
+        sharpness: TechnicalAssessment;
+        exposure: TechnicalAssessment;
+        motion_blur: TechnicalAssessment;
+        highlight_clipping: TechnicalAssessment;
+        eyes_open: TechnicalAssessment | null;
+    };
+    creative: {
+        expression: string;
+        candidness: string;
+        environmental_storytelling: string;
+        mood: string[];
+        compositional_fit: string;
+        emotion_strength: string;
+    };
+    provider: string;
+    provenance: string;
+    similarity_group: string | null;
+    technical_provenance: string;
+    creative_provenance: string;
+}
+
+export interface CullingRecommendation {
+    photo_id: number;
+    recommendation: 'strong_keep' | 'keep' | 'review' | 'reject_candidate';
+    confidence: number;
+    technical_rationale: string;
+    creative_rationale: string;
+    tradeoff: string;
+    influenced_by: string[];
+}
+
+export interface CullingRecommendationEntry extends CullingRecommendation {
+    photo: {
+        id: number;
+        filename: string;
+        url: string | null;
+        selection_state: string;
+        original_name: string | null;
+    };
+    similarity_group: string | null;
+    similarity_group_size: number;
+}
+
+export interface CullingContext {
+    project_id: number;
+    has_direction: boolean;
+    provider: string;
+    provenance: string;
+    context: {
+        photos_observed: number;
+        duplicate_groups: { photo_ids: number[]; count: number }[];
+        adopted_concept: string | null;
+        selection_priority: unknown;
+    };
+    recommendations: CullingRecommendationEntry[];
+}
+
+export interface PhotoAnalysisResponse {
+    project_id: number;
+    photo: PhotoSummary;
+    observation: PhotoObservationPayload;
+    recommendation: CullingRecommendation;
+}
+
+export interface AnalyzeProjectResponse {
+    project_id: number;
+    provider: string;
+    newly_analyzed: number;
+    total_observed: number;
+    observations: PhotoObservationPayload[];
+}
+
+export interface PhotographerDecisionPayload {
+    decision: {
+        id: number;
+        project_id: number;
+        photo_id: number;
+        decision: 'keep' | 'review' | 'reject';
+        note: string | null;
+        override: boolean;
+        photographer: { id: number; name: string };
+        decided_at: string | null;
+    };
+    photo: {
+        id: number;
+        selection_state: string;
+    };
+}
+
 /** Synthesised agent result — what the agent (or the UI echoing the agent)
  *  would observe after a tool call. */
 export interface ToolResult<T> {
@@ -248,6 +347,15 @@ const projectApiPaths = {
         projectApiPath(projectId, '/qa/review'),
     executeProposal: (projectId: number, proposalId: number) =>
         projectApiPath(projectId, `/proposals/${proposalId}/execute`),
+    /* Sprint 3: context-aware culling */
+    photoAnalysis: (projectId: number, photoId: number) =>
+        projectApiPath(projectId, `/culling/photos/${photoId}/analysis`),
+    cullingContext: (projectId: number) =>
+        projectApiPath(projectId, '/culling/context'),
+    cullingAnalyze: (projectId: number) =>
+        projectApiPath(projectId, '/culling/analyze'),
+    photographerDecide: (projectId: number, photoId: number) =>
+        `/projects/${projectId}/culling/photos/${photoId}/decide`,
 };
 
 async function get<T>(url: string): Promise<ToolResult<T>> {
@@ -425,6 +533,47 @@ export const webmcpApi = {
         return post<{ project_id: number; brainstorm: { id: number; input: string; status: string; created_at: string } }>(
             `/projects/${projectId}/creative/brainstorm`,
             { input },
+        );
+    },
+
+    /* ----------------------- Sprint 3: context-aware culling ----------------------- */
+
+    getPhotoAnalysis(projectId: number, photoId: number) {
+        return get<PhotoAnalysisResponse>(
+            projectApiPaths.photoAnalysis(projectId, photoId),
+        );
+    },
+
+    getCullingContext(projectId: number) {
+        return get<CullingContext>(projectApiPaths.cullingContext(projectId));
+    },
+
+    analyzeProjectPhotos(projectId: number) {
+        return post<AnalyzeProjectResponse>(
+            projectApiPaths.cullingAnalyze(projectId),
+            {},
+        );
+    },
+
+    /* -------------------- Sprint 3: HUMAN-ONLY UI actions ------------------- */
+    /* Photographer culling decisions/overrides. Deliberately NO WebMCP tool   */
+    /* wrapper — keep/review/reject/override is exclusively a photographer     */
+    /* action exercised through the UI.                                        */
+
+    photographerCullingDecide(
+        projectId: number,
+        photoId: number,
+        decision: 'keep' | 'review' | 'reject',
+        note?: string,
+        override?: boolean,
+    ) {
+        return post<PhotographerDecisionPayload>(
+            projectApiPaths.photographerDecide(projectId, photoId),
+            {
+                decision,
+                ...(note ? { note } : {}),
+                ...(override !== undefined ? { override } : {}),
+            },
         );
     },
 

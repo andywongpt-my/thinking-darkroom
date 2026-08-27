@@ -7,7 +7,7 @@
  */
 
 /** Creative authority levels from the domain model. */
-export type WebmcpAuthority = 'READ' | 'PROPOSE' | 'EXECUTE';
+export type WebmcpAuthority = 'READ' | 'ANALYZE' | 'PROPOSE' | 'EXECUTE';
 
 /** A JSON Schema property definition (subset we emit). */
 export interface JsonSchemaProperty {

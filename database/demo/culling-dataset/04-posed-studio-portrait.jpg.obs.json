@@ -1,0 +1,18 @@
+{
+  "_provenance": {
+    "technical": "pixel_analysis",
+    "creative": "demo_sidecar_annotation",
+    "annotator": "Thinking Darkroom demo \u2014 synthetic, human-authored labels"
+  },
+  "creative": {
+    "expression": "moderate",
+    "candidness": "heavily_posed",
+    "environmental_storytelling": "minimal",
+    "mood": [
+      "formal",
+      "stiff"
+    ],
+    "compositional_fit": "moderate",
+    "emotion_strength": "weak"
+  }
+}

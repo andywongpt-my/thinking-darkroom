@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\CreativeRoomPageController;
 use App\Http\Controllers\CreativeRoomReviewController;
+use App\Http\Controllers\CullingDecisionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PhotographerReviewController;
 use App\Http\Controllers\WorkspacePageController;
@@ -39,6 +40,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('creative.concepts.adopt');
     Route::post('/projects/{project}/creative/brainstorm', [CreativeRoomReviewController::class, 'openBrainstorm'])
         ->name('creative.brainstorm.open');
+
+    // Sprint 3 — HUMAN-ONLY culling decision / override (never WebMCP tools).
+    Route::post('/projects/{project}/culling/photos/{photo}/decide', [CullingDecisionController::class, 'decide'])
+        ->name('culling.photographer-decide');
 
     // WebMCP diagnostics (development panel).
     Route::get('/webmcp-diagnostics/projects/{project}/tools', [WebmcpDiagnosticsController::class, 'tools'])

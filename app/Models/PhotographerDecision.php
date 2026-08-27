@@ -13,6 +13,7 @@ class PhotographerDecision extends Model
     protected $fillable = [
         'project_id',
         'proposal_id',
+        'photo_id',
         'photographer_id',
         'decision',
         'note',
@@ -31,6 +32,11 @@ class PhotographerDecision extends Model
     public function proposal(): BelongsTo
     {
         return $this->belongsTo(Proposal::class);
+    }
+
+    public function photo(): BelongsTo
+    {
+        return $this->belongsTo(Photo::class);
     }
 
     public function photographer(): BelongsTo

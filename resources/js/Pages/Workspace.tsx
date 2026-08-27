@@ -3,7 +3,15 @@ import { Head, router, usePage } from '@inertiajs/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useWebmcpRegistry } from '@/webmcp/use-webmcp';
 import { webmcpApi } from '@/webmcp/api';
-import type { PhotoSummary, ProposalItemPayload, ProposalPayload } from '@/webmcp/api';
+import type {
+    CullingContext,
+    CullingRecommendationEntry,
+    PhotographerDecisionPayload,
+    PhotoAnalysisResponse,
+    PhotoSummary,
+    ProposalItemPayload,
+    ProposalPayload,
+} from '@/webmcp/api';
 
 interface WorkspacePhoto extends PhotoSummary {
     camera_model?: string | null;
@@ -73,6 +81,7 @@ interface PageProps extends Record<string, unknown> {
         user: { id: number; name: string; is_agent: boolean };
     };
     webmcp: { available: boolean };
+    initialCulling?: CullingContext | null;
     flash?: { success?: string };
 }
 
@@ -94,6 +103,7 @@ const STATE_LABEL: Record<string, string> = {
 
 const AUTHORITY_COLOR: Record<string, string> = {
     READ: 'bg-sky-100 text-sky-800',
+    ANALYZE: 'bg-violet-100 text-violet-800',
     PROPOSE: 'bg-amber-100 text-amber-800',
     EXECUTE: 'bg-emerald-100 text-emerald-800',
 };
@@ -110,9 +120,66 @@ function fmtTime(iso: string | null): string {
     return new Date(iso).toLocaleString();
 }
 
-export default function Workspace() {
+/* ---------------- Sprint 3 — context-aware culling constants ---------------- */
+
+/** Recommendation → { label, tone }. Order encodes strength for comparisons. */
+export const RECOMMENDATION_META: Record<
+    string,
+    { label: string; badge: string; rank: number }
+> = {
+    strong_keep: { label: 'STRONG KEEP', badge: 'bg-emerald-600 text-white', rank: 3 },
+    keep: { label: 'KEEP', badge: 'bg-emerald-100 text-emerald-800', rank: 2 },
+    review: { label: 'REVIEW', badge: 'bg-amber-100 text-amber-800', rank: 1 },
+    reject_candidate: { label: 'REJECT CANDIDATE', badge: 'bg-rose-600 text-white', rank: 0 },
+};
+
+export const recommendationRank = (r: string): number => RECOMMENDATION_META[r]?.rank ?? 1;
+
+/** Honest, human presentation of observation provenance (never pixel claims for creative data). */
+export const PROVENANCE_LABEL: Record<string, string> = {
+    pixel_analysis: 'Technical analysis — pixel-derived',
+    demo_sidecar_annotation: 'Creative context — demo annotation',
+};
+
+export const provenanceLabel = (key: string): string =>
+    PROVENANCE_LABEL[key] ?? key;
+
+/** Photographer-facing word for a technical assessment value. */
+export const assessmentText = (a: { assessment: string; confidence: number } | null | undefined): string =>
+    !a ? '—' : a.assessment.replace(/_/g, ' ');
+
+/** "90%" from a 0..1 confidence. */
+export const confidencePct = (c: number): string => `${Math.round(c * 100)}%`;
+
+/**
+ * Splits the tradeoff text around the adopted-brief reference so the WHY
+ * section can bold the brief linkage without hard-coding a photo id.
+ */
+export function tradeoffParts(tradeoff: string | null | undefined): { before: string; brief: string } {
+    const t = tradeoff ?? '';
+    const marker = ' the adopted ';
+    const idx = t.indexOf(marker);
+    if (idx === -1) return { before: t, brief: '' };
+    // before keeps everything up to (but excluding) the marker; the bolded
+    // brief segment starts AT the marker text ("the adopted …") so the two
+    // halves re-join to the original sentence with a single space.
+    return { before: t.slice(0, idx).trimEnd(), brief: t.slice(idx + 1) };
+}
+
+/** Culling decision the photographer may record. */
+export type CullingChoice = 'keep' | 'review' | 'reject';
+
+export default function Workspace({
+    initialCulling: initialCullingProp,
+    initialAnalysis = null,
+}: {
+    /** Server-rendered culling context (avoids a fetch round-trip on load). */
+    initialCulling?: CullingContext | null;
+    /** Server-rendered deep analysis for the initially-selected photo. */
+    initialAnalysis?: PhotoAnalysisResponse | null;
+} = {}) {
     const page = usePage<PageProps>();
-    const { project, brief, photos, proposals, decisions, activity, request, flash } = page.props;
+    const { project, brief, photos, proposals, decisions, activity, request, flash, initialCulling: pageInitialCulling } = page.props;
 
     const isAgent = request.user.is_agent;
 
@@ -138,6 +205,91 @@ export default function Workspace() {
     );
 
     const selected = photos.find((p) => p.id === selectedId) ?? null;
+
+    /* ---------------- Sprint 3 — context-aware culling state ---------------- */
+
+    // Project-wide culling picture (observations + recommendations).
+    // Inertia page props (server-rendered) win; direct component props are
+    // the test seam.
+    const [culling, setCulling] = useState<CullingContext | null>(pageInitialCulling ?? initialCullingProp ?? null);
+    const [cullingLoading, setCullingLoading] = useState((pageInitialCulling ?? initialCullingProp) === null);
+    // Per-photo analysis for the selected frame (deep payload incl. provenance).
+    const [analysis, setAnalysis] = useState<PhotoAnalysisResponse | null>(initialAnalysis);
+    // photographer decisions recorded this session (photo_id → decision payload).
+    const [myDecisions, setMyDecisions] = useState<Record<number, PhotographerDecisionPayload['decision']>>({});
+    const [overrideNote, setOverrideNote] = useState('');
+    const [overrideOpen, setOverrideOpen] = useState(false);
+
+    const recFor = useMemo(() => {
+        const map = new Map<number, CullingRecommendationEntry>();
+        (culling?.recommendations ?? []).forEach((r) => map.set(r.photo.id, r));
+        return map;
+    }, [culling]);
+
+    const selectedRec = selected ? recFor.get(selected.id) ?? null : null;
+
+    // Load the project-wide culling context once per project (and after overrides).
+    const loadCulling = async () => {
+        setCullingLoading(true);
+        try {
+            const res = await webmcpApi.getCullingContext(project.id);
+            if (res.ok && res.data) setCulling(res.data);
+        } finally {
+            setCullingLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        void loadCulling();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [project.id]);
+
+    // Deep per-photo analysis for the selected frame.
+    useEffect(() => {
+        if (!selected) {
+            setAnalysis(null);
+            return;
+        }
+        let live = true;
+        webmcpApi.getPhotoAnalysis(project.id, selected.id).then((res) => {
+            if (!live) return;
+            setAnalysis(res.ok && res.data ? res.data : null);
+        });
+        return () => {
+            live = false;
+        };
+    }, [project.id, selectedId]);
+
+    /**
+     * HUMAN-ONLY photographer decision (never a WebMCP tool). Persists
+     * through photographer_decisions and updates selection_state.
+     */
+    const recordCullingDecision = async (
+        photoId: number,
+        decision: CullingChoice,
+        note?: string,
+        override?: boolean,
+    ): Promise<PhotographerDecisionPayload | null> => {
+        const res = await webmcpApi.photographerCullingDecide(project.id, photoId, decision, note, override);
+        if (res.ok && res.data) {
+            setMyDecisions((d) => ({ ...d, [photoId]: res.data!.decision }));
+            addActivity({
+                tool_name: 'photographer_culling_decide',
+                authority: 'HUMAN',
+                result_status: 'completed',
+                output_summary: {
+                    photo_id: photoId,
+                    decision,
+                    override: res.data.decision.override,
+                    note: res.data.decision.note ?? undefined,
+                },
+            });
+            setNotify({ kind: 'ok', text: `Decision recorded: ${decision.toUpperCase()}${res.data.decision.override ? ' (override)' : ''}.` });
+            return res.data;
+        }
+        setNotify({ kind: 'err', text: `Decision failed: ${res.error}` });
+        return null;
+    };
 
     const refreshState = async () => {
         setBusy('refresh');
@@ -385,7 +537,10 @@ export default function Workspace() {
                             />
                         </div>
                         <div className="grid grid-cols-3 gap-2">
-                            {photos.map((p) => (
+                            {photos.map((p) => {
+                                const rec = recFor.get(p.id);
+                                const recMeta = rec ? RECOMMENDATION_META[rec.recommendation] : null;
+                                return (
                                 <div key={p.id} className="group relative">
                                     <button
                                         onClick={() => setSelectedId(p.id)}
@@ -397,6 +552,21 @@ export default function Workspace() {
                                             <div className="flex aspect-square w-full items-center justify-center bg-gray-200 text-xs text-gray-500">no img</div>
                                         )}
                                     </button>
+                                    {recMeta && (
+                                        <span
+                                            data-testid={`rec-badge-${p.id}`}
+                                            onClick={() => setSelectedId(p.id)}
+                                            role="button"
+                                            tabIndex={0}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' || e.key === ' ') setSelectedId(p.id);
+                                            }}
+                                            className={`absolute left-1 bottom-1 cursor-pointer rounded px-1 text-[9px] font-bold tracking-wide ${recMeta.badge}`}
+                                            title={`Agent recommendation: ${recMeta.label} (${confidencePct(rec?.confidence ?? 0)})`}
+                                        >
+                                            {recMeta.label}
+                                        </span>
+                                    )}
                                     {p.selection_state === 'culled' && (
                                         <span className="absolute left-1 top-1 rounded bg-rose-600 px-1 text-[10px] font-bold text-white">CULL</span>
                                     )}
@@ -409,7 +579,8 @@ export default function Workspace() {
                                         />
                                     </label>
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </section>
 
@@ -444,6 +615,207 @@ export default function Workspace() {
                                     <span>Shutter: <b>{selected.shutter_speed ?? '—'}</b></span>
                                     <span>Focal: <b>{selected.focal_length ?? '—'}</b></span>
                                 </div>
+
+                                {/* ============ Sprint 3 — context-aware culling card ============ */}
+                                {selectedRec && (
+                                    <div
+                                        data-testid="culling-card"
+                                        className="mt-4 rounded-xl border border-gray-200 bg-gray-50/60 p-4"
+                                    >
+                                        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                                            <h4 className="text-sm font-semibold text-gray-800">Context-Aware Culling</h4>
+                                            <div className="flex items-center gap-2">
+                                                <span
+                                                    data-testid="recommendation-badge"
+                                                    className={`rounded-full px-2.5 py-1 text-[11px] font-bold tracking-wide ${RECOMMENDATION_META[selectedRec.recommendation]?.badge ?? 'bg-gray-100 text-gray-600'}`}
+                                                >
+                                                    {RECOMMENDATION_META[selectedRec.recommendation]?.label ?? selectedRec.recommendation}
+                                                </span>
+                                                <span
+                                                    data-testid="recommendation-confidence"
+                                                    className="text-[11px] font-medium text-gray-500"
+                                                    title="Recommendation confidence — never certainty"
+                                                >
+                                                    {confidencePct(selectedRec.confidence)} confidence
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                            {/* TECHNICAL QUALITY */}
+                                            <div data-testid="technical-section">
+                                                <div className="mb-1.5 flex items-baseline justify-between">
+                                                    <h5 className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Technical quality</h5>
+                                                    {analysis?.observation && (
+                                                        <span
+                                                            data-testid="technical-provenance"
+                                                            className="text-[10px] text-gray-400"
+                                                            title={`Provenance: ${analysis.observation.technical_provenance}`}
+                                                        >
+                                                            {provenanceLabel(analysis.observation.technical_provenance)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <dl className="space-y-1 text-xs text-gray-600">
+                                                    <div className="flex justify-between gap-2"><dt>Sharpness</dt><dd className="font-medium text-gray-800">{assessmentText(analysis?.observation?.technical?.sharpness)}</dd></div>
+                                                    <div className="flex justify-between gap-2"><dt>Exposure</dt><dd className="font-medium text-gray-800">{assessmentText(analysis?.observation?.technical?.exposure)}</dd></div>
+                                                    <div className="flex justify-between gap-2"><dt>Motion blur</dt><dd className="font-medium text-gray-800">{assessmentText(analysis?.observation?.technical?.motion_blur)}</dd></div>
+                                                    <div className="flex justify-between gap-2"><dt>Highlight clipping</dt><dd className="font-medium text-gray-800">{assessmentText(analysis?.observation?.technical?.highlight_clipping)}</dd></div>
+                                                    <div className="flex justify-between gap-2" data-testid="similarity-group">
+                                                        <dt>Similarity group</dt>
+                                                        <dd className="font-medium text-gray-800">
+                                                            {selectedRec.similarity_group && selectedRec.similarity_group_size > 1
+                                                                ? `burst group · ${selectedRec.similarity_group_size} similar frame(s)`
+                                                                : 'unique frame'}
+                                                        </dd>
+                                                    </div>
+                                                </dl>
+                                                <p className="mt-2 text-xs leading-relaxed text-gray-600" data-testid="technical-rationale">{selectedRec.technical_rationale}</p>
+                                            </div>
+
+                                            {/* CREATIVE FIT */}
+                                            <div data-testid="creative-section">
+                                                <div className="mb-1.5 flex items-baseline justify-between">
+                                                    <h5 className="text-[11px] font-bold uppercase tracking-wide text-gray-500">Creative fit</h5>
+                                                    {analysis?.observation && (
+                                                        <span
+                                                            data-testid="creative-provenance"
+                                                            className="text-[10px] text-gray-400"
+                                                            title={`Provenance: ${analysis.observation.creative_provenance} — creative labels come from the documented demo annotation, not from pixel inference`}
+                                                        >
+                                                            {provenanceLabel(analysis.observation.creative_provenance)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {analysis?.observation && analysis.observation.creative_provenance === 'demo_sidecar_annotation' ? (
+                                                    <dl className="space-y-1 text-xs text-gray-600">
+                                                        <div className="flex justify-between gap-2"><dt>Emotional strength</dt><dd className="font-medium text-gray-800">{analysis.observation.creative.emotion_strength.replace(/_/g, ' ')}</dd></div>
+                                                        <div className="flex justify-between gap-2"><dt>Candidness</dt><dd className="font-medium text-gray-800">{analysis.observation.creative.candidness.replace(/_/g, ' ')}</dd></div>
+                                                        <div className="flex justify-between gap-2"><dt>Mood</dt><dd className="font-medium text-gray-800">{analysis.observation.creative.mood.length > 0 ? analysis.observation.creative.mood.join(', ') : '—'}</dd></div>
+                                                        <div className="flex justify-between gap-2"><dt>Storytelling</dt><dd className="font-medium text-gray-800">{analysis.observation.creative.environmental_storytelling.replace(/_/g, ' ')}</dd></div>
+                                                    </dl>
+                                                ) : (
+                                                    <p className="text-xs italic text-gray-400">
+                                                        Creative context not available for this frame — creative fit cannot be evaluated.
+                                                    </p>
+                                                )}
+                                                <p className="mt-2 text-xs leading-relaxed text-gray-600" data-testid="creative-rationale">{selectedRec.creative_rationale}</p>
+                                            </div>
+                                        </div>
+
+                                        {/* WHY */}
+                                        <div className="mt-3 rounded-lg border border-indigo-100 bg-indigo-50/70 p-3" data-testid="why-section">
+                                            <h5 className="text-[11px] font-bold uppercase tracking-wide text-indigo-500">Why</h5>
+                                            <p className="mt-1 text-xs leading-relaxed text-gray-700" data-testid="tradeoff-explanation">
+                                                {tradeoffParts(selectedRec.tradeoff).before}{' '}
+                                                {tradeoffParts(selectedRec.tradeoff).brief && (
+                                                    <b data-testid="brief-linkage">{tradeoffParts(selectedRec.tradeoff).brief}</b>
+                                                )}
+                                            </p>
+                                        </div>
+
+                                        {/* INFLUENCED BY */}
+                                        <div className="mt-2.5 flex flex-wrap items-center gap-1.5" data-testid="influenced-by">
+                                            <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Influenced by</span>
+                                            {selectedRec.influenced_by.length === 0 ? (
+                                                <span className="text-[11px] italic text-gray-400">no brief dimension moved this call</span>
+                                            ) : (
+                                                selectedRec.influenced_by.map((dim) => (
+                                                    <code key={dim} className="rounded bg-gray-200/80 px-1.5 py-0.5 text-[10px] font-semibold text-gray-700">{dim}</code>
+                                                ))
+                                            )}
+                                        </div>
+
+                                        {/* PHOTOGRAPHER ACTIONS — HUMAN authority, never a WebMCP tool */}
+                                        {!isAgent && (
+                                            <div className="mt-3 border-t border-gray-200 pt-3" data-testid="photographer-actions">
+                                                <div className="flex flex-wrap items-center gap-2">
+                                                    <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Your decision</span>
+                                                    {(['keep', 'review', 'reject'] as CullingChoice[]).map((choice) => {
+                                                        const active = myDecisions[selected.id]?.decision === choice
+                                                            || (selected.selection_state === 'selected' && choice === 'keep' && !myDecisions[selected.id])
+                                                            || (selected.selection_state === 'culled' && choice === 'reject' && !myDecisions[selected.id]);
+                                                        return (
+                                                            <button
+                                                                key={choice}
+                                                                onClick={() => void recordCullingDecision(selected.id, choice)}
+                                                                disabled={busy !== null}
+                                                                className={`rounded-md px-3 py-1.5 text-[11px] font-semibold transition disabled:opacity-40 ${
+                                                                    active
+                                                                        ? 'bg-gray-800 text-white'
+                                                                        : choice === 'keep'
+                                                                            ? 'border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                                                                            : choice === 'reject'
+                                                                                ? 'border border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100'
+                                                                                : 'border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100'
+                                                                }`}
+                                                            >
+                                                                {choice.charAt(0).toUpperCase() + choice.slice(1)}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                    <button
+                                                        onClick={() => setOverrideOpen((o) => !o)}
+                                                        disabled={busy !== null}
+                                                        className="rounded-md border border-indigo-300 bg-white px-3 py-1.5 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-40"
+                                                        title="Override the agent's recommendation with your reasoning"
+                                                    >
+                                                        Override
+                                                    </button>
+                                                </div>
+                                                {overrideOpen && (
+                                                    <div className="mt-2 rounded-lg border border-indigo-200 bg-white p-2.5">
+                                                        <label htmlFor="override-note" className="text-[11px] font-medium text-gray-600">
+                                                            Why does the agent's call miss? (optional, saved with your decision)
+                                                        </label>
+                                                        <input
+                                                            id="override-note"
+                                                            type="text"
+                                                            value={overrideNote}
+                                                            onChange={(e) => setOverrideNote(e.target.value)}
+                                                            placeholder='e.g. "The expression matters more than the softness."'
+                                                            className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
+                                                        />
+                                                        <div className="mt-2 flex flex-wrap gap-2">
+                                                            {(['keep', 'review', 'reject'] as CullingChoice[]).map((choice) => (
+                                                                <button
+                                                                    key={choice}
+                                                                    onClick={() => {
+                                                                        void recordCullingDecision(selected.id, choice, overrideNote.trim() || undefined, true);
+                                                                        setOverrideNote('');
+                                                                        setOverrideOpen(false);
+                                                                    }}
+                                                                    disabled={busy !== null}
+                                                                    className="rounded-md bg-indigo-600 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-indigo-500 disabled:opacity-40"
+                                                                >
+                                                                    Override → {choice.charAt(0).toUpperCase() + choice.slice(1)}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {myDecisions[selected.id] && (
+                                                    <p className="mt-2 text-[11px] text-gray-500" data-testid="decision-persisted">
+                                                        Recorded <b>{myDecisions[selected.id].decision.toUpperCase()}</b>
+                                                        {myDecisions[selected.id].override ? ' (override)' : ''}
+                                                        {myDecisions[selected.id].note ? ` — "${myDecisions[selected.id].note}"` : ''}
+                                                        {' '}· persisted to photographer_decisions.
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
+                                        {isAgent && (
+                                            <p className="mt-3 border-t border-gray-200 pt-2 text-[11px] italic text-gray-400" data-testid="agent-no-final-authority">
+                                                Agent view — recommendations only. Culling is finalized exclusively by the photographer.
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+                                {!selectedRec && !cullingLoading && (
+                                    <p className="mt-3 text-[11px] italic text-gray-400">
+                                        No context-aware recommendation yet for this frame.
+                                    </p>
+                                )}
                             </>
                         ) : (
                             <div className="flex h-64 items-center justify-center rounded-lg bg-gray-50 text-sm text-gray-500">
@@ -460,6 +832,16 @@ export default function Workspace() {
                                 <div className="rounded-lg bg-gray-50 p-2"><dt className="text-gray-400">Status</dt><dd className="font-medium text-gray-800">{project.status}</dd></div>
                                 <div className="rounded-lg bg-gray-50 p-2"><dt className="text-gray-400">Photos</dt><dd className="font-medium text-gray-800">{photos.length}</dd></div>
                                 <div className="rounded-lg bg-gray-50 p-2"><dt className="text-gray-400">Eligible for execute</dt><dd className="font-medium text-gray-800">{eligibleForExecution ? 'Yes' : 'No'}</dd></div>
+                                {culling && (
+                                    <div className="rounded-lg bg-gray-50 p-2" data-testid="culling-context-summary">
+                                        <dt className="text-gray-400">Context-aware culling</dt>
+                                        <dd className="font-medium text-gray-800">
+                                            {culling.context.photos_observed}/{photos.length} observed
+                                            {culling.has_direction ? ' · brief applied' : ' · no adopted brief'}
+                                            {culling.context.duplicate_groups.length > 0 ? ` · ${culling.context.duplicate_groups.length} similarity group(s)` : ''}
+                                        </dd>
+                                    </div>
+                                )}
                             </dl>
                         </div>
                     </section>

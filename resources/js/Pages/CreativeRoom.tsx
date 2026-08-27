@@ -1,8 +1,9 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router, usePage } from '@inertiajs/react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useWebmcpRegistry } from '@/webmcp/use-webmcp';
 import { webmcpApi } from '@/webmcp/api';
+import { onConceptMutatingActivity } from '@/webmcp/events';
 import type { ConceptPayload } from '@/webmcp/api';
 
 /* ------------------------------------------------------------------ types */
@@ -49,6 +50,7 @@ interface PageProps extends Record<string, unknown> {
 
 const AUTHORITY_COLOR: Record<string, string> = {
     READ: 'bg-sky-100 text-sky-800',
+    ANALYZE: 'bg-violet-100 text-violet-800',
     PROPOSE: 'bg-amber-100 text-amber-800',
     EXECUTE: 'bg-emerald-100 text-emerald-800',
 };
@@ -99,6 +101,19 @@ function dimensionEntries(content: Record<string, unknown> | null | undefined): 
                       .join(' · ')
                 : String(v),
     ]);
+}
+
+/* ---------------------------------------------------------------- helpers */
+
+/**
+ * One production behavior, kept out of the component so it is testable
+ * without a DOM: subscribe to WebMCP concept-mutating activity and refresh
+ * the concept list. Returns the unsubscribe function for useEffect cleanup.
+ */
+export function bindConceptAutoRefresh(refreshList: () => Promise<void> | void): () => void {
+    return onConceptMutatingActivity(() => {
+        void refreshList();
+    });
 }
 
 /* ------------------------------------------------------------ component */
@@ -152,6 +167,11 @@ export default function CreativeRoom() {
     const reloadPage = useCallback(() => {
         router.reload({ only: ['concepts', 'brief', 'adopted_concept_id', 'agent_activity', 'brainstorm'] });
     }, []);
+
+    // WebMCP-driven concept mutations (propose_concepts / revision / merge)
+    // refresh the local concept list so new agent proposals appear WITHOUT a
+    // manual browser refresh. Reuses refreshList — no new state, no websockets.
+    useEffect(() => bindConceptAutoRefresh(refreshList), [refreshList]);
 
     /* --------------------------- human actions ---------------------------- */
 

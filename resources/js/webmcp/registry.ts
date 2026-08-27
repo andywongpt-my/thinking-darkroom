@@ -18,6 +18,7 @@ import { workspaceTools } from './tools/workspace';
 import { proposalTools } from './tools/proposals';
 import { qaTools } from './tools/qa';
 import { creativeReadTools, creativeProposeTools } from './tools/creative';
+import { cullingReadTools } from './tools/culling';
 import { buildApplyApprovedPlanTool } from './tools/execution';
 
 export interface RegistrySnapshot {
@@ -60,7 +61,7 @@ export class WebmcpRegistry {
     /** Register the always-on base tools. Returns snapshot. */
     begin(): RegistrySnapshot {
         for (const tool of this.baseTools()) {
-            this.track(tool, 'READ', false, new AbortController());
+            this.track(tool, this.authorityFor(tool.name), false, new AbortController());
         }
         return this.snapshot();
     }
@@ -169,7 +170,34 @@ export class WebmcpRegistry {
             // creative direction is adopted exclusively through the human UI.
             ...creativeReadTools(this.projectId),
             ...creativeProposeTools(this.projectId),
+            // Sprint 3 — context-aware culling: 2 READ + 1 ANALYZE. NO
+            // photographer-decision tool: culling is finalized exclusively
+            // through the human UI (photographer_decisions), never via WebMCP.
+            ...cullingReadTools(this.projectId),
         ];
+    }
+
+    /**
+     * The server-side authority for a base tool. Mirrors
+     * App\Support\WebmcpToolCatalog — the catalogue remains authoritative;
+     * this mirror only labels the diagnostics feed honestly.
+     */
+    private authorityFor(name: string): WebmcpAuthority {
+        switch (name) {
+            case 'propose_cull':
+            case 'propose_retouch_plan':
+            case 'run_consistency_review':
+            case 'propose_concepts':
+            case 'propose_concept_revision':
+            case 'propose_concept_merge':
+            case 'propose_creative_brief':
+                return 'PROPOSE';
+            // Sprint 3 — persists non-final photo_observations.
+            case 'analyze_project_photos':
+                return 'ANALYZE';
+            default:
+                return 'READ';
+        }
     }
 
     private track(tool: ModelContextTool, authority: WebmcpAuthority, dynamic: boolean, abort: AbortController): void {

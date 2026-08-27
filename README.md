@@ -1,58 +1,136 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Thinking Darkroom
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A photographer-first photo workspace where a WebMCP AI agent can inspect,
+analyze, propose — and the photographer alone decides. Built as a hackathon
+project on Laravel 12 + Inertia + React.
 
-## About Laravel
+## What it demonstrates
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+### Context-Aware Culling
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+Thinking Darkroom combines three sources of information:
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+1. **Technical image observations** — derived directly from the demo JPEG
+   pixels using deterministic image analysis (sharpness, exposure, motion
+   blur, highlight clipping, and perceptual similarity). No model inference,
+   no network calls: the same pixels always produce the same observation.
 
-## Learning Laravel
+2. **Creative annotations** — in the bundled hackathon demo dataset,
+   subjective creative attributes (emotional strength, candidness, posing,
+   storytelling, mood) are supplied by documented demo sidecar annotations
+   (`database/demo/culling-dataset/*.obs.json`).
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+3. **Photographer-approved Creative Brief** — Thinking Darkroom uses the
+   adopted Creative Brief to decide how technical and creative tradeoffs
+   should be weighted for the current project.
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+The same photo observation can therefore receive different recommendations
+under different photographer-approved creative directions:
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+- **Emotion-first direction:** a slightly-soft but emotionally strong frame
+  → KEEP.
+- **Technical-precision direction:** the same observation → REJECT CANDIDATE.
 
-## Agentic Development
+This demonstrates context-aware decision-making rather than generic image
+quality ranking.
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+**Claim boundary (read this before quoting the demo):**
+
+- Technical characteristics are **computed from image pixels**.
+- Creative attributes in the bundled hackathon demo dataset are **supplied
+  through documented sidecar annotations** (`technical_provenance =
+  pixel_analysis`, `creative_provenance = demo_sidecar_annotation`).
+- Thinking Darkroom combines both with the photographer-approved Creative
+  Brief to produce context-aware culling recommendations.
+- The system does **not** visually detect emotion from pixels, does **not**
+  include a trained photography model, and does **not** learn photographer
+  taste through ML.
+
+### Human authority model
+
+Agents may analyze and propose. Photographers retain final authority over
+selection and override decisions.
+
+Authority levels used throughout the codebase (`app/Domain/Domain.php`):
+
+- **READ** — inspect existing state.
+- **ANALYZE** — derive and persist non-final observations
+  (`photo_observations`); never changes selections. This is why
+  `analyze_project_photos` is not read-only: it persists observation rows,
+  but observations are evidence, not decisions.
+- **PROPOSE** — recommend actions (proposal rows only) for photographer
+  review.
+- **EXECUTE** — execute an already human-approved, eligible action
+  (`apply_approved_plan`, registered only while an approved proposal is
+  pending).
+- **HUMAN** — adoption, culling override, and final creative decisions.
+  These exist only as photographer UI endpoints and are deliberately absent
+  from the WebMCP tool catalog; agent accounts are hard-blocked at the HTTP
+  layer as well.
+
+### Agent tool surface (WebMCP)
+
+19 normal base tools are registered per project workspace:
+
+- Sprint 1 — 8 static (5 READ, 3 PROPOSE): workspace/proposal/qa inspection
+  and proposal tools.
+- Sprint 2 — 8 static (4 READ, 4 PROPOSE): Creative Room concepts and brief
+  proposal tools.
+- Sprint 3 — 3 static (2 READ, 1 ANALYZE): `get_photo_analysis` (READ),
+  `get_culling_context` (READ), `analyze_project_photos` (ANALYZE — persists
+  non-final `photo_observations` only).
+- 1 dynamic: `apply_approved_plan` (EXECUTE), registered only while an
+  approved, unexecuted proposal exists and unregistered the moment it is
+  executed or rejected.
+
+There is deliberately **no** WebMCP tool for finalizing culls, approving
+proposals, overriding decisions, or deleting originals — those are
+photographer-only actions.
+
+## Demo dataset
+
+`database/demo/culling-dataset/` contains 12 synthetic JPEGs (960×640)
+generated specifically for this project, with a sidecar annotation file per
+image and a provenance README. No third-party photography is included. See
+[dataset provenance README](database/demo/culling-dataset/README.md).
+
+## Architecture
+
+- **Laravel 12** API + Inertia/React workspace UI.
+- **Context-aware culling:** `ContextAwareCullingService` combines
+  `PhotoObservation`s (from `DemoPhotoAnalysisProvider` pixel statistics)
+  with `CreativeRoomService::structuredIntentFor()` to produce
+  recommendation + confidence + technical/creative rationale + tradeoff +
+  `influenced_by` traceability.
+- **Persistence:** `photo_observations` table; photographer photo-level
+  decisions persist to `photographer_decisions.photo_id`.
+- **Workspace culling UI:** per-photo recommendation badges with technical
+  quality, creative fit, WHY rationale, `influenced_by`, confidence,
+  provenance labels, and similarity grouping — with keyboard-accessible
+  photographer override.
+
+## Demo dataset licensing
+
+The bundled demo JPEGs and sidecar annotations are original works created
+for this repository (see `database/demo/culling-dataset/README.md`) and may
+be redistributed with it (CC0 1.0).
+
+## Development
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+composer install
+npm install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate --seed
+composer run dev
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Run the test suites:
 
-## Contributing
-
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
-
-## Code of Conduct
-
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```bash
+php artisan test        # backend (84 tests / 538 assertions)
+npm test                # frontend (46 tests)
+npm run typecheck
+npm run build
+```
