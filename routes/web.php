@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\CreativeRoomPageController;
+use App\Http\Controllers\CreativeRoomReviewController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PhotographerReviewController;
 use App\Http\Controllers\WorkspacePageController;
@@ -16,6 +18,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/projects/{project}', [WorkspacePageController::class, 'show'])->name('workspace.show');
     Route::post('/projects/{project}/photos', [WorkspacePageController::class, 'upload'])->name('workspace.upload');
 
+    // Sprint 2 — Creative Room (visual creative workspace page).
+    Route::get('/projects/{project}/creative', [CreativeRoomPageController::class, 'show'])
+        ->name('creative.show');
+
     // HUMAN-ONLY review endpoints (never exposed as WebMCP tools).
     Route::post('/projects/{project}/proposals/{proposal}/approve', [PhotographerReviewController::class, 'approve'])
         ->name('proposals.approve');
@@ -23,6 +29,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('proposals.reject');
     Route::post('/projects/{project}/proposals/{proposal}/modify', [PhotographerReviewController::class, 'modify'])
         ->name('proposals.modify');
+
+    // Sprint 2 — HUMAN-ONLY Creative Room review (never WebMCP tools).
+    Route::post('/projects/{project}/creative/concepts/{concept}/explore', [CreativeRoomReviewController::class, 'explore'])
+        ->name('creative.concepts.explore');
+    Route::post('/projects/{project}/creative/concepts/{concept}/reject', [CreativeRoomReviewController::class, 'reject'])
+        ->name('creative.concepts.reject');
+    Route::post('/projects/{project}/creative/concepts/{concept}/adopt', [CreativeRoomReviewController::class, 'adopt'])
+        ->name('creative.concepts.adopt');
+    Route::post('/projects/{project}/creative/brainstorm', [CreativeRoomReviewController::class, 'openBrainstorm'])
+        ->name('creative.brainstorm.open');
 
     // WebMCP diagnostics (development panel).
     Route::get('/webmcp-diagnostics/projects/{project}/tools', [WebmcpDiagnosticsController::class, 'tools'])

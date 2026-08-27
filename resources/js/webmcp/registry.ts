@@ -17,6 +17,7 @@ import type { ModelContext, ModelContextTool, RegisteredToolMeta, WebmcpAuthorit
 import { workspaceTools } from './tools/workspace';
 import { proposalTools } from './tools/proposals';
 import { qaTools } from './tools/qa';
+import { creativeReadTools, creativeProposeTools } from './tools/creative';
 import { buildApplyApprovedPlanTool } from './tools/execution';
 
 export interface RegistrySnapshot {
@@ -164,6 +165,10 @@ export class WebmcpRegistry {
             ...workspaceTools(this.projectId),
             ...proposalTools(this.projectId),
             ...qaTools(this.projectId),
+            // Sprint 2 — Creative Room: 4 READ + 4 PROPOSE. NO adoption tool:
+            // creative direction is adopted exclusively through the human UI.
+            ...creativeReadTools(this.projectId),
+            ...creativeProposeTools(this.projectId),
         ];
     }
 

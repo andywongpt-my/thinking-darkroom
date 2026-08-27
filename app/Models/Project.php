@@ -42,6 +42,11 @@ class Project extends Model
         return $this->hasOne(CreativeBrief::class)->latestOfMany();
     }
 
+    public function creativeBriefs(): HasMany
+    {
+        return $this->hasMany(CreativeBrief::class);
+    }
+
     public function proposals(): HasMany
     {
         return $this->hasMany(Proposal::class);
@@ -60,6 +65,24 @@ class Project extends Model
     public function findings(): HasMany
     {
         return $this->hasMany(QaFinding::class);
+    }
+
+    public function brainstormSessions(): HasMany
+    {
+        return $this->hasMany(BrainstormSession::class);
+    }
+
+    public function creativeConcepts(): HasMany
+    {
+        return $this->hasMany(CreativeConcept::class);
+    }
+
+    public function currentCreativeDirection(): ?CreativeConcept
+    {
+        return $this->creativeConcepts()
+            ->where('status', Domain::CONCEPT_STATUS_ADOPTED)
+            ->latest('adopted_at')
+            ->first();
     }
 
     /** Proposals currently eligible for execution by an authorized agent tool. */

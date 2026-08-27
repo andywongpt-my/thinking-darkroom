@@ -123,6 +123,71 @@ export interface ProposalPayload {
     };
 }
 
+/* ------------------------- Sprint 2: Creative Room ------------------------- */
+
+export interface ConceptItemPayload {
+    id?: number;
+    dimension: string;
+    label: string | null;
+    value: string | null;
+    source: string;
+}
+
+export interface ConceptPayload {
+    id: number;
+    project_id: number;
+    brainstorm_session_id: number | null;
+    parent_concept_id: number | null;
+    title: string;
+    summary: string | null;
+    content: Record<string, unknown>;
+    status: string;
+    created_by: number | null;
+    creator_name?: string | null;
+    creator_is_agent?: boolean;
+    lineage_basis: { concept_id: number; title: string; note?: string | null }[] | null;
+    adopted_at: string | null;
+    created_at?: string | null;
+    items: ConceptItemPayload[];
+}
+
+export interface BrainstormContext {
+    project_id: number;
+    brainstorm: {
+        id: number;
+        input: string;
+        status: string;
+        photographer?: string | null;
+        created_at: string;
+    } | null;
+    creative_direction: StructuredIntent | null;
+}
+
+export interface StructuredIntent {
+    project_id: number;
+    has_direction: boolean;
+    adopted_concept: Record<string, unknown> | null;
+    brief: Record<string, unknown> | null;
+    intent: Record<string, unknown>;
+}
+
+export interface ConceptInput {
+    title: string;
+    summary?: string;
+    content: Record<string, unknown>;
+    items?: { dimension: string; label?: string; value?: string; source?: string }[];
+    [key: string]: unknown;
+}
+
+export interface BriefProposalPayload {
+    id: number;
+    status: string;
+    creative_direction: string;
+    tonality_notes: string | null;
+    deliverables: string | null;
+    payload: Record<string, unknown>;
+}
+
 export interface QaFindingPayload {
     id: number;
     severity: string;
@@ -279,6 +344,107 @@ export const webmcpApi = {
         return post<ProposalPayload>(
             projectApiPaths.executeProposal(projectId, proposalId),
             {},
+        );
+    },
+
+    /* ----------------------- Sprint 2: Creative Room ----------------------- */
+
+    getBrainstormContext(projectId: number) {
+        return get<BrainstormContext>(
+            projectApiPath(projectId, '/creative/brainstorm'),
+        );
+    },
+
+    getCreativeDirection(projectId: number) {
+        return get<StructuredIntent>(
+            projectApiPath(projectId, '/creative/direction'),
+        );
+    },
+
+    listConcepts(projectId: number) {
+        return get<{ project_id: number; concepts: ConceptPayload[] }>(
+            projectApiPath(projectId, '/creative/concepts'),
+        );
+    },
+
+    getConcept(projectId: number, conceptId: number) {
+        return get<{ project_id: number; concept: ConceptPayload }>(
+            projectApiPath(projectId, `/creative/concepts/${conceptId}`),
+        );
+    },
+
+    proposeConcepts(projectId: number, concepts: ConceptInput[], brainstormSessionId?: number) {
+        return post<{ project_id: number; concepts: ConceptPayload[] }>(
+            projectApiPath(projectId, '/creative/concepts'),
+            {
+                concepts,
+                ...(brainstormSessionId ? { brainstorm_session_id: brainstormSessionId } : {}),
+            },
+        );
+    },
+
+    proposeConceptRevision(projectId: number, conceptId: number, input: ConceptInput) {
+        return post<{ project_id: number; concept: ConceptPayload }>(
+            projectApiPath(projectId, `/creative/concepts/${conceptId}/revise`),
+            input,
+        );
+    },
+
+    proposeConceptMerge(
+        projectId: number,
+        sources: { concept_id: number; note?: string }[],
+        input: ConceptInput,
+    ) {
+        return post<{ project_id: number; concept: ConceptPayload }>(
+            projectApiPath(projectId, '/creative/merge'),
+            { sources, ...input },
+        );
+    },
+
+    proposeCreativeBrief(
+        projectId: number,
+        title: string,
+        payload: Record<string, unknown>,
+        sourceConceptId?: number,
+    ) {
+        return post<{ project_id: number; brief_proposal: BriefProposalPayload; adopted: boolean }>(
+            projectApiPath(projectId, '/creative/brief-proposal'),
+            {
+                title,
+                payload,
+                ...(sourceConceptId ? { source_concept_id: sourceConceptId } : {}),
+            },
+        );
+    },
+
+    /* -------------------- Sprint 2: HUMAN-ONLY UI actions ------------------- */
+    /* These deliberately have NO WebMCP tool wrapper — adoption/rejection is  */
+    /* exclusively a photographer action exercised through the UI.             */
+
+    openBrainstorm(projectId: number, input: string) {
+        return post<{ project_id: number; brainstorm: { id: number; input: string; status: string; created_at: string } }>(
+            `/projects/${projectId}/creative/brainstorm`,
+            { input },
+        );
+    },
+
+    exploreConcept(projectId: number, conceptId: number) {
+        return post<{ concept: ConceptPayload }>(
+            `/projects/${projectId}/creative/concepts/${conceptId}/explore`,
+        );
+    },
+
+    rejectConcept(projectId: number, conceptId: number, note?: string) {
+        return post<{ concept: ConceptPayload }>(
+            `/projects/${projectId}/creative/concepts/${conceptId}/reject`,
+            note ? { note } : {},
+        );
+    },
+
+    adoptConcept(projectId: number, conceptId: number, note?: string) {
+        return post<{ concept: ConceptPayload }>(
+            `/projects/${projectId}/creative/concepts/${conceptId}/adopt`,
+            note ? { note } : {},
         );
     },
 

@@ -72,6 +72,44 @@ final class Domain
     /** Execution tool available only after photographer approval. */
     public const AUTHORITY_EXECUTE = 'EXECUTE';
 
+    /* --------------------------- sprint 2: concepts --------------------------- */
+
+    /** Concept is awaiting review/photographer attention. */
+    public const CONCEPT_STATUS_PROPOSED = 'proposed';
+
+    /** Photographer is actively exploring/reworking this concept. */
+    public const CONCEPT_STATUS_EXPLORING = 'exploring';
+
+    public const CONCEPT_STATUS_REJECTED = 'rejected';
+
+    /** Concept built from combining two or more source concepts. */
+    public const CONCEPT_STATUS_MERGED = 'merged';
+
+    /** A formerly-adopted direction replaced by a newer adoption. Terminal. */
+    public const CONCEPT_STATUS_SUPERSEDED = 'superseded';
+
+    /** Photographer adopted this concept as the current creative direction. */
+    public const CONCEPT_STATUS_ADOPTED = 'adopted';
+
+    /** Ordered lifecycle of a creative concept. */
+    public const CONCEPT_STATUSES = [
+        self::CONCEPT_STATUS_PROPOSED,
+        self::CONCEPT_STATUS_EXPLORING,
+        self::CONCEPT_STATUS_REJECTED,
+        self::CONCEPT_STATUS_MERGED,
+        self::CONCEPT_STATUS_SUPERSEDED,
+        self::CONCEPT_STATUS_ADOPTED,
+    ];
+
+    /** Agent tools that are NEVER allowed to exist (final-authority boundary). */
+    public const FORBIDDEN_CREATIVE_DIRECTION_TOOLS = [
+        'adopt_creative_direction',
+        'approve_concept',
+        'set_final_creative_direction',
+        'force_creative_direction',
+        'bypass_creative_review',
+    ];
+
     /* ----------------------------- photo selection ------------------------------ */
 
     public const SELECTION_UNREVIEWED = 'unreviewed';

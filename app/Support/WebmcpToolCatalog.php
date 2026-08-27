@@ -109,6 +109,97 @@ final class WebmcpToolCatalog
                 'description' => 'Returns the photographer decision history and proposal states for the project.',
                 'dynamic' => false,
             ],
+            // Sprint 2 — Creative Room READ tools.
+            'get_brainstorm_context' => [
+                'name' => 'get_brainstorm_context',
+                'authority' => Domain::AUTHORITY_READ,
+                'method' => 'GET',
+                'path' => self::routePath('api.webmcp.creative.brainstorm', [
+                    'project' => self::PROJECT_PLACEHOLDER,
+                ]),
+                'read_only' => true,
+                'description' => 'Returns the current brainstorm session + input for the project, and the adopted creative direction if one exists. READ only.',
+                'dynamic' => false,
+            ],
+            'get_creative_direction' => [
+                'name' => 'get_creative_direction',
+                'authority' => Domain::AUTHORITY_READ,
+                'method' => 'GET',
+                'path' => self::routePath('api.webmcp.creative.direction', [
+                    'project' => self::PROJECT_PLACEHOLDER,
+                ]),
+                'read_only' => true,
+                'description' => 'Returns the ADOPTED creative direction (concept + derived structured creative brief) for the project. Null when no direction is adopted. READ only.',
+                'dynamic' => false,
+            ],
+            'list_concepts' => [
+                'name' => 'list_concepts',
+                'authority' => Domain::AUTHORITY_READ,
+                'method' => 'GET',
+                'path' => self::routePath('api.webmcp.creative.concepts', [
+                    'project' => self::PROJECT_PLACEHOLDER,
+                ]),
+                'read_only' => true,
+                'description' => 'Lists every creative concept for the project with status and lineage. READ only.',
+                'dynamic' => false,
+            ],
+            'get_concept' => [
+                'name' => 'get_concept',
+                'authority' => Domain::AUTHORITY_READ,
+                'method' => 'GET',
+                'path' => self::routePath('api.webmcp.creative.concepts.show', [
+                    'project' => self::PROJECT_PLACEHOLDER,
+                    'concept' => '__WEBMCP_CONCEPT__',
+                ]),
+                'read_only' => true,
+                'description' => 'Returns a single creative concept with full structured content and lineage. READ only.',
+                'dynamic' => false,
+            ],
+            'propose_concepts' => [
+                'name' => 'propose_concepts',
+                'authority' => Domain::AUTHORITY_PROPOSE,
+                'method' => 'POST',
+                'path' => self::routePath('api.webmcp.creative.concepts', [
+                    'project' => self::PROJECT_PLACEHOLDER,
+                ]),
+                'read_only' => false,
+                'description' => 'Proposes up to 3 structured creative concepts from a brainstorm. Concepts are created in PROPOSED status — adoption is ALWAYS the photographer\'s. PROPOSE authority.',
+                'dynamic' => false,
+            ],
+            'propose_concept_revision' => [
+                'name' => 'propose_concept_revision',
+                'authority' => Domain::AUTHORITY_PROPOSE,
+                'method' => 'POST',
+                'path' => self::routePath('api.webmcp.creative.concepts.revise', [
+                    'project' => self::PROJECT_PLACEHOLDER,
+                    'concept' => '__WEBMCP_CONCEPT__',
+                ]),
+                'read_only' => false,
+                'description' => 'Proposes a child/revision of an existing concept while preserving lineage. The parent is untouched. PROPOSE authority.',
+                'dynamic' => false,
+            ],
+            'propose_concept_merge' => [
+                'name' => 'propose_concept_merge',
+                'authority' => Domain::AUTHORITY_PROPOSE,
+                'method' => 'POST',
+                'path' => self::routePath('api.webmcp.creative.merge', [
+                    'project' => self::PROJECT_PLACEHOLDER,
+                ]),
+                'read_only' => false,
+                'description' => 'Combines structured ideas from two or more concepts into a new proposed concept with visible lineage. PROPOSE authority.',
+                'dynamic' => false,
+            ],
+            'propose_creative_brief' => [
+                'name' => 'propose_creative_brief',
+                'authority' => Domain::AUTHORITY_PROPOSE,
+                'method' => 'POST',
+                'path' => self::routePath('api.webmcp.creative.brief-proposal', [
+                    'project' => self::PROJECT_PLACEHOLDER,
+                ]),
+                'read_only' => false,
+                'description' => 'Proposes a structured creative brief for the photographer to review. This persists a PROPOSAL only — it never adopts or activates the brief. The photographer adopts through the UI. PROPOSE authority.',
+                'dynamic' => false,
+            ],
             'propose_cull' => [
                 'name' => 'propose_cull',
                 'authority' => Domain::AUTHORITY_PROPOSE,

@@ -26,9 +26,11 @@
         <env name="DB_CONNECTION" value="mysql"/>
         <env name="DB_DATABASE" value="webmcp_test"/>
         <env name="DB_HOST" value="127.0.0.1"/>
-        <env name="DB_PORT" value="3307"/>
-        <env name="DB_USERNAME" value="webmcp"/>
-        <env name="DB_PASSWORD" value="webmcp_pw"/>
+        <!-- Non-forced: host environment overrides these (verified empirically).
+             3308 = local MySQL 9.7 (webmcp-mysql97) default; override with DB_PORT when needed. -->
+        <env name="DB_PORT" value="3308" force="false"/>
+        <env name="DB_USERNAME" value="webmcp" force="false"/>
+        <env name="DB_PASSWORD" value="webmcp97_pw" force="false"/>
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>

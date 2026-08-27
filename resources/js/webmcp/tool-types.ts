@@ -20,6 +20,10 @@ export interface JsonSchemaProperty {
     additionalProperties?: boolean;
     minimum?: number;
     maximum?: number;
+    minItems?: number;
+    maxItems?: number;
+    /** Escape hatch for schema fragments whose shape varies by branch. */
+    [key: string]: unknown;
 }
 
 /** The JSON Schema object a WebMCP tool registers with. */

@@ -72,6 +72,25 @@ describe('WebmcpRegistry lifecycle', () => {
         'propose_cull',
         'propose_retouch_plan',
         'run_consistency_review',
+        // Sprint 2 — Creative Room
+        'get_brainstorm_context',
+        'get_creative_direction',
+        'list_concepts',
+        'get_concept',
+        'propose_concepts',
+        'propose_concept_revision',
+        'propose_concept_merge',
+        'propose_creative_brief',
+    ];
+
+    /** Sprint 2 tools must never include any human-final authority tool. */
+    const FORBIDDEN = [
+        'adopt_creative_direction',
+        'approve_concept',
+        'reject_as_photographer',
+        'set_final_creative_direction',
+        'bypass_review',
+        'force_adoption',
     ];
 
     beforeEach(() => {
@@ -118,6 +137,29 @@ describe('WebmcpRegistry lifecycle', () => {
             expect(fake.tool(proposeTool)?.annotations?.readOnlyHint).toBe(false);
         }
         expect(fake.tool('apply_approved_plan')).toBeUndefined();
+
+        // Sprint 2 — Creative Room annotations.
+        for (const readTool of [
+            'get_brainstorm_context',
+            'get_creative_direction',
+            'list_concepts',
+            'get_concept',
+        ]) {
+            expect(fake.tool(readTool)?.annotations?.readOnlyHint).toBe(true);
+        }
+        for (const proposeTool of [
+            'propose_concepts',
+            'propose_concept_revision',
+            'propose_concept_merge',
+            'propose_creative_brief',
+        ]) {
+            expect(fake.tool(proposeTool)?.annotations?.readOnlyHint).toBe(false);
+        }
+        // Human-final authority tools must NEVER be registered.
+        for (const banned of FORBIDDEN) {
+            expect(fake.names()).not.toContain(banned);
+            expect(fake.tool(banned)).toBeUndefined();
+        }
 
         for (const n of fake.names()) {
             expect(

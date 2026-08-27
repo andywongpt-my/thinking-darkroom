@@ -32,3 +32,11 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Database backups / dumps — never commit
+/database/backup/
+*.sql
+*.sql.gz
+
+# E2E-only environment override (localhost:8091)
+.env.e2e
