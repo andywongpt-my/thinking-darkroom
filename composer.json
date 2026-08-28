@@ -51,6 +51,7 @@
         ],
         "vercel": [
             "Composer\\Config::disableProcessTimeout",
+            "rm -f bootstrap/cache/packages.php bootstrap/cache/services.php bootstrap/cache/config.php",
             "npm ci --no-audit --no-fund",
             "npm run build",
             "@php artisan config:clear",
