@@ -2,6 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "outputDirectory": "vercel-out",
+  "buildCommand": "rm -f bootstrap/cache/packages.php bootstrap/cache/services.php bootstrap/cache/config.php && npm ci --no-audit --no-fund && npm run build && mkdir -p vercel-out/build && cp -r public/build/. vercel-out/build/ && cp public/favicon.ico public/robots.txt vercel-out/",
   "functions": {
     "api/index.php": { "runtime": "vercel-php@0.8.0" },
     "api/storage.php": { "runtime": "vercel-php@0.8.0" }
