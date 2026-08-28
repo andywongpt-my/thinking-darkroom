@@ -11,12 +11,20 @@
 
 declare(strict_types=1);
 
-$seedMarker = '/tmp/.thinking-darkroom-seeded';
 $bundleStorage = __DIR__.'/../seed-storage';
+$bundleDb = __DIR__.'/../database/seed.sqlite';
+$releaseMarker = '/tmp/.thinking-darkroom-storage-release';
+$releaseFingerprint = hash('sha256', implode('|', [
+    (string) hash_file('sha256', __FILE__),
+    (string) (is_file($bundleDb) ? hash_file('sha256', $bundleDb) : ''),
+]));
+$needsRefresh = ! is_file($releaseMarker)
+    || ! hash_equals($releaseFingerprint, trim((string) file_get_contents($releaseMarker)));
 
-if (! file_exists($seedMarker) && is_dir($bundleStorage)) {
+if ($needsRefresh && is_dir($bundleStorage)) {
+    shell_exec('rm -rf /tmp/storage/app/public');
     shell_exec('mkdir -p /tmp/storage/app && cp -r '.escapeshellarg($bundleStorage).' /tmp/storage/app/public');
-    touch($seedMarker);
+    file_put_contents($releaseMarker, $releaseFingerprint, LOCK_EX);
 }
 
 $uri = urldecode(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
