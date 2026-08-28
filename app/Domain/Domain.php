@@ -178,6 +178,9 @@ final class Domain
         self::OBSERVATION_PROVIDER_VLM => 'external_vision_model',
     ];
 
+    /** Technical analysis fallback when the runtime has no GD extension. */
+    public const OBSERVATION_PROVENANCE_DEMO_GD_UNAVAILABLE = 'gd_unavailable_unknown_technical';
+
     /* ------------------------------ retouch states ------------------------------ */
 
     public const RETOUCH_NONE = 'none';

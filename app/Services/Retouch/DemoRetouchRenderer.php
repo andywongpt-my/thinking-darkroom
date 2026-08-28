@@ -4,8 +4,10 @@ namespace App\Services\Retouch;
 
 use App\Domain\Domain;
 use App\Domain\Retouch\InvalidAdjustmentException;
+use App\Domain\Retouch\RendererUnavailableException;
 use App\Domain\Retouch\RetouchAdjustmentSet;
 use App\Models\Photo;
+use App\Support\GdAvailability;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
@@ -30,6 +32,11 @@ class DemoRetouchRenderer implements RetouchRenderer
 {
     public const JPEG_QUALITY = 92;
 
+    public function __construct(
+        private readonly GdAvailability $gd = new GdAvailability,
+    ) {
+    }
+
     /** clamps a byte value to 0..255 */
     private static function clamp(int $value): int
     {
@@ -43,6 +50,10 @@ class DemoRetouchRenderer implements RetouchRenderer
 
     public function render(Photo $photo, RetouchAdjustmentSet $adjustments): array
     {
+        if (! $this->gd->isAvailable()) {
+            throw RendererUnavailableException::gdUnavailable();
+        }
+
         $image = $this->loadOriginal($photo);
 
         try {

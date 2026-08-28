@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Webmcp;
 
 use App\Domain\Domain;
+use App\Domain\Retouch\RendererUnavailableException;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\Proposal;
@@ -107,7 +108,9 @@ class ProposalController extends Controller
                             'influenced_by' => $recommendation['influenced_by'],
                             'similarity_group' => $observation->similarityGroup,
                             'observation_provenance' => [
-                                'technical' => 'pixel_analysis',
+                                'technical' => $observation->provenance === Domain::OBSERVATION_PROVENANCE_DEMO_GD_UNAVAILABLE
+                                    ? $observation->provenance
+                                    : 'pixel_analysis',
                                 'creative' => 'demo_sidecar_annotation',
                                 'provider' => $observation->provider,
                             ],
@@ -209,6 +212,23 @@ class ProposalController extends Controller
             $executed = $this->proposals->execute($proposal, $request->user(), function (Proposal $p) {
                 $this->applicator->apply($p);
             });
+        } catch (RendererUnavailableException $e) {
+            $this->audit->record(
+                $request,
+                $project,
+                $request->user(),
+                'apply_approved_plan',
+                Domain::AUTHORITY_EXECUTE,
+                ['proposal_id' => $proposal->id],
+                ['error' => $e->getMessage(), 'code' => 'renderer_unavailable'],
+                Domain::RESULT_ERROR,
+                (hrtime(true) - $start) / 1e6,
+            );
+
+            return response()->json([
+                'error' => $e->getMessage(),
+                'code' => 'renderer_unavailable',
+            ], 422);
         } catch (\LogicException $e) {
             $this->audit->record(
                 $request,

@@ -11,8 +11,10 @@ use App\Models\Project;
 use App\Models\User;
 use App\Services\Culling\ContextAwareCullingService;
 use App\Services\Culling\DemoPhotoAnalysisProvider;
+use App\Services\Culling\PhotoAnalysisProvider;
 use App\Services\ProposalService;
 use App\Support\WebmcpToolCatalog;
+use App\Support\GdAvailability;
 use Database\Seeders\Sprint3CullingSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -46,6 +48,10 @@ class ContextAwareCullingTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        // Isolate filesystem writes (e.g. the no-GD fallback sidecar probe)
+        // from the real dev dataset under storage/app/public/.
+        Storage::fake('public');
 
         // Deterministic certification dataset (12 original synthetic JPEGs).
         $this->seed(Sprint3CullingSeeder::class);
@@ -116,6 +122,48 @@ class ContextAwareCullingTest extends TestCase
         // The creative fields came from the sidecar, NOT from pixels: the
         // provider records no vision claims. eyes_open stays null (no face model).
         $this->assertNull($soft->eyesOpen());
+    }
+
+    public function test_missing_gd_reports_unknown_technical_and_honest_fallback_provenance(): void
+    {
+        $degradedProvider = new DemoPhotoAnalysisProvider(new GdAvailability(false));
+        app()->instance(GdAvailability::class, new GdAvailability(false));
+        app()->instance(PhotoAnalysisProvider::class, $degradedProvider);
+
+        PhotoObservationRecord::where('project_id', $this->project->id)->delete();
+        DemoPhotoAnalysisProvider::resetSimilarityMemory();
+
+        $service = app(ContextAwareCullingService::class);
+        $this->assertSame(12, $service->analyzeProject($this->project));
+
+        $observations = $service->observationsFor($this->project);
+        $observation = $this->observationForFile($observations, '02-soft-emotive-gaze.jpg');
+
+        $this->assertSame(Domain::OBSERVATION_PROVENANCE_DEMO_GD_UNAVAILABLE, $observation->provenance);
+        foreach (['sharpness', 'exposure', 'motion_blur', 'highlight_clipping'] as $dimension) {
+            $this->assertSame('unknown', $observation->technical[$dimension]['assessment']);
+            // JSON roundtrip normalizes 0.0 to int 0 (no JSON_PRESERVE_ZERO_FRACTION):
+            // semantic requirement is exactly-zero confidence, not a PHP type.
+            $this->assertEqualsWithDelta(0.0, $observation->technical[$dimension]['confidence'], 0.0001);
+        }
+
+        // similarityGroupFromPixels must also degrade without calling any GD
+        // function, while preserving a human-authored sidecar group.
+        $fallbackPath = "project-{$this->project->id}/no-gd.jpg";
+        Storage::disk('public')->put($fallbackPath, 'not an image');
+        Storage::disk('public')->put($fallbackPath.'.obs.json', json_encode([
+            'similarity_group' => 'sidecar-fallback',
+        ], JSON_THROW_ON_ERROR));
+        $fallbackPhoto = (new Photo)->forceFill(['id' => 999, 'path' => $fallbackPath]);
+        $fallback = (new DemoPhotoAnalysisProvider(new GdAvailability(false)))->observe($fallbackPhoto);
+        $this->assertSame('sidecar-fallback', $fallback->similarityGroup);
+
+        $this->actingAs($this->agent)
+            ->getJson(route('api.webmcp.culling.photo-analysis', [$this->project->id, $observation->photoId]))
+            ->assertOk()
+            ->assertJsonPath('observation.provenance', Domain::OBSERVATION_PROVENANCE_DEMO_GD_UNAVAILABLE)
+            ->assertJsonPath('observation.technical_provenance', Domain::OBSERVATION_PROVENANCE_DEMO_GD_UNAVAILABLE)
+            ->assertJsonPath('observation.creative_provenance', 'demo_sidecar_annotation');
     }
 
     public function test_creative_fields_come_from_sidecar_and_missing_sidecar_is_honest(): void

@@ -150,7 +150,9 @@ class CullingController extends Controller
     {
         $payload = $o->toPayload();
 
-        $payload['technical_provenance'] = 'pixel_analysis';
+        $payload['technical_provenance'] = $o->provenance === Domain::OBSERVATION_PROVENANCE_DEMO_GD_UNAVAILABLE
+            ? $o->provenance
+            : 'pixel_analysis';
         $payload['creative_provenance'] = 'demo_sidecar_annotation';
 
         return $payload;

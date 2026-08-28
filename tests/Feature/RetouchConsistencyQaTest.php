@@ -14,6 +14,7 @@ use App\Services\CreativeRoomService;
 use App\Services\ProposalApplicator;
 use App\Services\ProposalService;
 use App\Services\Retouch\ContextAwareRetouchService;
+use App\Support\GdAvailability;
 use App\Support\WebmcpToolCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -386,6 +387,35 @@ class RetouchConsistencyQaTest extends TestCase
         $this->actingAs($agent)
             ->postJson(route('api.webmcp.proposals.execute', [$project->id, $proposal->id]))
             ->assertStatus(409);
+    }
+
+    public function test_execution_reports_renderer_unavailable_without_500_and_preserves_approval(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+        $photo = $project->photos()->first();
+        $originalBytes = 'original bytes remain untouched';
+        Storage::disk('public')->put($photo->path, $originalBytes);
+
+        $proposal = $this->makeRetouchProposal([$photographer, $agent, $project], $agent);
+        $this->service->approve($proposal, $photographer);
+
+        app()->instance(GdAvailability::class, new GdAvailability(false));
+
+        $response = $this->actingAs($agent)
+            ->postJson(route('api.webmcp.proposals.execute', [$project->id, $proposal->id]))
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'renderer_unavailable');
+
+        $this->assertStringContainsString('GD', (string) $response->json('error'));
+        $this->assertSame(Domain::STATE_APPROVED, $proposal->fresh()->status);
+        $this->assertSame(Domain::RETOUCH_APPROVED, $photo->fresh()->retouch_state);
+        $this->assertSame(0, PhotoDerivative::where('photo_id', $photo->id)->count());
+        $this->assertSame($originalBytes, Storage::disk('public')->get($photo->path));
+        $this->assertDatabaseHas('agent_tool_calls', [
+            'tool_name' => 'apply_approved_plan',
+            'authority' => Domain::AUTHORITY_EXECUTE,
+            'result_status' => Domain::RESULT_ERROR,
+        ]);
     }
 
     public function test_execution_creates_derivative_and_original_remains_untouched(): void

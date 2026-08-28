@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Domain\Domain;
 use App\Domain\Retouch\InvalidAdjustmentException;
+use App\Domain\Retouch\RendererUnavailableException;
 use App\Domain\Retouch\RetouchAdjustmentSet;
 use App\Models\Photo;
 use App\Models\PhotoDerivative;
@@ -201,6 +202,8 @@ class ProposalApplicator
 
         try {
             $rendered = $this->renderer->render($photo, $adjustments);
+        } catch (RendererUnavailableException $e) {
+            throw $e;
         } catch (InvalidAdjustmentException|RuntimeException $e) {
             return null;
         }

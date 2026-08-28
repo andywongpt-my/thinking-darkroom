@@ -5,6 +5,7 @@ namespace App\Services\Culling;
 use App\Domain\Culling\PhotoObservation;
 use App\Domain\Domain;
 use App\Models\Photo;
+use App\Support\GdAvailability;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -28,6 +29,11 @@ use Illuminate\Support\Facades\Storage;
  */
 class DemoPhotoAnalysisProvider implements PhotoAnalysisProvider
 {
+    public function __construct(
+        private readonly GdAvailability $gd = new GdAvailability,
+    ) {
+    }
+
     public function name(): string
     {
         return Domain::OBSERVATION_PROVIDER_DEMO;
@@ -35,7 +41,9 @@ class DemoPhotoAnalysisProvider implements PhotoAnalysisProvider
 
     public function provenance(): string
     {
-        return Domain::OBSERVATION_PROVENANCES[Domain::OBSERVATION_PROVIDER_DEMO];
+        return $this->gd->isAvailable()
+            ? Domain::OBSERVATION_PROVENANCES[Domain::OBSERVATION_PROVIDER_DEMO]
+            : Domain::OBSERVATION_PROVENANCE_DEMO_GD_UNAVAILABLE;
     }
 
     public function observe(Photo $photo): PhotoObservation
@@ -97,6 +105,10 @@ class DemoPhotoAnalysisProvider implements PhotoAnalysisProvider
     /** @return resource|\GdImage|null */
     private function loadImage(Photo $photo)
     {
+        if (! $this->gd->isAvailable()) {
+            return null;
+        }
+
         if (! $photo->path) {
             return null;
         }

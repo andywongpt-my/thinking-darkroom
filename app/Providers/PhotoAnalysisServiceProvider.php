@@ -18,8 +18,8 @@ class PhotoAnalysisServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->app->singleton(PhotoAnalysisProvider::class, function () {
-            return new DemoPhotoAnalysisProvider;
+        $this->app->singleton(PhotoAnalysisProvider::class, function ($app) {
+            return new DemoPhotoAnalysisProvider($app->make(\App\Support\GdAvailability::class));
         });
     }
 }
