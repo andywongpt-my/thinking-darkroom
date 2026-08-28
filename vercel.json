@@ -1,15 +1,14 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
+  "outputDirectory": "public",
   "functions": {
-    "api/index.php": {
-      "runtime": "vercel-php@0.8.0"
-    }
+    "api/index.php": { "runtime": "vercel-php@0.8.0" },
+    "api/storage.php": { "runtime": "vercel-php@0.8.0" }
   },
-  "routes": [
-    { "src": "/build/(.*)", "dest": "/public/build/$1" },
-    { "src": "/storage/(.*)", "dest": "/api/storage.php" },
-    { "src": "/(.*)", "dest": "/api/index.php" }
+  "rewrites": [
+    { "source": "/storage/(.*)", "destination": "/api/storage.php" },
+    { "source": "/(.*)", "destination": "/api/index.php" }
   ],
   "env": {
     "APP_NAME": "Thinking Darkroom",
@@ -21,7 +20,6 @@
     "APP_PACKAGES_CACHE": "/tmp/packages.php",
     "APP_ROUTES_CACHE": "/tmp/routes.php",
     "APP_SERVICES_CACHE": "/tmp/services.php",
-    "APP_STORAGE_KEYS": "/tmp/storage/keys",
     "LARAVEL_STORAGE_PATH": "/tmp/storage",
     "VIEW_COMPILED_PATH": "/tmp/views",
     "SSR_TEMP_PATH": "/tmp/ssr",
