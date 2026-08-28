@@ -6,7 +6,7 @@
   "functions": {
     "api/index.php": {
       "runtime": "vercel-php@0.8.0",
-      "includeFiles": "{public/build/manifest.json,vendor/tightenco/ziggy/dist/route.umd.js}"
+      "includeFiles": "public/build/manifest.json"
     },
     "api/storage.php": { "runtime": "vercel-php@0.8.0" }
   },

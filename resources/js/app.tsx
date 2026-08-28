@@ -4,6 +4,11 @@ import './bootstrap';
 import { createInertiaApp } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
+import route from './ziggy-route';
+
+// The Ziggy route() helper is bundled with the app (see config/ziggy.php:
+// skip-route-function). `@routes` supplies the route payload as window.Ziggy.
+window.route = route;
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
