@@ -49,6 +49,13 @@
             "Composer\\Config::disableProcessTimeout",
             "@php artisan dev"
         ],
+        "vercel": [
+            "Composer\\Config::disableProcessTimeout",
+            "npm ci --no-audit --no-fund",
+            "npm run build",
+            "@php artisan config:clear",
+            "@php migrate-seed.php"
+        ],
         "test": [
             "@php artisan config:clear --ansi @no_additional_args",
             "@php artisan test"

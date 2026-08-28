@@ -1,0 +1,36 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/index.php": {
+      "runtime": "vercel-php@0.8.0"
+    }
+  },
+  "routes": [
+    { "src": "/build/(.*)", "dest": "/public/build/$1" },
+    { "src": "/storage/(.*)", "dest": "/api/storage.php" },
+    { "src": "/(.*)", "dest": "/api/index.php" }
+  ],
+  "env": {
+    "APP_NAME": "Thinking Darkroom",
+    "APP_ENV": "production",
+    "APP_DEBUG": "false",
+    "APP_URL": "https://thinking-darkroom.vercel.app",
+    "APP_CONFIG_CACHE": "/tmp/config.php",
+    "APP_EVENTS_CACHE": "/tmp/events.php",
+    "APP_PACKAGES_CACHE": "/tmp/packages.php",
+    "APP_ROUTES_CACHE": "/tmp/routes.php",
+    "APP_SERVICES_CACHE": "/tmp/services.php",
+    "APP_STORAGE_KEYS": "/tmp/storage/keys",
+    "LARAVEL_STORAGE_PATH": "/tmp/storage",
+    "VIEW_COMPILED_PATH": "/tmp/views",
+    "SSR_TEMP_PATH": "/tmp/ssr",
+    "CACHE_STORE": "file",
+    "SESSION_DRIVER": "file",
+    "SESSION_DOMAIN": null,
+    "LOG_CHANNEL": "stderr",
+    "LOG_LEVEL": "debug",
+    "DB_CONNECTION": "sqlite",
+    "DB_DATABASE": "/tmp/database.sqlite",
+    "NODE_PATH": "node"
+  }
+}

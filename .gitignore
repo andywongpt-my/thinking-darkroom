@@ -38,6 +38,10 @@ Thumbs.db
 *.sql
 *.sql.gz
 
+# Vercel build-time seed bundle (generated during build, ephemeral demo data)
+/database/seed.sqlite
+/seed-storage/
+
 # E2E-only environment override (localhost:8091)
 .env.e2e
 # Local operational scripts (contain local DB credentials — never publish)
