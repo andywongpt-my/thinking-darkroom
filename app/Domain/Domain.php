@@ -188,6 +188,41 @@ final class Domain
 
     public const RETOUCH_APPLIED = 'applied';
 
+    /* ------------------------- sprint 4: retouch derivatives ------------------------- */
+
+    /** Derivative produced while exploring a retouch proposal (preview render). */
+    public const DERIVATIVE_RETOUCH_PREVIEW = 'retouch_preview';
+
+    /** Derivative produced by executing an APPROVED plan (authoritative render). */
+    public const DERIVATIVE_APPROVED_RENDER = 'approved_render';
+
+    public const DERIVATIVE_TYPES = [
+        self::DERIVATIVE_RETOUCH_PREVIEW,
+        self::DERIVATIVE_APPROVED_RENDER,
+    ];
+
+    /**
+     * Sprint 4 adjustment vocabulary. Global, deterministic, explainable.
+     * These are NOT Lightroom units — each is a normalized -1.0..+1.0 offset
+     * interpreted by the DemoRetouchRenderer only.
+     */
+    public const RETOUCH_ADJUSTMENTS = [
+        'exposure',
+        'contrast',
+        'saturation',
+        'warmth',
+        'highlight_recovery',
+        'shadow_lift',
+    ];
+
+    /** Normalized range for every supported adjustment. */
+    public const ADJUSTMENT_MIN = -1.0;
+
+    public const ADJUSTMENT_MAX = 1.0;
+
+    /** Honest renderer attribution stored on every derivative. */
+    public const RENDERER_PROVENANCE_DEMO = 'demo_gd_renderer_deterministic';
+
     /* ---------------------------------- misc ----------------------------------- */
 
     public const QA_SEVERITIES = ['info', 'warning', 'error', 'critical'];

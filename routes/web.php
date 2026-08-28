@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\CreativeMemoryController;
 use App\Http\Controllers\CreativeRoomPageController;
 use App\Http\Controllers\CreativeRoomReviewController;
 use App\Http\Controllers\CullingDecisionController;
@@ -8,6 +9,7 @@ use App\Http\Controllers\PhotographerReviewController;
 use App\Http\Controllers\WorkspacePageController;
 use App\Http\Controllers\WebmcpDiagnosticsController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\QaFindingReviewController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [WorkspacePageController::class, 'root'])->name('root');
@@ -44,6 +46,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Sprint 3 — HUMAN-ONLY culling decision / override (never WebMCP tools).
     Route::post('/projects/{project}/culling/photos/{photo}/decide', [CullingDecisionController::class, 'decide'])
         ->name('culling.photographer-decide');
+
+    // Sprint 4 — HUMAN-ONLY creative memory (LEARN). Never WebMCP tools.
+    Route::get('/projects/{project}/creative-memories', [CreativeMemoryController::class, 'index'])
+        ->name('creative-memory.index');
+    Route::post('/projects/{project}/creative-memories', [CreativeMemoryController::class, 'store'])
+        ->name('creative-memory.store');
+
+    // Sprint 4 — HUMAN-ONLY QA actions (acknowledge / dismiss a finding).
+    // The agent may analyze and explain; only the photographer decides what
+    // happens to a finding. Never WebMCP tools.
+    Route::post('/projects/{project}/qa-findings/{finding}/respond', [QaFindingReviewController::class, 'respond'])
+        ->name('qa-findings.respond');
 
     // WebMCP diagnostics (development panel).
     Route::get('/webmcp-diagnostics/projects/{project}/tools', [WebmcpDiagnosticsController::class, 'tools'])

@@ -186,7 +186,6 @@ export class WebmcpRegistry {
         switch (name) {
             case 'propose_cull':
             case 'propose_retouch_plan':
-            case 'run_consistency_review':
             case 'propose_concepts':
             case 'propose_concept_revision':
             case 'propose_concept_merge':
@@ -194,6 +193,9 @@ export class WebmcpRegistry {
                 return 'PROPOSE';
             // Sprint 3 — persists non-final photo_observations.
             case 'analyze_project_photos':
+            // Sprint 4 — persists non-final qa_findings. NOT READ (it writes),
+            // NOT PROPOSE (it proposes no creative option), never a decision.
+            case 'run_consistency_review':
                 return 'ANALYZE';
             default:
                 return 'READ';

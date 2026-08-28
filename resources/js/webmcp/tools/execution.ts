@@ -27,7 +27,18 @@ export const buildApplyApprovedPlanTool = (
     execute: async () => {
         const result = await webmcpApi.applyApprovedPlan(projectId, proposalId);
 
-        if (result.ok) onExecuted?.();
+        if (result.ok) {
+            // Unregister AFTER the host has settled this very tool call: the
+            // lifecycle teardown (AbortController.abort + host unregisterTool)
+            // fires the registration signal, and the Chrome WebMCP host treats
+            // an aborted registration as an aborted in-flight call — it then
+            // discards our result and throws to the caller even though the
+            // HTTP execution fully succeeded. A microtask still resolves
+            // before the host settles the promise, so yield a full macrotask
+            // first (live-certification finding, Sprint 4; verified: with the
+            // abort signal suppressed the same call resolves the ToolResult).
+            setTimeout(() => onExecuted?.(), 0);
+        }
 
         return result;
     },

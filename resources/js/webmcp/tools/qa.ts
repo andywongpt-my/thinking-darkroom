@@ -1,6 +1,7 @@
 /**
- * QA WebMCP tool: run_consistency_review. PROPOSE authority (creates findings,
- * never modifies creative state).
+ * QA WebMCP tool: run_consistency_review. ANALYZE authority — the scan
+ * PERSISTS qa_findings (so it is NOT read-only), but findings are non-final
+ * analysis: it never modifies creative state or approves anything.
  */
 import type { ModelContextTool } from '../tool-types';
 import { webmcpApi } from '../api';
@@ -9,7 +10,7 @@ export const qaTools = (projectId: number): ModelContextTool[] => [
     {
         name: 'run_consistency_review',
         description:
-            'Runs a consistency review over the project photos (exposure/white-balance/metadata focus) and creates QA findings. PROPOSE authority — creates findings only, never modifies creative state.',
+            'Runs a deterministic consistency review over the selected set (observations + applied derivative adjustments + adopted Creative Brief) and PERSISTS qa_findings. ANALYZE authority — persists analysis, never creative decisions; severity is judged relative to the adopted brief.',
         inputSchema: {
             type: 'object',
             additionalProperties: false,

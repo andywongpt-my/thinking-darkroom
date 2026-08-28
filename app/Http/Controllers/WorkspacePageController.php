@@ -101,6 +101,45 @@ class WorkspacePageController extends Controller
                 'created_at' => $a->created_at->toISOString(),
             ]);
 
+        // Sprint 4 — persisted QA findings for the Consistency QA panel.
+        $qaFindings = $project->findings()
+            ->orderByDesc('id')
+            ->limit(30)
+            ->get()
+            ->map(fn ($f) => [
+                'id' => $f->id,
+                'severity' => $f->severity,
+                'category' => $f->category,
+                'message' => $f->message,
+                'photo_id' => $f->photo_id,
+                'status' => $f->status,
+                'details' => $f->details,
+            ])
+            ->values()
+            ->all();
+
+        // Sprint 4 — persisted photographer decision history (Creative Memory).
+        // Explicit photographer-authored lessons; deterministic context for
+        // future proposals. NOT machine-learned personalization.
+        $creativeMemories = $project->creativeMemories()
+            ->with('photographer:id,name')
+            ->orderByDesc('id')
+            ->limit(30)
+            ->get()
+            ->map(fn ($m) => [
+                'id' => $m->id,
+                'kind' => $m->kind,
+                'lesson' => $m->lesson,
+                'photographer' => $m->photographer?->name,
+                'created_at' => $m->created_at?->toISOString(),
+            ])
+            ->values();
+
+        // Sprint 4 — retouch truth card: the full three-layer history for the
+        // most recent retouch proposal chain (agent original → photographer
+        // modification → executed values) plus the real derivative evidence.
+        $retouch = $this->retouchCard($project);
+
         return Inertia::render('Workspace', [
             'project' => [
                 'id' => $project->id,
@@ -142,7 +181,141 @@ class WorkspacePageController extends Controller
 
                 return $result;
             })(),
+            // Sprint 4 — retouch / QA / creative-memory state for the panels.
+            'retouchCard' => $retouch,
+            'qaFindings' => $qaFindings,
+            'creativeMemories' => $creativeMemories,
         ]);
+    }
+
+    /**
+     * Sprint 4 — the retouch truth card payload: three-layer adjustment
+     * history (AGENT ORIGINAL → PHOTOGRAPHER MODIFICATION → EXECUTED) plus
+     * real before/after evidence (URLs, checksums, dimensions) for the most
+     * recent retouch proposal chain in the project.
+     *
+     * Everything here is read straight from the database and the storage
+     * disk — the UI never fabricates values.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function retouchCard(Project $project): ?array
+    {
+        $chain = $project->proposals()
+            ->whereIn('type', [Domain::TYPE_RETOUCH, Domain::TYPE_BATCH_RETOUCH])
+            ->orderByDesc('id')
+            ->limit(6)
+            ->get();
+
+        if ($chain->isEmpty()) {
+            return null;
+        }
+
+        // Prefer the executed member of the chain; fall back to the newest.
+        $proposal = $chain->firstWhere('executed_at', '!==', null) ?? $chain->first();
+        $proposal->load(['items.photo:id,filename,path,width,height']);
+
+        $item = $proposal->items->first();
+        if ($item === null) {
+            return null;
+        }
+
+        $photo = $item->photo;
+        $originalPath = $photo?->path;
+        $disk = Storage::disk('public');
+
+        // Agent-original values: the superseding proposal's payload preserves
+        // them byte-for-byte; otherwise the proposal's own item params.
+        // PROJECTION: item params also carry read-only brief-awareness
+        // evidence (brief_aware, derived_adjustments, adjustments_summary,
+        // retouch_influenced_by, retouch_note) — the three-layer value
+        // history must present ONLY the executable adjustment numbers, never
+        // the metadata block.
+        $executableKeys = array_fill_keys(Domain::RETOUCH_ADJUSTMENTS, true);
+        $projectAdjustments = fn ($params) => collect(is_array($params) ? $params : [])
+            ->filter(fn ($v, $k) => array_key_exists($k, $executableKeys) && is_numeric($v))
+            ->map(fn ($v) => (float) $v)
+            ->all();
+
+        $agentOriginal = null;
+        if ($proposal->supersedes_id !== null) {
+            $parent = $project->proposals()->find($proposal->supersedes_id);
+            $agentOriginal = data_get($proposal->payload, 'original_items.0.params')
+                ?? $parent?->items->first()?->params;
+        }
+        $agentOriginal ??= $item->params;
+        $agentOriginal = $projectAdjustments($agentOriginal);
+
+        // Photographer modification: the superseded proposal's modify decision.
+        $modification = null;
+        $decision = $project->decisions()
+            ->where('proposal_id', $proposal->supersedes_id ?? $proposal->id)
+            ->where('decision', 'modify')
+            ->orderByDesc('id')
+            ->first();
+        if ($decision !== null) {
+            $mods = $decision->modifications ?? [];
+            $modification = [
+                'adjustments' => $mods['adjustments'] ?? ($mods['params'] ?? null),
+                'note' => $decision->note,
+            ];
+        }
+
+        // Executed values: the persisted derivative adjustments (source of
+        // truth for what actually ran), with the item result as fallback.
+        $derivative = $originalPath
+            ? \App\Models\PhotoDerivative::where('photo_id', $item->photo_id)
+                ->where('type', Domain::DERIVATIVE_APPROVED_RENDER)
+                ->first()
+            : null;
+
+        $executed = $derivative?->adjustments
+            ?? data_get($item->result, 'operations')
+            ?? null;
+
+        $originalSha = $originalPath && $disk->exists($originalPath)
+            ? hash('sha256', (string) $disk->get($originalPath))
+            : null;
+        $derivativeSha = null;
+        $derivativeUrl = null;
+        if ($derivative && $disk->exists($derivative->storage_path)) {
+            $derivativeSha = hash('sha256', (string) $disk->get($derivative->storage_path));
+            $derivativeUrl = asset('storage/'.ltrim($derivative->storage_path, '/'));
+        }
+
+        return [
+            'proposal_id' => $proposal->id,
+            'status' => $proposal->status,
+            'photo' => $photo ? [
+                'id' => $photo->id,
+                'filename' => $photo->filename,
+                'width' => $photo->width,
+                'height' => $photo->height,
+            ] : null,
+            'original' => [
+                'url' => $photo && $photo->path ? asset('storage/'.ltrim($photo->path, '/')) : null,
+                'sha256' => $originalSha,
+            ],
+            'derivative' => $derivative ? [
+                'url' => $derivativeUrl,
+                'sha256' => $derivativeSha,
+                'storage_path' => $derivative->storage_path,
+                'adjustments' => $derivative->adjustments,
+                'provenance' => $derivative->provenance,
+                'proposal_id' => $derivative->proposal_id,
+            ] : null,
+            'agent_original' => [
+                'params' => $agentOriginal,
+                'influenced_by' => data_get($item->params, 'retouch_influenced_by', []),
+                'brief_aware' => (bool) data_get($item->params, 'brief_aware', false),
+                'note' => data_get($item->params, 'retouch_note'),
+            ],
+            'photographer_modification' => $modification,
+            'executed' => $executed !== null ? [
+                'params' => $executed,
+                'at' => $proposal->executed_at?->toISOString(),
+            ] : null,
+        ];
     }
 
     /** POST /projects/{project}/photos — normal JPEG upload for real demo photos. */

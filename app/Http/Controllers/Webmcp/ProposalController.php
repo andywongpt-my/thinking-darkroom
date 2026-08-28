@@ -9,6 +9,7 @@ use App\Models\Proposal;
 use App\Services\Culling\ContextAwareCullingService;
 use App\Services\ProposalApplicator;
 use App\Services\ProposalService;
+use App\Services\Retouch\ContextAwareRetouchService;
 use App\Services\ToolCallAuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,6 +23,7 @@ class ProposalController extends Controller
         private readonly ProposalApplicator $applicator,
         private readonly ToolCallAuditService $audit,
         private readonly ContextAwareCullingService $culling,
+        private readonly ContextAwareRetouchService $retouch,
     ) {}
 
     /**
@@ -110,6 +112,31 @@ class ProposalController extends Controller
                                 'provider' => $observation->provider,
                             ],
                         ]);
+                    }
+                }
+            }
+
+            // Sprint 4 — Creative-Brief-aware enrichment for retouch items:
+            // derive the deterministic adjustment proposal from the photo's
+            // observation + adopted brief and attach it as evidence so the
+            // photographer sees WHY each adjustment was suggested. Still
+            // PROPOSE-only: nothing renders until approval + execute.
+            if (in_array($type, [Domain::TYPE_RETOUCH, Domain::TYPE_BATCH_RETOUCH], true) && isset($item['photo_id'])) {
+                $photo = $project->photos()->where('photos.id', $item['photo_id'])->first();
+                if ($photo !== null) {
+                    $observation = $this->culling->observationFor($photo)
+                        ?? $this->observeSingle($project, $photo);
+                    if ($observation !== null) {
+                        $retouchRec = $this->retouch->recommendForPhoto($project, $observation);
+                        if ($retouchRec !== null) {
+                            $merged['params'] = array_merge($merged['params'] ?? [], [
+                                'brief_aware' => $retouchRec['has_brief'],
+                                'derived_adjustments' => $retouchRec['adjustments'],
+                                'adjustments_summary' => $retouchRec['adjustments_summary'],
+                                'retouch_influenced_by' => $retouchRec['influenced_by'],
+                                'retouch_note' => $retouchRec['note'],
+                            ]);
+                        }
                     }
                 }
             }

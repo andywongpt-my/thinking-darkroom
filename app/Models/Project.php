@@ -67,6 +67,19 @@ class Project extends Model
         return $this->hasMany(QaFinding::class);
     }
 
+    /** Sprint 4 — non-destructive retouch derivatives. */
+    public function derivatives(): HasMany
+    {
+        return $this->hasMany(PhotoDerivative::class);
+    }
+
+    /** Sprint 4 — LEARN: photographer-authored creative memory. */
+    public function creativeMemories(): HasMany
+    {
+        return $this->hasMany(CreativeMemory::class);
+    }
+
+
     public function brainstormSessions(): HasMany
     {
         return $this->hasMany(BrainstormSession::class);

@@ -316,11 +316,13 @@ describe('WebmcpRegistry lifecycle', () => {
         expect(byName.get('get_culling_context')?.authority).toBe('READ');
         expect(byName.get('analyze_project_photos')?.authority).toBe('ANALYZE');
 
-        // Sprint 1/2 PROPOSE tools keep their label; nothing else claims ANALYZE.
+        // Sprint 1/2 PROPOSE tools keep their label; run_consistency_review is
+        // Sprint 4 ANALYZE (persists qa_findings — never READ, never PROPOSE).
         expect(byName.get('propose_cull')?.authority).toBe('PROPOSE');
         expect(byName.get('propose_concepts')?.authority).toBe('PROPOSE');
+        expect(byName.get('run_consistency_review')?.authority).toBe('ANALYZE');
         const analyze = snap.registered.filter((t) => t.authority === 'ANALYZE');
-        expect(analyze.map((t) => t.name)).toEqual(['analyze_project_photos']);
+        expect(analyze.map((t) => t.name).sort()).toEqual(['analyze_project_photos', 'run_consistency_review']);
     });
 
     it('feature detection prefers document.modelContext and ignores deprecated navigator.modelContext', () => {

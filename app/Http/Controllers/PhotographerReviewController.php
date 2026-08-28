@@ -59,6 +59,12 @@ class PhotographerReviewController extends Controller
         $validated = $request->validate([
             'note' => ['sometimes', 'string', 'max:2000'],
             'modifications' => ['sometimes', 'array'],
+            // Sprint 4 — photographer-edited adjustment values. Shape-checked
+            // here; value validation happens against the adjustment vocabulary
+            // in the superseding proposal's lifecycle + applicator.
+            'modifications.adjustments' => ['sometimes', 'array', 'max:12'],
+            'modifications.adjustments.*' => ['numeric'],
+            'modifications.summary' => ['sometimes', 'string', 'max:2000'],
         ]);
 
         try {
@@ -72,7 +78,8 @@ class PhotographerReviewController extends Controller
             return response()->json(['error' => $e->getMessage()], 409);
         }
 
-        // The agent can pick up the draft on the next proposal cycle.
+        // The agent can pick up the draft on the next proposal cycle; a
+        // photographer-edited retouch supersede lands directly pending_review.
         return response()->json([
             'proposal' => $proposal->only(['id', 'project_id', 'type', 'status']),
             'superseding_draft' => $draft->only(['id', 'project_id', 'type', 'status', 'summary']),

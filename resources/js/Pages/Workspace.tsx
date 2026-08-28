@@ -63,6 +63,58 @@ interface ActivityEntry {
     created_at: string;
 }
 
+/* ---------------- Sprint 4 — retouch / QA / creative memory types ---------------- */
+
+interface RetouchCard {
+    proposal_id: number;
+    status: string;
+    photo: { id: number; filename: string; width: number | null; height: number | null } | null;
+    original: { url: string | null; sha256: string | null };
+    derivative: {
+        url: string | null;
+        sha256: string | null;
+        storage_path: string;
+        adjustments: Record<string, number> | null;
+        provenance: string;
+        proposal_id: number | null;
+    } | null;
+    agent_original: {
+        params: Record<string, number> | null;
+        influenced_by: string[];
+        brief_aware: boolean;
+        note: string | null;
+    };
+    photographer_modification: { adjustments: Record<string, number> | null; note: string | null } | null;
+    executed: { params: Record<string, number> | null; at: string | null } | null;
+}
+
+interface QaFindingRow {
+    id: number;
+    severity: string;
+    category: string;
+    message: string;
+    photo_id: number | null;
+    status: string;
+    details: {
+        observation?: string;
+        expected?: string;
+        explanation?: string;
+        influenced_by?: string[];
+        recommendation?: string;
+    } | null;
+}
+
+interface CreativeMemoryRow {
+    id: number;
+    kind: string;
+    lesson: string;
+    /** Photographer display name — string from the page props; defensively
+     * a {id,name} relation object is tolerated and projected via entityName
+     * (the shape that caused React error #31 before the fix). */
+    photographer: string | { id: number; name: string } | null;
+    created_at: string | null;
+}
+
 interface PageProps extends Record<string, unknown> {
     auth: { user: { id: number; name: string; email: string } };
     project: {
@@ -83,6 +135,12 @@ interface PageProps extends Record<string, unknown> {
     webmcp: { available: boolean };
     initialCulling?: CullingContext | null;
     flash?: { success?: string };
+    /** Sprint 4 — retouch truth card (three-layer history + real before/after). */
+    retouchCard?: RetouchCard | null;
+    /** Sprint 4 — persisted consistency-QA findings. */
+    qaFindings?: QaFindingRow[];
+    /** Sprint 4 — persisted photographer decision history (Creative Memory). */
+    creativeMemories?: CreativeMemoryRow[];
 }
 
 const TYPE_LABEL: Record<string, string> = {
@@ -118,6 +176,46 @@ const STATUS_DOT: Record<string, string> = {
 function fmtTime(iso: string | null): string {
     if (!iso) return '—';
     return new Date(iso).toLocaleString();
+}
+
+/** "+0.25 exposure · +0.08 warmth" style formatting for adjustment sets. */
+export function fmtAdjustments(params: Record<string, number> | null | undefined): string {
+    if (!params || Object.keys(params).length === 0) return '—';
+    return Object.entries(params)
+        .map(([k, v]) => `${(v ?? 0) >= 0 ? '+' : ''}${v} ${k}`)
+        .join(' · ');
+}
+
+/**
+ * Render-safe projection for a "named entity" field that may arrive as a
+ * plain string OR as a relation object shaped {id, name} (e.g. an API
+ * response that leaks the eager-loaded relation). The UI conceptually shows
+ * a person name, so the object's `.name` is the human-readable value; any
+ * other object shape falls back to a stable string so an object is NEVER
+ * rendered as a React child (live E2E finding: Minified React error #31).
+ */
+export function entityName(value: unknown): string {
+    if (value === null || value === undefined) return '';
+    if (typeof value === 'string') return value;
+    if (typeof value === 'object' && 'name' in (value as Record<string, unknown>)) {
+        const name = (value as Record<string, unknown>).name;
+        if (typeof name === 'string') return name;
+    }
+    return JSON.stringify(value);
+}
+
+/** Numeric-only projection of an adjustment payload (drops string metadata). */
+function numericAdjustments(params: Record<string, unknown> | null | undefined): Record<string, number> {
+    if (!params) return {};
+    const out: Record<string, number> = {};
+    for (const [k, v] of Object.entries(params)) {
+        if (typeof v === 'number' && Number.isFinite(v)) {
+            // Skip enrichment metadata that happens to be numeric (counts).
+            if (k === 'brief_aware') continue;
+            out[k] = v;
+        }
+    }
+    return out;
 }
 
 /* ---------------- Sprint 3 — context-aware culling constants ---------------- */
@@ -179,7 +277,7 @@ export default function Workspace({
     initialAnalysis?: PhotoAnalysisResponse | null;
 } = {}) {
     const page = usePage<PageProps>();
-    const { project, brief, photos, proposals, decisions, activity, request, flash, initialCulling: pageInitialCulling } = page.props;
+    const { project, brief, photos, proposals, decisions, activity, request, flash, initialCulling: pageInitialCulling, retouchCard: pageRetouchCard, qaFindings: pageQaFindings, creativeMemories: pageCreativeMemories } = page.props;
 
     const isAgent = request.user.is_agent;
 
@@ -192,6 +290,32 @@ export default function Workspace({
     const [diagOpen, setDiagOpen] = useState(false);
     const [notify, setNotify] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
     const uploadRef = useRef<HTMLInputElement>(null);
+
+    /* ---------------- Sprint 4 — retouch / QA / creative memory state ---------------- */
+
+    // Retouch truth card (server-rendered three-layer history).
+    const [retouchCard] = useState<RetouchCard | null>(pageRetouchCard ?? null);
+    // Persisted QA findings, locally updated after photographer QA actions.
+    const [qaFindings, setQaFindings] = useState<QaFindingRow[]>(pageQaFindings ?? []);
+    // Persisted Creative Memory lessons (photographer decision history).
+    const [memories, setMemories] = useState<CreativeMemoryRow[]>(pageCreativeMemories ?? []);
+    // Which retouch proposal's modify form is open.
+    const [modifyOpenFor, setModifyOpenFor] = useState<number | null>(null);
+
+    /** Agent's original numeric adjustments for a retouch proposal. */
+    const agentValuesFor = (p: WorkspaceProposal): Record<string, number> =>
+        numericAdjustments(p.items[0]?.params ?? null);
+
+    /**
+     * Photographer-modified values for a proposal chain: the retouchCard's
+     * modification layer (server-truth) matched to this chain, else null.
+     */
+    const photographerValuesFor = (p: WorkspaceProposal): Record<string, number> | null =>
+        retouchCard?.photographer_modification?.adjustments ?? null;
+    // Photographer-edited adjustment values for the pending retouch proposal.
+    const [modifyValues, setModifyValues] = useState<{ exposure: string; warmth: string }>({ exposure: '', warmth: '' });
+    // Draft text for a new Creative Memory lesson.
+    const [memoryDraft, setMemoryDraft] = useState('');
 
     // The single eligible approved, unexecuted proposal (drives dynamic tool).
     const eligibleProposal = useMemo(
@@ -401,7 +525,7 @@ export default function Workspace({
         const res = await webmcpApi.runConsistencyReview(project.id, 'selected');
         setBusy(null);
         if (res.ok && res.data) {
-            addActivity({ tool_name: 'run_consistency_review', authority: 'PROPOSE', result_status: 'completed', output_summary: { findings: res.data.created_findings.length } });
+            addActivity({ tool_name: 'run_consistency_review', authority: 'ANALYZE', result_status: 'completed', output_summary: { findings: res.data.created_findings.length } });
             setNotify({ kind: 'ok', text: `Consistency review done — ${res.data.created_findings.length} finding(s).` });
         } else {
             setNotify({ kind: 'err', text: `run_consistency_review failed: ${res.error}` });
@@ -465,6 +589,104 @@ export default function Workspace({
         } else {
             addActivity({ tool_name: 'apply_approved_plan', authority: 'EXECUTE', result_status: 'error', output_summary: { error: res.error, proposal_id: eligibleProposal.id } });
             setNotify({ kind: 'err', text: `execute failed: ${res.error}` });
+        }
+    };
+
+    /* ---------------- Sprint 4 — human authority handlers (never WebMCP tools) ---------------- */
+
+    /** HUMAN-ONLY: photographer edits adjustment VALUES, superseding proposal lands pending_review. */
+    const humanModify = async (proposal: WorkspaceProposal) => {
+        const adjustments: Record<string, number> = {};
+        const exposure = parseFloat(modifyValues.exposure);
+        const warmth = parseFloat(modifyValues.warmth);
+        if (Number.isFinite(exposure)) adjustments.exposure = exposure;
+        if (Number.isFinite(warmth)) adjustments.warmth = warmth;
+        if (Object.keys(adjustments).length === 0) {
+            setNotify({ kind: 'err', text: 'Enter at least one adjustment value to modify.' });
+            return;
+        }
+        setBusy('modify');
+        try {
+            const resp = await fetch(route('proposals.modify', [project.id, proposal.id]), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content ?? '',
+                },
+                body: JSON.stringify({
+                    note: 'Photographer edited the adjustment values.',
+                    modifications: { adjustments },
+                }),
+            });
+            const j = await resp.json().catch(() => null);
+            if (resp.ok && j?.superseding_draft) {
+                setLocalProposals((ps) => ps.map((p) => (p.id === proposal.id ? { ...p, status: 'modified' } : p)));
+                addActivity({ tool_name: 'photographer_modify', authority: 'HUMAN', result_status: 'completed', output_summary: { proposal_id: proposal.id, superseded_by: j.superseding_draft.id, adjustments } });
+                setNotify({ kind: 'ok', text: `Values saved — new proposal #${j.superseding_draft.id} is pending your review.` });
+                setModifyValues({ exposure: '', warmth: '' });
+            } else {
+                setNotify({ kind: 'err', text: `Modify failed: ${j?.error ?? resp.statusText}` });
+            }
+        } finally {
+            setBusy(null);
+        }
+    };
+
+    /** HUMAN-ONLY: acknowledge / dismiss a QA finding. */
+    const respondQaFinding = async (finding: QaFindingRow, action: 'acknowledge' | 'dismiss') => {
+        setBusy(`qa-${finding.id}`);
+        try {
+            const resp = await fetch(route('qa-findings.respond', [project.id, finding.id]), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content ?? '',
+                },
+                body: JSON.stringify({ action }),
+            });
+            const j = await resp.json().catch(() => null);
+            if (resp.ok && j?.finding) {
+                setQaFindings((fs) => fs.map((f) => (f.id === finding.id ? { ...f, status: j.finding.status } : f)));
+                addActivity({ tool_name: `photographer_qa_${action}`, authority: 'HUMAN', result_status: 'completed', output_summary: { finding_id: finding.id, status: j.finding.status } });
+                setNotify({ kind: 'ok', text: `Finding #${finding.id} ${action}d.` });
+            } else {
+                setNotify({ kind: 'err', text: `QA action failed: ${j?.error ?? resp.statusText}` });
+            }
+        } finally {
+            setBusy(null);
+        }
+    };
+
+    /** HUMAN-ONLY: persist a photographer-authored creative memory lesson. */
+    const storeMemory = async (lesson: string) => {
+        const text = lesson.trim();
+        if (text.length < 3) {
+            setNotify({ kind: 'err', text: 'A lesson needs at least 3 characters.' });
+            return;
+        }
+        setBusy('memory');
+        try {
+            const resp = await fetch(route('creative-memory.store', project.id), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content ?? '',
+                },
+                body: JSON.stringify({ lesson: text }),
+            });
+            const j = await resp.json().catch(() => null);
+            if (resp.ok && j?.memory) {
+                setMemories((ms) => [j.memory, ...ms]);
+                addActivity({ tool_name: 'photographer_store_memory', authority: 'HUMAN', result_status: 'completed', output_summary: { memory_id: j.memory.id } });
+                setNotify({ kind: 'ok', text: 'Lesson saved to Creative Memory.' });
+            } else {
+                setNotify({ kind: 'err', text: `Save failed: ${j?.error ?? resp.statusText}` });
+            }
+        } finally {
+            setBusy(null);
         }
     };
 
@@ -846,7 +1068,7 @@ export default function Workspace({
                         </div>
                     </section>
 
-                    {/* ============ RIGHT: Creative Direction + Agent Proposal + Review ============ */}
+                    {/* ============ RIGHT: Creative Direction + Retouch + QA + Agent Proposal + Memory ============ */}
                     <section className="space-y-5">
                         {/* Creative Direction */}
                         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
@@ -864,6 +1086,221 @@ export default function Workspace({
                             )}
                         </div>
 
+                        {/* ============ Sprint 4 — RETOUCH PANEL: ORIGINAL vs APPROVED ============ */}
+                        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm" data-testid="retouch-panel">
+                            <div className="mb-2 flex items-center justify-between">
+                                <h3 className="text-sm font-semibold text-gray-800">Retouch</h3>
+                                {retouchCard && (
+                                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                        retouchCard.status === 'executed'
+                                            ? 'bg-gray-800 text-white'
+                                            : retouchCard.status === 'approved'
+                                                ? 'bg-emerald-100 text-emerald-700'
+                                                : 'bg-amber-100 text-amber-700'
+                                    }`} data-testid="retouch-status">
+                                        {retouchCard.status === 'executed' ? 'APPROVED BY PHOTOGRAPHER' : STATE_LABEL[retouchCard.status] ?? retouchCard.status}
+                                    </span>
+                                )}
+                            </div>
+
+                            {retouchCard ? (
+                                <div>
+                                    {/* BEFORE / AFTER — real image sources only */}
+                                    <div className="grid grid-cols-2 gap-2" data-testid="before-after">
+                                        <figure>
+                                            <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">ORIGINAL</p>
+                                            {retouchCard.original.url ? (
+                                                <img src={retouchCard.original.url} alt="original" data-testid="original-image" className="w-full rounded-lg border border-gray-200" />
+                                            ) : (
+                                                <div className="flex h-28 items-center justify-center rounded-lg bg-gray-100 text-xs text-gray-400">no original</div>
+                                            )}
+                                        </figure>
+                                        <figure>
+                                            <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">APPROVED / PREVIEW</p>
+                                            {retouchCard.derivative?.url ? (
+                                                <img src={retouchCard.derivative.url} alt="approved derivative" data-testid="derivative-image" className="w-full rounded-lg border-2 border-emerald-300" />
+                                            ) : (
+                                                <div className="flex h-28 items-center justify-center rounded-lg border border-dashed border-gray-300 text-xs text-gray-400" data-testid="derivative-placeholder">
+                                                    {retouchCard.executed || retouchCard.status === 'approved' ? 'Rendering…' : 'Not executed yet'}
+                                                </div>
+                                            )}
+                                        </figure>
+                                    </div>
+
+                                    {/* Creative Brief influence */}
+                                    {retouchCard.agent_original.influenced_by.length > 0 && (
+                                        <div className="mt-2 flex flex-wrap items-center gap-1.5" data-testid="retouch-influenced-by">
+                                            <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Brief influence</span>
+                                            {retouchCard.agent_original.influenced_by.map((dim) => (
+                                                <code key={dim} className="rounded bg-gray-200/80 px-1.5 py-0.5 text-[10px] font-semibold text-gray-700">{dim}</code>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* THREE-LAYER VALUE HISTORY — the trust core */}
+                                    <dl className="mt-3 space-y-1 text-xs" data-testid="retouch-layers">
+                                        <div className="flex items-baseline justify-between gap-2" data-testid="layer-agent-original">
+                                            <dt className="text-gray-500">AI PROPOSAL</dt>
+                                            <dd className="font-semibold text-gray-800">{fmtAdjustments(retouchCard.agent_original.params)}</dd>
+                                        </div>
+                                        {retouchCard.photographer_modification?.adjustments && (
+                                            <div className="flex items-baseline justify-between gap-2" data-testid="layer-photographer-modified">
+                                                <dt className="text-gray-500">PHOTOGRAPHER MODIFIED{retouchCard.photographer_modification.note ? ' — ' + retouchCard.photographer_modification.note : ''}</dt>
+                                                <dd className="font-semibold text-indigo-700">{fmtAdjustments(retouchCard.photographer_modification.adjustments)}</dd>
+                                            </div>
+                                        )}
+                                        {retouchCard.executed?.params && (
+                                            <div className="flex items-baseline justify-between gap-2 border-t border-gray-100 pt-1" data-testid="layer-executed">
+                                                <dt className="font-semibold text-gray-800">FINAL APPROVED VALUES</dt>
+                                                <dd className="font-bold text-emerald-700">{fmtAdjustments(retouchCard.executed.params)}</dd>
+                                            </div>
+                                        )}
+                                    </dl>
+
+                                    {/* Human-authority status */}
+                                    <p className="mt-2 rounded-md bg-emerald-50 px-2 py-1.5 text-[11px] font-semibold text-emerald-800" data-testid="human-authority-status">
+                                        {retouchCard.executed
+                                            ? 'APPROVED BY PHOTOGRAPHER — only the human-approved values were executed.'
+                                            : retouchCard.status === 'approved'
+                                                ? 'APPROVED — awaiting execution via apply_approved_plan.'
+                                                : retouchCard.status === 'modified'
+                                                    ? 'MODIFIED BY PHOTOGRAPHER — superseding proposal pending review.'
+                                                    : 'PENDING PHOTOGRAPHER REVIEW — nothing executes without photographer approval.'}
+                                    </p>
+
+                                    {/* Real before/after evidence: checksums make it verifiable */}
+                                    <div className="mt-2 space-y-0.5 text-[10px] text-gray-400" data-testid="retouch-evidence">
+                                        <p>original sha256: <code data-testid="original-sha">{retouchCard.original.sha256 ? `${retouchCard.original.sha256.slice(0, 16)}…` : '—'}</code></p>
+                                        {retouchCard.derivative && (
+                                            <>
+                                                <p>derivative sha256: <code data-testid="derivative-sha">{retouchCard.derivative.sha256?.slice(0, 16)}…</code> ({retouchCard.derivative.storage_path})</p>
+                                                <p data-testid="checksum-divergence" className={retouchCard.derivative.sha256 && retouchCard.original.sha256 && retouchCard.derivative.sha256 !== retouchCard.original.sha256 ? 'text-emerald-700' : 'text-rose-600'}>
+                                                    {retouchCard.derivative.sha256 !== retouchCard.original.sha256
+                                                        ? '✓ derivative differs from original — original unchanged (byte-for-byte verified at execute time)'
+                                                        : '✗ derivative checksum equals original — inspect!'}
+                                                </p>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className="text-xs text-gray-400">No retouch proposal yet — run the agent's Propose Retouch Plan.</p>
+                            )}
+                        </div>
+
+                        {/* ============ Sprint 4 — CONSISTENCY QA PANEL ============ */}
+                        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm" data-testid="qa-panel">
+                            <div className="mb-2 flex items-center justify-between">
+                                <h3 className="text-sm font-semibold text-gray-800">Consistency QA</h3>
+                                <span className="text-[11px] text-gray-400" data-testid="qa-summary">
+                                    {qaFindings.length === 0
+                                        ? 'no findings yet'
+                                        : `${qaFindings.filter((f) => f.status === 'open').length} open · ${qaFindings.filter((f) => f.status !== 'open').length} resolved`}
+                                </span>
+                            </div>
+                            {qaFindings.length === 0 ? (
+                                <p className="text-xs text-gray-400">Run the agent's consistency review to populate findings.</p>
+                            ) : (
+                                <ul className="space-y-2">
+                                    {qaFindings.map((f) => (
+                                        <li key={f.id} className="rounded-lg border border-gray-200 p-2" data-testid={`qa-finding-${f.id}`}>
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className="text-[11px] font-bold text-gray-800" data-testid={`qa-category-${f.id}`}>{f.category.replace(/_/g, ' ')}</span>
+                                                <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
+                                                    f.severity === 'info' ? 'bg-sky-100 text-sky-700'
+                                                        : f.severity === 'low' ? 'bg-amber-100 text-amber-700'
+                                                            : f.severity === 'medium' || f.severity === 'warning' ? 'bg-amber-100 text-amber-800'
+                                                                : 'bg-rose-100 text-rose-700'
+                                                }`} data-testid={`qa-severity-${f.id}`}>{f.severity.toUpperCase()}</span>
+                                            </div>
+                                            <p className="mt-1 text-[11px] text-gray-600">{f.message}</p>
+                                            {f.details?.explanation && (
+                                                <p className="mt-1 text-[11px] leading-relaxed text-gray-500" data-testid={`qa-why-${f.id}`}>
+                                                    <b>WHY:</b> {f.details.explanation}
+                                                </p>
+                                            )}
+                                            {f.details?.expected && (
+                                                <p className="mt-0.5 text-[11px] text-gray-500"><b>Expected:</b> {f.details.expected}</p>
+                                            )}
+                                            {f.details?.influenced_by && f.details.influenced_by.length > 0 && (
+                                                <div className="mt-1 flex flex-wrap items-center gap-1" data-testid={`qa-influenced-${f.id}`}>
+                                                    <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">influenced_by</span>
+                                                    {f.details.influenced_by?.map((ref) => (
+                                                        <code key={ref} className="rounded bg-gray-200/80 px-1.5 py-0.5 text-[10px] font-semibold text-gray-700">{ref}</code>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            <div className="mt-1.5 flex items-center gap-2">
+                                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${f.status === 'open' ? 'bg-amber-100 text-amber-700' : f.status === 'acknowledged' ? 'bg-sky-100 text-sky-700' : 'bg-gray-200 text-gray-600'}`} data-testid={`qa-status-${f.id}`}>
+                                                    {f.status}
+                                                </span>
+                                                {!isAgent && f.status === 'open' && (
+                                                    <div className="flex gap-1.5">
+                                                        <button
+                                                            onClick={() => void respondQaFinding(f, 'acknowledge')}
+                                                            disabled={busy !== null}
+                                                            className="rounded border border-sky-300 px-2 py-0.5 text-[11px] font-semibold text-sky-700 hover:bg-sky-50 disabled:opacity-40"
+                                                        >
+                                                            Acknowledge
+                                                        </button>
+                                                        <button
+                                                            onClick={() => void respondQaFinding(f, 'dismiss')}
+                                                            disabled={busy !== null}
+                                                            className="rounded border border-gray-400 px-2 py-0.5 text-[11px] font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                                                        >
+                                                            Dismiss
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                {isAgent && <span className="text-[10px] italic text-gray-400">agent view — QA actions are photographer authority</span>}
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+
+                        {/* ============ Sprint 4 — CREATIVE MEMORY ============ */}
+                        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm" data-testid="creative-memory-panel">
+                            <h3 className="mb-1 text-sm font-semibold text-gray-800">Creative Memory</h3>
+                            <p className="mb-2 text-[10px] leading-relaxed text-gray-400">
+                                Photographer decision history — explicit lessons you record. Future proposals read them as
+                                deterministic context; this is not machine-learned personalization.
+                            </p>
+                            {!isAgent && (
+                                <div className="mb-2 flex gap-1.5">
+                                    <input
+                                        type="text"
+                                        value={memoryDraft}
+                                        onChange={(e) => setMemoryDraft(e.target.value)}
+                                        placeholder='e.g. "Less warm." "Preserve grain."'
+                                        className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs"
+                                        aria-label="New creative memory lesson"
+                                    />
+                                    <button
+                                        onClick={() => void storeMemory(memoryDraft)}
+                                        disabled={busy !== null}
+                                        className="rounded bg-gray-800 px-2 py-1 text-[11px] font-semibold text-white hover:bg-gray-700 disabled:opacity-40"
+                                    >
+                                        {busy === 'memory' ? '…' : 'Save'}
+                                    </button>
+                                </div>
+                            )}
+                            <ul className="space-y-1.5" data-testid="memory-list">
+                                {memories.length === 0 ? (
+                                    <li className="text-xs text-gray-400">No lessons yet.</li>
+                                ) : (
+                                    memories.map((m) => (
+                                        <li key={m.id} className="rounded-md border border-gray-100 bg-gray-50/70 p-2 text-[11px]" data-testid={`memory-${m.id}`}>
+                                            <p className="text-gray-700">“{m.lesson}”</p>
+                                            <p className="mt-0.5 text-[10px] text-gray-400">
+                                                {entityName(m.photographer) || 'photographer'} · {m.kind} · {fmtTime(m.created_at)}
+                                            </p>
+                                        </li>
+                                    ))
+                                )}
+                            </ul>
+                        </div>
                         {/* Agent proposal controls */}
                         <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                             <h3 className="mb-2 text-sm font-semibold text-gray-800">Agent Proposal</h3>
@@ -917,23 +1354,89 @@ export default function Workspace({
                                                     {p.items.length} item(s) · {p.created_by ?? 'agent'} · {fmtTime(p.created_at)}
                                                 </div>
 
+                                                {/* Retouch proposal value layers — makes human authority obvious */}
+                                                {(p.type === 'retouch' || p.type === 'batch_retouch') && p.items[0]?.params && (
+                                                    <div className="mt-1.5 space-y-0.5 text-[11px]" data-testid={`proposal-${p.id}-values`}>
+                                                        <p className="text-gray-600">
+                                                            AI proposal: <b data-testid="ai-proposed-values">{fmtAdjustments(agentValuesFor(p))}</b>
+                                                        </p>
+                                                        {(p.status === 'approved' || p.status === 'executed') && (
+                                                            <p className="text-gray-600">
+                                                                Photographer modified: <b data-testid="photographer-modified-values">{fmtAdjustments(photographerValuesFor(p) ?? agentValuesFor(p))}</b>
+                                                            </p>
+                                                        )}
+                                                        {p.status === 'executed' && (
+                                                            <p className="text-gray-900">
+                                                                Final approved (executed): <b data-testid="final-approved-values">{fmtAdjustments(photographerValuesFor(p) ?? agentValuesFor(p))}</b>
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                )}
+
                                                 {/* Reviewer != agent: approve/reject/modify are HUMAN-ONLY */}
                                                 {!isAgent && (p.status === 'pending_review' || p.status === 'draft') && (
-                                                    <div className="mt-2 flex gap-2">
-                                                        <button
-                                                            onClick={() => humanApprove(p)}
-                                                            disabled={busy !== null}
-                                                            className="rounded bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
-                                                        >
-                                                            Approve
-                                                        </button>
-                                                        <button
-                                                            onClick={() => humanReject(p)}
-                                                            disabled={busy !== null}
-                                                            className="rounded bg-rose-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-rose-500 disabled:opacity-40"
-                                                        >
-                                                            Reject
-                                                        </button>
+                                                    <div className="mt-2">
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                onClick={() => humanApprove(p)}
+                                                                disabled={busy !== null}
+                                                                className="rounded bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
+                                                            >
+                                                                Approve
+                                                            </button>
+                                                            {(p.type === 'retouch' || p.type === 'batch_retouch') && (
+                                                                <button
+                                                                    onClick={() => setModifyOpenFor((cur) => (cur === p.id ? null : p.id))}
+                                                                    disabled={busy !== null}
+                                                                    className="rounded border border-indigo-400 px-2 py-1 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-40"
+                                                                >
+                                                                    Modify
+                                                                </button>
+                                                            )}
+                                                            <button
+                                                                onClick={() => humanReject(p)}
+                                                                disabled={busy !== null}
+                                                                className="rounded bg-rose-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-rose-500 disabled:opacity-40"
+                                                            >
+                                                                Reject
+                                                            </button>
+                                                        </div>
+                                                        {modifyOpenFor === p.id && (
+                                                            <div className="mt-2 rounded-lg border border-indigo-200 bg-white p-2" data-testid="modify-form">
+                                                                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                                                                    Your values (agent proposed {fmtAdjustments(agentValuesFor(p))})
+                                                                </p>
+                                                                <div className="mt-1 flex items-center gap-2">
+                                                                    <label htmlFor={`mod-exposure-${p.id}`} className="text-[11px] text-gray-600">Exposure</label>
+                                                                    <input
+                                                                        id={`mod-exposure-${p.id}`}
+                                                                        data-testid="modify-exposure"
+                                                                        type="number" step="0.01" min="-1" max="1"
+                                                                        value={modifyValues.exposure}
+                                                                        onChange={(e) => setModifyValues((v) => ({ ...v, exposure: e.target.value }))}
+                                                                        placeholder={String(agentValuesFor(p).exposure ?? 0)}
+                                                                        className="w-20 rounded border border-gray-300 px-1.5 py-1 text-xs"
+                                                                    />
+                                                                    <label htmlFor={`mod-warmth-${p.id}`} className="text-[11px] text-gray-600">Warmth</label>
+                                                                    <input
+                                                                        id={`mod-warmth-${p.id}`}
+                                                                        data-testid="modify-warmth"
+                                                                        type="number" step="0.01" min="-1" max="1"
+                                                                        value={modifyValues.warmth}
+                                                                        onChange={(e) => setModifyValues((v) => ({ ...v, warmth: e.target.value }))}
+                                                                        placeholder={String(agentValuesFor(p).warmth ?? 0)}
+                                                                        className="w-20 rounded border border-gray-300 px-1.5 py-1 text-xs"
+                                                                    />
+                                                                    <button
+                                                                        onClick={() => void humanModify(p)}
+                                                                        disabled={busy !== null}
+                                                                        className="rounded bg-indigo-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-indigo-500 disabled:opacity-40"
+                                                                    >
+                                                                        Save values
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 )}
 

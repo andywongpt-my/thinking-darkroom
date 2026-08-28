@@ -182,16 +182,57 @@ class ProposalService
 
             $this->resetRetouchMarkers($proposal);
 
-            return Proposal::create([
+            // Sprint 4 — for retouch proposals the photographer may supply
+            // edited adjustment VALUES (`modifications.adjustments`). When
+            // given, the superseding proposal is created directly in
+            // PENDING_REVIEW with the photographer's values as executable
+            // params; the original agent values are preserved in payload.
+            $isRetouch = in_array($proposal->type, [Domain::TYPE_RETOUCH, Domain::TYPE_BATCH_RETOUCH], true);
+            $adjustments = $modifications['adjustments'] ?? ($modifications['params'] ?? null);
+            $photographerEdited = $isRetouch && is_array($adjustments) && $adjustments !== [];
+
+            $superseding = Proposal::create([
                 'project_id' => $proposal->project_id,
                 'created_by' => $proposal->created_by,
                 'type' => $proposal->type,
-                'status' => Domain::STATE_DRAFT,
+                'status' => $photographerEdited ? Domain::STATE_PENDING_REVIEW : Domain::STATE_DRAFT,
                 'summary' => ($note ? $note.' — ' : 'Revised plan based on photographer feedback. ')
                     . ($modifications['summary'] ?? ''),
-                'payload' => ['refines' => $proposal->id, 'feedback' => $modifications],
+                'payload' => [
+                    'refines' => $proposal->id,
+                    'feedback' => $modifications,
+                    // Preserve the ORIGINAL agent values for honest history.
+                    'original_items' => $proposal->items->map(fn ($i) => [
+                        'photo_id' => $i->photo_id,
+                        'params' => $i->params,
+                        'rationale' => $i->rationale,
+                    ])->all(),
+                ],
                 'supersedes_id' => $proposal->id,
             ]);
+
+            if ($photographerEdited) {
+                foreach ($proposal->items as $item) {
+                    ProposalItem::create([
+                        'proposal_id' => $superseding->id,
+                        'photo_id' => $item->photo_id,
+                        'kind' => $item->kind,
+                        'action' => $item->action,
+                        'rationale' => $item->rationale,
+                        'params' => $adjustments,
+                        'status' => 'proposed',
+                    ]);
+                }
+
+                $superseding->items()
+                    ->whereNotNull('photo_id')
+                    ->get()
+                    ->each(function (ProposalItem $item) {
+                        $item->photo?->forceFill(['retouch_state' => Domain::RETOUCH_PROPOSED])->saveQuietly();
+                    });
+            }
+
+            return $superseding;
         });
     }
 

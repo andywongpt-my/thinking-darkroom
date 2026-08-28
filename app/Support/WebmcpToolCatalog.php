@@ -259,13 +259,18 @@ final class WebmcpToolCatalog
             ],
             'run_consistency_review' => [
                 'name' => 'run_consistency_review',
-                'authority' => Domain::AUTHORITY_PROPOSE,
+                // Sprint 4 authority semantics: this scan PERSISTS qa_findings,
+                // so it is NOT read-only. It derives + persists NON-FINAL
+                // analysis (findings are evidence, never creative decisions)
+                // — exactly the ANALYZE authority from the Sprint 3 model.
+                // It must never be presented as a READ tool.
+                'authority' => Domain::AUTHORITY_ANALYZE,
                 'method' => 'POST',
                 'path' => self::routePath('api.webmcp.qa.review', [
                     'project' => self::PROJECT_PLACEHOLDER,
                 ]),
-                'read_only' => false,
-                'description' => 'Runs a consistency review and creates qa_findings for the project.',
+                'read_only' => false, // persists qa_findings → readOnlyHint = false
+                'description' => 'Runs a deterministic consistency review over the selected set (observations + applied derivative adjustments + adopted Creative Brief) and PERSISTS qa_findings. Persists analysis, never creative decisions. ANALYZE authority (not READ): the scan writes qa_findings rows; severity is judged relative to the adopted brief.',
                 'dynamic' => false,
             ],
             'apply_approved_plan' => [
