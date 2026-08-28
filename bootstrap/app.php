@@ -22,6 +22,14 @@ return Application::configure(basePath: dirname(__DIR__))
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Vercel terminates TLS before forwarding requests to the PHP function.
+        // Trust only its scheme signal; client-supplied forwarding IP/host data
+        // must not influence login throttling, audit trails, or reset URLs.
+        $middleware->trustProxies(
+            at: '*',
+            headers: Request::HEADER_X_FORWARDED_PROTO,
+        );
+
         // Same-origin SPA + Inertia: let the frontend call /api/projects over
         // the authenticated session; standalone agents still use tokens.
         $middleware->statefulApi();
