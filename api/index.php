@@ -58,4 +58,15 @@ if ($needsRefresh) {
     file_put_contents($releaseMarker, $releaseFingerprint, LOCK_EX);
 }
 
+// ---- built-in-server SCRIPT_NAME fix --------------------------------------
+// When PHP's built-in server runs with a router script (as the vercel-php
+// runtime does), SCRIPT_NAME/PHP_SELF are polluted with the REQUEST path.
+// Symfony derives Laravel's base path from dirname(SCRIPT_NAME); with the
+// entrypoint living in api/ that yields "/api", so Laravel strips the /api
+// prefix from every route and all /api/* endpoints 404. The lambda serves
+// the whole app at "/" (all rewrites land on this single entrypoint), so
+// the honest mapping is a root-level script.
+$_SERVER['SCRIPT_NAME'] = '/index.php';
+$_SERVER['PHP_SELF'] = '/index.php';
+
 require __DIR__.'/../public/index.php';
