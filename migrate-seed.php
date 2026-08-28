@@ -27,6 +27,9 @@ $env = [
     'DB_DATABASE' => __DIR__.'/database/seed.sqlite',
     'SESSION_DRIVER' => 'file',
     'CACHE_STORE' => 'file',
+    // Build container has its own writable project dir; pin storage there
+    // (vercel.json env is runtime-only and does NOT reach the build phase).
+    'LARAVEL_STORAGE_PATH' => __DIR__.'/storage-seed',
 ];
 
 foreach ($env as $k => $v) {
@@ -56,7 +59,7 @@ foreach (['DatabaseSeeder', 'Sprint3CullingSeeder'] as $seeder) {
 }
 
 // Bundle the seeded public-disk media (photos) for the read-only lambda.
-$src = rtrim(getenv('LARAVEL_STORAGE_PATH') ?: sys_get_temp_dir().'/storage', '/').'/app/public';
+$src = __DIR__.'/storage-seed/app/public';
 $dst = __DIR__.'/seed-storage';
 
 if (is_dir($dst)) {
