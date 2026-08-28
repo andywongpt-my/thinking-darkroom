@@ -42,6 +42,7 @@ Thumbs.db
 /database/seed.sqlite
 /seed-storage/
 /storage-seed/
+/vercel-out/
 
 # E2E-only environment override (localhost:8091)
 .env.e2e

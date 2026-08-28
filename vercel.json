@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "outputDirectory": "public",
+  "outputDirectory": "vercel-out",
   "functions": {
     "api/index.php": { "runtime": "vercel-php@0.8.0" },
     "api/storage.php": { "runtime": "vercel-php@0.8.0" }
