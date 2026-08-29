@@ -132,6 +132,11 @@ interface PageProps extends Record<string, unknown> {
     request: {
         user: { id: number; name: string; is_agent: boolean };
     };
+    permissions?: {
+        can_upload: boolean;
+        can_photographer_act: boolean;
+        can_execute: boolean;
+    };
     webmcp: { available: boolean };
     initialCulling?: CullingContext | null;
     flash?: { success?: string };
@@ -277,9 +282,15 @@ export default function Workspace({
     initialAnalysis?: PhotoAnalysisResponse | null;
 } = {}) {
     const page = usePage<PageProps>();
-    const { project, brief, photos, proposals, decisions, activity, request, flash, initialCulling: pageInitialCulling, retouchCard: pageRetouchCard, qaFindings: pageQaFindings, creativeMemories: pageCreativeMemories } = page.props;
+    const { project, brief, photos, proposals, decisions, activity, request, permissions: pagePermissions, flash, initialCulling: pageInitialCulling, retouchCard: pageRetouchCard, qaFindings: pageQaFindings, creativeMemories: pageCreativeMemories } = page.props;
 
     const isAgent = request.user.is_agent;
+    const permissions = pagePermissions ?? {
+        can_upload: false,
+        can_photographer_act: false,
+        can_execute: false,
+    };
+    const canPhotographerAct = permissions.can_photographer_act;
 
     const [selectedId, setSelectedId] = useState<number | null>(photos[0]?.id ?? null);
     const [localProposals, setLocalProposals] = useState<WorkspaceProposal[]>(proposals);
@@ -339,6 +350,7 @@ export default function Workspace({
     const [cullingLoading, setCullingLoading] = useState((pageInitialCulling ?? initialCullingProp) === null);
     // Per-photo analysis for the selected frame (deep payload incl. provenance).
     const [analysis, setAnalysis] = useState<PhotoAnalysisResponse | null>(initialAnalysis);
+    const [analysisRefresh, setAnalysisRefresh] = useState(0);
     // photographer decisions recorded this session (photo_id → decision payload).
     const [myDecisions, setMyDecisions] = useState<Record<number, PhotographerDecisionPayload['decision']>>({});
     const [overrideNote, setOverrideNote] = useState('');
@@ -382,7 +394,7 @@ export default function Workspace({
         return () => {
             live = false;
         };
-    }, [project.id, selectedId]);
+    }, [project.id, selectedId, analysisRefresh]);
 
     /**
      * HUMAN-ONLY photographer decision (never a WebMCP tool). Persists
@@ -517,6 +529,37 @@ export default function Workspace({
         } else {
             addActivity({ tool_name: 'propose_retouch_plan', authority: 'PROPOSE', result_status: 'error', output_summary: { error: res.error } });
             setNotify({ kind: 'err', text: `propose_retouch_plan failed: ${res.error}` });
+        }
+    };
+
+    const runAnalyze = async () => {
+        setBusy('analyze');
+        try {
+            const res = await webmcpApi.analyzeProjectPhotos(project.id);
+            if (res.ok && res.data) {
+                addActivity({
+                    tool_name: 'analyze_project_photos',
+                    authority: 'ANALYZE',
+                    result_status: 'completed',
+                    output_summary: {
+                        newly_analyzed: res.data.newly_analyzed,
+                        total_observed: res.data.total_observed,
+                    },
+                });
+                await loadCulling();
+                setAnalysisRefresh((version) => version + 1);
+                setNotify({ kind: 'ok', text: `Analysis complete — ${res.data.newly_analyzed} new observation(s).` });
+            } else {
+                addActivity({
+                    tool_name: 'analyze_project_photos',
+                    authority: 'ANALYZE',
+                    result_status: 'error',
+                    output_summary: { error: res.error },
+                });
+                setNotify({ kind: 'err', text: `analyze_project_photos failed: ${res.error}` });
+            }
+        } finally {
+            setBusy(null);
         }
     };
 
@@ -742,21 +785,25 @@ export default function Workspace({
                     <section className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
                         <div className="mb-2 flex items-center justify-between">
                             <h3 className="text-sm font-semibold text-gray-800">Photos</h3>
-                            <button
-                                onClick={() => uploadRef.current?.click()}
-                                disabled={busy !== null}
-                                className="rounded-md bg-gray-800 px-2 py-1 text-xs font-medium text-white hover:bg-gray-700 disabled:opacity-40"
-                            >
-                                {busy === 'upload' ? 'Uploading…' : '+ Upload'}
-                            </button>
-                            <input
-                                ref={uploadRef}
-                                type="file"
-                                accept="image/jpeg,image/png,image/webp"
-                                multiple
-                                className="hidden"
-                                onChange={(e) => doUpload(e.target.files)}
-                            />
+                            {permissions.can_upload && (
+                                <>
+                                    <button
+                                        onClick={() => uploadRef.current?.click()}
+                                        disabled={busy !== null}
+                                        className="rounded-md bg-gray-800 px-2 py-1 text-xs font-medium text-white hover:bg-gray-700 disabled:opacity-40"
+                                    >
+                                        {busy === 'upload' ? 'Uploading…' : '+ Upload'}
+                                    </button>
+                                    <input
+                                        ref={uploadRef}
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/webp"
+                                        multiple
+                                        className="hidden"
+                                        onChange={(e) => doUpload(e.target.files)}
+                                    />
+                                </>
+                            )}
                         </div>
                         <div className="grid grid-cols-3 gap-2">
                             {photos.map((p) => {
@@ -949,7 +996,7 @@ export default function Workspace({
                                         </div>
 
                                         {/* PHOTOGRAPHER ACTIONS — HUMAN authority, never a WebMCP tool */}
-                                        {!isAgent && (
+                                        {canPhotographerAct && (
                                             <div className="mt-3 border-t border-gray-200 pt-3" data-testid="photographer-actions">
                                                 <div className="flex flex-wrap items-center gap-2">
                                                     <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Your decision</span>
@@ -1034,9 +1081,14 @@ export default function Workspace({
                                     </div>
                                 )}
                                 {!selectedRec && !cullingLoading && (
-                                    <p className="mt-3 text-[11px] italic text-gray-400">
-                                        No context-aware recommendation yet for this frame.
-                                    </p>
+                                    <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+                                        <p className="font-medium">Analysis has not run for this frame.</p>
+                                        <p className="mt-0.5 text-amber-800">
+                                            {isAgent
+                                                ? 'Run Analyze Project Photos to create non-final observations before requesting a recommendation.'
+                                                : 'An agent must explicitly analyze project photos before this frame can receive a recommendation.'}
+                                        </p>
+                                    </div>
                                 )}
                             </>
                         ) : (
@@ -1234,7 +1286,7 @@ export default function Workspace({
                                                 <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${f.status === 'open' ? 'bg-amber-100 text-amber-700' : f.status === 'acknowledged' ? 'bg-sky-100 text-sky-700' : 'bg-gray-200 text-gray-600'}`} data-testid={`qa-status-${f.id}`}>
                                                     {f.status}
                                                 </span>
-                                                {!isAgent && f.status === 'open' && (
+                                                {canPhotographerAct && f.status === 'open' && (
                                                     <div className="flex gap-1.5">
                                                         <button
                                                             onClick={() => void respondQaFinding(f, 'acknowledge')}
@@ -1267,7 +1319,7 @@ export default function Workspace({
                                 Photographer decision history — explicit lessons you record. Future proposals read them as
                                 deterministic context; this is not machine-learned personalization.
                             </p>
-                            {!isAgent && (
+                            {canPhotographerAct && (
                                 <div className="mb-2 flex gap-1.5">
                                     <input
                                         type="text"
@@ -1320,6 +1372,16 @@ export default function Workspace({
                                 >
                                     {busy === 'retouch' ? '…' : 'Propose Retouch Plan'}
                                 </button>
+                                {isAgent && (
+                                    <button
+                                        onClick={runAnalyze}
+                                        disabled={busy !== null}
+                                        className="w-full rounded-md bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                                        title="Persist non-final photo observations before reading recommendations"
+                                    >
+                                        {busy === 'analyze' ? 'Analyzing…' : 'Analyze Project Photos'}
+                                    </button>
+                                )}
                                 <button
                                     onClick={runReview}
                                     disabled={busy !== null || !isAgent}
@@ -1328,7 +1390,9 @@ export default function Workspace({
                                     {busy === 'review' ? '…' : 'Run Consistency Review'}
                                 </button>
                                 {!isAgent && (
-                                    <p className="text-[11px] text-gray-400">You are signed in as photographer.</p>
+                                    <p className="text-[11px] text-gray-400">
+                                        {canPhotographerAct ? 'You are signed in as photographer.' : 'Viewer access is read-only.'}
+                                    </p>
                                 )}
                             </div>
 
@@ -1373,8 +1437,8 @@ export default function Workspace({
                                                     </div>
                                                 )}
 
-                                                {/* Reviewer != agent: approve/reject/modify are HUMAN-ONLY */}
-                                                {!isAgent && (p.status === 'pending_review' || p.status === 'draft') && (
+                                                {/* Reviewer != agent: approve/reject/modify are photographer-only. */}
+                                                {canPhotographerAct && (p.status === 'pending_review' || p.status === 'draft') && (
                                                     <div className="mt-2">
                                                         <div className="flex gap-2">
                                                             <button
@@ -1440,8 +1504,8 @@ export default function Workspace({
                                                     </div>
                                                 )}
 
-                                                {/* Execute approved plan — visible to both, executes via registered tool */}
-                                                {p.status === 'approved' && !p.executed_at && (
+                                                {/* Server policy remains the authority for execution. */}
+                                                {permissions.can_execute && p.status === 'approved' && !p.executed_at && (
                                                     <button
                                                         onClick={runExecute}
                                                         disabled={busy !== null}

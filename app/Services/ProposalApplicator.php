@@ -277,7 +277,6 @@ class ProposalApplicator
         return $bytes === false || $bytes === '' ? null : hash('sha256', $bytes);
     }
 
-
     private function applyQaResolution(ProposalItem $item): array
     {
         $photo = $item->photo;
@@ -292,7 +291,7 @@ class ProposalApplicator
             }
         }
 
-        if ($photo && $item->action === 'reprocess' || $item->action === 'apply_fix') {
+        if ($photo && in_array($item->action, ['reprocess', 'apply_fix'], true)) {
             $photo->forceFill(['retouch_state' => Domain::RETOUCH_APPLIED])->save();
         }
 

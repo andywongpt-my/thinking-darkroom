@@ -4,13 +4,10 @@ namespace App\Http\Controllers\Webmcp;
 
 use App\Domain\Domain;
 use App\Http\Controllers\Controller;
-use App\Models\Photo;
 use App\Models\Project;
-use App\Support\WebmcpToolCatalog;
 use App\Services\ToolCallAuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 
 /**
  * READ authority tools. Every response is also written to the agent audit
@@ -23,7 +20,7 @@ class WorkspaceController extends Controller
     /** get_workspace_context */
     public function context(Request $request, Project $project): JsonResponse
     {
-        $start = hrtime(true);
+        $this->authorize('view', $project);
 
         $brief = $project->brief;
         $data = [

@@ -3,14 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Domain\Domain;
-use App\Models\Project;
 use App\Models\Photo;
+use App\Models\PhotoDerivative;
+use App\Models\Project;
+use App\Services\Culling\ContextAwareCullingService;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Validation\ValidationException;
-use Illuminate\Http\RedirectResponse;
 
 class WorkspacePageController extends Controller
 {
@@ -28,6 +29,15 @@ class WorkspacePageController extends Controller
     public function show(Request $request, Project $project): Response
     {
         $this->authorize('view', $project);
+
+        $user = $request->user();
+        $role = $project->members()
+            ->where('project_members.user_id', $user->id)
+            ->value('project_members.role');
+        $canPhotographerAct = ! $user->isAgent() && in_array($role, [
+            Domain::ROLE_OWNER,
+            Domain::ROLE_PHOTOGRAPHER,
+        ], true);
 
         $photos = $project->photos()
             ->orderBy('id')
@@ -162,10 +172,15 @@ class WorkspacePageController extends Controller
             'activity' => $activity,
             'request' => [
                 'user' => [
-                    'id' => $request->user()->id,
-                    'name' => $request->user()->name,
-                    'is_agent' => $request->user()->isAgent(),
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'is_agent' => $user->isAgent(),
                 ],
+            ],
+            'permissions' => [
+                'can_upload' => $canPhotographerAct,
+                'can_photographer_act' => $canPhotographerAct,
+                'can_execute' => $role !== Domain::ROLE_VIEWER,
             ],
             'webmcp' => [
                 'available' => true,
@@ -174,8 +189,7 @@ class WorkspacePageController extends Controller
             // first paint already carries recommendations (no extra fetch).
             // Same shape as the WebMCP get_culling_context tool response.
             'initialCulling' => (function () use ($project) {
-                $culling = app(\App\Services\Culling\ContextAwareCullingService::class);
-                $culling->analyzeProject($project);
+                $culling = app(ContextAwareCullingService::class);
                 $result = $culling->recommendForProject($project);
                 $result['context'] = $culling->contextSummary($project);
 
@@ -264,7 +278,7 @@ class WorkspacePageController extends Controller
         // Executed values: the persisted derivative adjustments (source of
         // truth for what actually ran), with the item result as fallback.
         $derivative = $originalPath
-            ? \App\Models\PhotoDerivative::where('photo_id', $item->photo_id)
+            ? PhotoDerivative::where('photo_id', $item->photo_id)
                 ->where('type', Domain::DERIVATIVE_APPROVED_RENDER)
                 ->first()
             : null;
@@ -321,7 +335,7 @@ class WorkspacePageController extends Controller
     /** POST /projects/{project}/photos — normal JPEG upload for real demo photos. */
     public function upload(Request $request, Project $project): RedirectResponse
     {
-        $this->authorize('view', $project);
+        $this->authorize('upload', $project);
 
         $validated = $request->validate([
             'photos' => ['required', 'array', 'min:1', 'max:20'],

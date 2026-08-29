@@ -4,8 +4,10 @@ namespace Tests\Feature;
 
 use App\Domain\Culling\PhotoObservation;
 use App\Domain\Domain;
-use App\Models\CreativeMemory;
+use App\Models\CreativeConcept;
+use App\Models\Photo;
 use App\Models\PhotoDerivative;
+use App\Models\PhotoObservationRecord;
 use App\Models\Project;
 use App\Models\Proposal;
 use App\Models\QaFinding;
@@ -17,6 +19,7 @@ use App\Services\Retouch\ContextAwareRetouchService;
 use App\Support\GdAvailability;
 use App\Support\WebmcpToolCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -47,7 +50,7 @@ class RetouchConsistencyQaTest extends TestCase
     }
 
     /* ------------------------------------------------------------------ */
-    /*  World building                                                     */
+    /*  World building */
     /* ------------------------------------------------------------------ */
 
     /**
@@ -71,7 +74,7 @@ class RetouchConsistencyQaTest extends TestCase
     }
 
     /** Put a real deterministic JPEG on the fake public disk for a photo. */
-    private function putRealJpeg(\App\Models\Photo $photo): void
+    private function putRealJpeg(Photo $photo): void
     {
         $image = imagecreatetruecolor(64, 48);
         imagefill($image, 0, 0, imagecolorallocate($image, 90, 80, 70));
@@ -92,7 +95,7 @@ class RetouchConsistencyQaTest extends TestCase
     }
 
     /** Adopt a concept so the project has an active Creative Brief. */
-    private function adoptBrief(Project $project, User $photographer, array $overrides = []): \App\Models\CreativeConcept
+    private function adoptBrief(Project $project, User $photographer, array $overrides = []): CreativeConcept
     {
         $room = app(CreativeRoomService::class);
         $concept = $room->proposeConcept(
@@ -127,7 +130,7 @@ class RetouchConsistencyQaTest extends TestCase
     }
 
     /* ------------------------------------------------------------------ */
-    /*  1. Brief-aware retouch proposals                                   */
+    /*  1. Brief-aware retouch proposals */
     /* ------------------------------------------------------------------ */
 
     public function test_retouch_proposal_consumes_current_creative_brief(): void
@@ -229,7 +232,7 @@ class RetouchConsistencyQaTest extends TestCase
     }
 
     /* ------------------------------------------------------------------ */
-    /*  2. Photographer review: approve / reject / modify                  */
+    /*  2. Photographer review: approve / reject / modify */
     /* ------------------------------------------------------------------ */
 
     private function makeRetouchProposal(array $photographerAndProject, User $agent, array $params = ['exposure' => 0.3, 'warmth' => 0.22]): Proposal
@@ -302,7 +305,7 @@ class RetouchConsistencyQaTest extends TestCase
     }
 
     /* ------------------------------------------------------------------ */
-    /*  3. Human authority boundaries                                      */
+    /*  3. Human authority boundaries */
     /* ------------------------------------------------------------------ */
 
     public function test_agent_cannot_approve_retouch_proposal(): void
@@ -363,7 +366,7 @@ class RetouchConsistencyQaTest extends TestCase
     }
 
     /* ------------------------------------------------------------------ */
-    /*  4. Execution: derivatives, immutability, idempotency               */
+    /*  4. Execution: derivatives, immutability, idempotency */
     /* ------------------------------------------------------------------ */
 
     private function approveAndExecute(array $world, Proposal $proposal): void
@@ -634,15 +637,15 @@ class RetouchConsistencyQaTest extends TestCase
     }
 
     /* ------------------------------------------------------------------ */
-    /*  5. Consistency QA + counterfactual                                 */
+    /*  5. Consistency QA + counterfactual */
     /* ------------------------------------------------------------------ */
 
-    private function seedSelectedSetWithDerivatives(Project $project, float $outlierWarmth): \Illuminate\Support\Collection
+    private function seedSelectedSetWithDerivatives(Project $project, float $outlierWarmth): Collection
     {
         $photos = $project->photos()->orderBy('id')->take(3)->get();
         foreach ($photos as $i => $photo) {
             $photo->forceFill(['selection_state' => Domain::SELECTION_SELECTED])->save();
-            \App\Models\PhotoObservationRecord::create([
+            PhotoObservationRecord::create([
                 'photo_id' => $photo->id,
                 'project_id' => $project->id,
                 'payload' => [
@@ -777,6 +780,39 @@ class RetouchConsistencyQaTest extends TestCase
         );
     }
 
+    public function test_project_level_qa_resolution_without_a_photo_resolves_findings_safely(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+        $finding = QaFinding::create([
+            'project_id' => $project->id,
+            'photo_id' => null,
+            'severity' => 'warning',
+            'category' => 'project_level_consistency',
+            'message' => 'The set needs a project-level correction.',
+            'details' => [],
+            'status' => 'open',
+        ]);
+
+        $proposal = $this->service->createProposal(
+            $project,
+            $agent,
+            Domain::TYPE_QA_RESOLUTION,
+            [[
+                'action' => 'apply_fix',
+                'params' => ['finding_ids' => [$finding->id]],
+            ]],
+            'Resolve the project-level QA finding.',
+        );
+        $proposal = $this->service->approve($proposal, $photographer);
+
+        $result = app(ProposalApplicator::class)->apply($proposal);
+
+        $finding->refresh();
+        $this->assertSame('resolved', $finding->status);
+        $this->assertSame(1, $result['items_applied']);
+        $this->assertNull($result['items'][0]['photo_id']);
+    }
+
     public function test_qa_human_actions_are_photographer_only(): void
     {
         [$photographer, $agent, $project] = $this->makeWorld();
@@ -816,7 +852,7 @@ class RetouchConsistencyQaTest extends TestCase
     }
 
     /* ------------------------------------------------------------------ */
-    /*  6. Creative Memory (LEARN)                                         */
+    /*  6. Creative Memory (LEARN) */
     /* ------------------------------------------------------------------ */
 
     public function test_photographer_can_store_creative_memory(): void
@@ -918,7 +954,7 @@ class RetouchConsistencyQaTest extends TestCase
     }
 
     /* ------------------------------------------------------------------ */
-    /*  7. Inventory + regressions                                         */
+    /*  7. Inventory + regressions */
     /* ------------------------------------------------------------------ */
 
     public function test_webmcp_inventory_no_drift(): void

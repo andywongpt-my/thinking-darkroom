@@ -16,6 +16,8 @@ class BriefController extends Controller
     /** get_creative_brief */
     public function show(Request $request, Project $project): JsonResponse
     {
+        $this->authorize('view', $project);
+
         $brief = $project->brief;
 
         $this->audit->record(

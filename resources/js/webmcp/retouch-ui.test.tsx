@@ -328,6 +328,7 @@ function baseProps(over: Record<string, unknown> = {}): Record<string, unknown> 
         decisions: [],
         activity: [],
         request: { user: { id: 1, name: 'Maya', is_agent: false } },
+        permissions: { can_upload: true, can_photographer_act: true, can_execute: true },
         webmcp: { available: true },
         retouchCard: RETOUCH_CARD,
         qaFindings: QA_FINDINGS,
@@ -436,7 +437,10 @@ describe('Sprint 4 — Workspace retouch / QA / creative-memory UI + registry ce
         expect(text(html)).toContain('Reject');
         // the photographer-signed-in hint renders for the photographer, never the agent
         expect(text(html)).toContain('You are signed in as photographer');
-        const agentHtml = mount(baseProps({ request: { user: { id: 2, name: 'Agent', is_agent: true } } }));
+        const agentHtml = mount(baseProps({
+            request: { user: { id: 2, name: 'Agent', is_agent: true } },
+            permissions: { can_upload: false, can_photographer_act: false, can_execute: true },
+        }));
         expect(text(agentHtml)).not.toContain('You are signed in as photographer');
     });
 
@@ -485,7 +489,10 @@ describe('Sprint 4 — Workspace retouch / QA / creative-memory UI + registry ce
     it('16. renders the acknowledge action for the photographer and NOT for the agent', () => {
         const html = mount(baseProps());
         expect(text(html)).toContain('Acknowledge');
-        const agentHtml = mount(baseProps({ request: { user: { id: 2, name: 'Agent', is_agent: true } } }));
+        const agentHtml = mount(baseProps({
+            request: { user: { id: 2, name: 'Agent', is_agent: true } },
+            permissions: { can_upload: false, can_photographer_act: false, can_execute: true },
+        }));
         expect(text(agentHtml)).not.toContain('Acknowledge');
         expect(text(agentHtml)).toContain('QA actions are photographer authority');
     });

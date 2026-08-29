@@ -38,7 +38,7 @@ class CreativeRoomController extends Controller
     /** get_brainstorm_context */
     public function brainstormContext(Request $request, Project $project): JsonResponse
     {
-        $this->assertMember($request, $project);
+        $this->authorize('view', $project);
 
         $session = $project->brainstormSessions()->latest('id')->first();
         $direction = $this->creative->structuredIntentFor($project);
@@ -66,7 +66,7 @@ class CreativeRoomController extends Controller
     /** get_creative_direction — the adopted direction + derived structured brief. */
     public function creativeDirection(Request $request, Project $project): JsonResponse
     {
-        $this->assertMember($request, $project);
+        $this->authorize('view', $project);
 
         $direction = $this->creative->structuredIntentFor($project);
 
@@ -89,7 +89,7 @@ class CreativeRoomController extends Controller
     /** list_concepts */
     public function concepts(Request $request, Project $project): JsonResponse
     {
-        $this->assertMember($request, $project);
+        $this->authorize('view', $project);
 
         $concepts = $project->creativeConcepts()
             ->with('items')
@@ -114,7 +114,7 @@ class CreativeRoomController extends Controller
     /** get_concept */
     public function concept(Request $request, Project $project, CreativeConcept $concept): JsonResponse
     {
-        $this->assertMember($request, $project);
+        $this->authorize('view', $project);
         if ($concept->project_id !== $project->id) {
             abort(404, 'Concept does not belong to this project.');
         }
@@ -137,7 +137,7 @@ class CreativeRoomController extends Controller
     /** propose_concepts — up to 3 structured concepts; adoption is human-only. */
     public function proposeConcepts(Request $request, Project $project): JsonResponse
     {
-        $this->assertMember($request, $project);
+        $this->authorize('propose', $project);
 
         $validated = $request->validate([
             'brainstorm_session_id' => ['sometimes', 'integer', 'exists:brainstorm_sessions,id'],
@@ -206,7 +206,7 @@ class CreativeRoomController extends Controller
     /** propose_concept_revision — child of an existing concept, lineage preserved. */
     public function proposeConceptRevision(Request $request, Project $project, CreativeConcept $concept): JsonResponse
     {
-        $this->assertMember($request, $project);
+        $this->authorize('propose', $project);
         if ($concept->project_id !== $project->id) {
             abort(404, 'Concept does not belong to this project.');
         }
@@ -244,7 +244,7 @@ class CreativeRoomController extends Controller
     /** propose_concept_merge — combine two+ concepts into a new merged concept. */
     public function proposeConceptMerge(Request $request, Project $project): JsonResponse
     {
-        $this->assertMember($request, $project);
+        $this->authorize('propose', $project);
 
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
@@ -290,7 +290,7 @@ class CreativeRoomController extends Controller
     /** propose_creative_brief — persisted PROPOSAL only; never activates. */
     public function proposeCreativeBrief(Request $request, Project $project): JsonResponse
     {
-        $this->assertMember($request, $project);
+        $this->authorize('propose', $project);
 
         $validated = $request->validate([
             'source_concept_id' => ['sometimes', 'integer'],
@@ -336,13 +336,6 @@ class CreativeRoomController extends Controller
     }
 
     /* -------------------------------- helpers -------------------------------- */
-
-    private function assertMember(Request $request, Project $project): void
-    {
-        if (! $project->members()->where('user_id', $request->user()->id)->exists()) {
-            abort(403, 'Not a member of this project.');
-        }
-    }
 
     /** @return array<string, mixed> */
     private function conceptPayload(CreativeConcept $concept): array

@@ -7,6 +7,7 @@ use App\Domain\Retouch\RendererUnavailableException;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\Proposal;
+use App\Services\CreativeRoomService;
 use App\Services\Culling\ContextAwareCullingService;
 use App\Services\ProposalApplicator;
 use App\Services\ProposalService;
@@ -14,7 +15,6 @@ use App\Services\Retouch\ContextAwareRetouchService;
 use App\Services\ToolCallAuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class ProposalController extends Controller
@@ -56,7 +56,7 @@ class ProposalController extends Controller
      */
     private function createProposal(Request $request, Project $project, string $type): JsonResponse
     {
-        $this->assertCanPropose($request, $project);
+        $this->authorize('propose', $project);
         $itemRules = $this->itemRulesFor($type);
 
         $validated = $request->validate([
@@ -92,7 +92,7 @@ class ProposalController extends Controller
                     $observation = $this->culling->observationFor($photo)
                         ?? $this->observeSingle($project, $photo);
                     if ($observation !== null) {
-                        $direction = app(\App\Services\CreativeRoomService::class)
+                        $direction = app(CreativeRoomService::class)
                             ->structuredIntentFor($project);
                         $recommendation = $this->culling->recommend(
                             $observation,
@@ -260,13 +260,6 @@ class ProposalController extends Controller
     }
 
     /* ---------------------------------- helpers ---------------------------------- */
-
-    private function assertCanPropose(Request $request, Project $project): void
-    {
-        if (! $project->members()->where('user_id', $request->user()->id)->exists()) {
-            abort(403, 'Not a member of this project.');
-        }
-    }
 
     private function assertCanExecute(Request $request, Project $project, Proposal $proposal): void
     {

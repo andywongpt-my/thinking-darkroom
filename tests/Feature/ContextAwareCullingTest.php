@@ -5,16 +5,17 @@ namespace Tests\Feature;
 use App\Domain\Culling\PhotoObservation;
 use App\Domain\Domain;
 use App\Models\Photo;
-use App\Models\PhotoObservationRecord;
 use App\Models\PhotographerDecision;
+use App\Models\PhotoObservationRecord;
 use App\Models\Project;
 use App\Models\User;
+use App\Services\CreativeRoomService;
 use App\Services\Culling\ContextAwareCullingService;
 use App\Services\Culling\DemoPhotoAnalysisProvider;
 use App\Services\Culling\PhotoAnalysisProvider;
 use App\Services\ProposalService;
-use App\Support\WebmcpToolCatalog;
 use App\Support\GdAvailability;
+use App\Support\WebmcpToolCatalog;
 use Database\Seeders\Sprint3CullingSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -64,6 +65,37 @@ class ContextAwareCullingTest extends TestCase
         PhotoObservationRecord::where('project_id', $this->project->id)->delete();
         DemoPhotoAnalysisProvider::resetSimilarityMemory();
         app(ContextAwareCullingService::class)->analyzeProject($this->project);
+    }
+
+    public function test_workspace_and_read_tools_do_not_create_observations_before_analyze(): void
+    {
+        PhotoObservationRecord::where('project_id', $this->project->id)->delete();
+        $photo = $this->photoByFile('01-candid-laugh-sharp.jpg');
+
+        $this->actingAs($this->photographer)
+            ->get(route('workspace.show', [$this->project->id]))
+            ->assertOk();
+
+        $this->assertSame(0, PhotoObservationRecord::where('project_id', $this->project->id)->count());
+
+        $this->actingAs($this->agent)
+            ->getJson(route('api.webmcp.culling.context', [$this->project->id]))
+            ->assertOk()
+            ->assertJsonPath('context.photos_observed', 0)
+            ->assertJsonCount(0, 'recommendations');
+
+        $this->actingAs($this->agent)
+            ->getJson(route('api.webmcp.culling.photo-analysis', [$this->project->id, $photo->id]))
+            ->assertStatus(409);
+
+        $this->assertSame(0, PhotoObservationRecord::where('project_id', $this->project->id)->count());
+
+        $this->actingAs($this->agent)
+            ->postJson(route('api.webmcp.culling.analyze', [$this->project->id]))
+            ->assertOk()
+            ->assertJsonPath('newly_analyzed', 12);
+
+        $this->assertSame(12, PhotoObservationRecord::where('project_id', $this->project->id)->count());
     }
 
     /* ------------------------------ dataset / analysis ------------------------------ */
@@ -752,7 +784,7 @@ class ContextAwareCullingTest extends TestCase
     /** @return array<string, mixed> the seeder's adopted structured intent */
     private function adoptedIntent(): array
     {
-        $direction = app(\App\Services\CreativeRoomService::class)->structuredIntentFor($this->project);
+        $direction = app(CreativeRoomService::class)->structuredIntentFor($this->project);
         $this->assertNotNull($direction, 'the certification project must have an adopted direction');
 
         return $direction['intent'];

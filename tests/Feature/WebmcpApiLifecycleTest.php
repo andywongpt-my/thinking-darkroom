@@ -4,10 +4,13 @@ namespace Tests\Feature;
 
 use App\Domain\Domain;
 use App\Models\Project;
+use App\Models\Proposal;
 use App\Models\User;
 use App\Support\WebmcpToolCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -206,6 +209,111 @@ class WebmcpApiLifecycleTest extends TestCase
         $this->assertDatabaseCount('proposals', 0);
     }
 
+    public function test_outsider_cannot_read_or_analyze_another_projects_webmcp_data(): void
+    {
+        $outsider = User::factory()->create(['is_agent' => true]);
+        $photoId = $this->photoId(1);
+
+        $this->actingAs($outsider)
+            ->getJson(route('api.webmcp.context', [$this->project->id]))
+            ->assertForbidden();
+
+        $this->actingAs($outsider)
+            ->getJson(route('api.webmcp.photos.index', [$this->project->id]))
+            ->assertForbidden();
+
+        $this->actingAs($outsider)
+            ->getJson(route('api.webmcp.photos.show', [$this->project->id, $photoId]))
+            ->assertForbidden();
+
+        $this->actingAs($outsider)
+            ->getJson(route('api.webmcp.brief.show', [$this->project->id]))
+            ->assertForbidden();
+
+        $this->actingAs($outsider)
+            ->getJson(route('api.webmcp.decisions.index', [$this->project->id]))
+            ->assertForbidden();
+
+        $this->actingAs($outsider)
+            ->getJson(route('api.webmcp.culling.photo-analysis', [$this->project->id, $photoId]))
+            ->assertForbidden();
+
+        $this->actingAs($outsider)
+            ->getJson(route('api.webmcp.culling.context', [$this->project->id]))
+            ->assertForbidden();
+
+        $this->actingAs($outsider)
+            ->postJson(route('api.webmcp.culling.analyze', [$this->project->id]))
+            ->assertForbidden();
+
+        $this->actingAs($outsider)
+            ->postJson(route('api.webmcp.qa.review', [$this->project->id]), ['scope' => 'all'])
+            ->assertForbidden();
+
+        $this->actingAs($outsider)
+            ->getJson(route('api.webmcp.creative.brainstorm', [$this->project->id]))
+            ->assertForbidden();
+
+        $this->actingAs($outsider)
+            ->getJson(route('api.webmcp.creative.direction', [$this->project->id]))
+            ->assertForbidden();
+
+        $this->actingAs($outsider)
+            ->getJson(route('api.webmcp.creative.concepts', [$this->project->id]))
+            ->assertForbidden();
+
+        $this->assertDatabaseCount('photo_observations', 0);
+        $this->assertDatabaseCount('qa_findings', 0);
+    }
+
+    public function test_viewer_cannot_create_a_webmcp_proposal(): void
+    {
+        $viewer = User::factory()->create();
+        $this->project->members()->attach($viewer->id, ['role' => Domain::ROLE_VIEWER]);
+
+        $this->actingAs($viewer)
+            ->postJson(route('api.webmcp.proposals.cull', [$this->project->id]), [
+                'items' => [[
+                    'photo_id' => $this->photoId(1),
+                    'action' => 'cull',
+                ]],
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseCount('proposals', 0);
+    }
+
+    public function test_viewer_cannot_create_a_creative_room_webmcp_proposal(): void
+    {
+        $viewer = User::factory()->create();
+        $this->project->members()->attach($viewer->id, ['role' => Domain::ROLE_VIEWER]);
+
+        $this->actingAs($viewer)
+            ->postJson(route('api.webmcp.creative.concepts', [$this->project->id]), [
+                'concepts' => [[
+                    'title' => 'Viewer cannot propose',
+                    'content' => ['mood' => ['neutral']],
+                ]],
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseCount('creative_concepts', 0);
+    }
+
+    public function test_agent_cannot_upload_project_photos(): void
+    {
+        Storage::fake('public');
+
+        $this->actingAs($this->agent)
+            ->post(route('workspace.upload', [$this->project->id]), [
+                'photos' => [UploadedFile::fake()->image('agent-upload.jpg')],
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseCount('photos', 6);
+        Storage::disk('public')->assertMissing('project-'.$this->project->id.'/agent-upload.jpg');
+    }
+
     private function buildApprovedCull(): array
     {
         $resp = $this->actingAs($this->agent)->postJson(
@@ -215,7 +323,7 @@ class WebmcpApiLifecycleTest extends TestCase
                 'items' => [['photo_id' => $this->photoId(1), 'action' => 'cull']],
             ],
         );
-        $proposal = \App\Models\Proposal::findOrFail($resp->json('proposal.id'));
+        $proposal = Proposal::findOrFail($resp->json('proposal.id'));
 
         return [$proposal];
     }

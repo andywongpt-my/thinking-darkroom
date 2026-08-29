@@ -7,6 +7,7 @@ use App\Domain\Domain;
 use App\Http\Controllers\Controller;
 use App\Models\Photo;
 use App\Models\Project;
+use App\Services\CreativeRoomService;
 use App\Services\Culling\ContextAwareCullingService;
 use App\Services\ToolCallAuditService;
 use Illuminate\Http\JsonResponse;
@@ -32,6 +33,8 @@ class CullingController extends Controller
     /** get_photo_analysis — one photo's observation (+ recommendation against current brief). */
     public function photoAnalysis(Request $request, Project $project, Photo $photo): JsonResponse
     {
+        $this->authorize('view', $project);
+
         $start = hrtime(true);
 
         if ($photo->project_id !== $project->id) {
@@ -47,16 +50,25 @@ class CullingController extends Controller
         $observation = $this->culling->observationFor($photo);
 
         if ($observation === null) {
-            // Analyze lazily so an agent reading a fresh upload still gets data.
-            $this->culling->analyzeProject($project);
-            $observation = $this->culling->observationFor($photo);
+            $this->audit->record(
+                $request, $project, $request->user(), 'get_photo_analysis', Domain::AUTHORITY_READ,
+                ['project_id' => $project->id, 'photo_id' => $photo->id],
+                [
+                    'error' => 'analysis required before photo analysis can be read',
+                    'next_action' => 'analyze_project_photos',
+                    'duration_ms' => (hrtime(true) - $start) / 1e6,
+                ],
+                Domain::RESULT_WARNING,
+            );
+
+            return response()->json([
+                'error' => 'Photo has not been analyzed. Run analyze_project_photos before requesting its analysis.',
+                'code' => 'analysis_required',
+                'next_action' => 'analyze_project_photos',
+            ], 409);
         }
 
-        if ($observation === null) {
-            return response()->json(['error' => 'Photo could not be analyzed.'], 422);
-        }
-
-        $direction = app(\App\Services\CreativeRoomService::class)->structuredIntentFor($project);
+        $direction = app(CreativeRoomService::class)->structuredIntentFor($project);
         $recommendation = $this->culling->recommend($observation, $direction['intent'] ?? null);
 
         $this->audit->record(
@@ -80,10 +92,9 @@ class CullingController extends Controller
     /** get_culling_context — project-wide analysis state + recommendations. */
     public function cullingContext(Request $request, Project $project): JsonResponse
     {
-        $start = hrtime(true);
+        $this->authorize('view', $project);
 
-        // Ensure every photo has an observation before recommending.
-        $this->culling->analyzeProject($project);
+        $start = hrtime(true);
 
         $result = $this->culling->recommendForProject($project);
         $result['context'] = $this->culling->contextSummary($project);
@@ -110,6 +121,8 @@ class CullingController extends Controller
      */
     public function analyzeProject(Request $request, Project $project): JsonResponse
     {
+        $this->authorize('analyze', $project);
+
         $start = hrtime(true);
 
         $analyzed = $this->culling->analyzeProject($project);

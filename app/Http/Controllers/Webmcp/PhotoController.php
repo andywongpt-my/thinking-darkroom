@@ -17,7 +17,7 @@ class PhotoController extends Controller
     /** list_project_photos */
     public function index(Request $request, Project $project): JsonResponse
     {
-        $start = hrtime(true);
+        $this->authorize('view', $project);
 
         $photos = $project->photos()
             ->orderBy('id')
@@ -41,6 +41,8 @@ class PhotoController extends Controller
     /** inspect_photo */
     public function show(Request $request, Project $project, Photo $photo): JsonResponse
     {
+        $this->authorize('view', $project);
+
         $abort = $this->authorizePhoto($request, $project, $photo);
         if ($abort) {
             return $abort;

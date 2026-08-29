@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Webmcp;
 use App\Domain\Domain;
 use App\Http\Controllers\Controller;
 use App\Models\Project;
-use App\Models\QaFinding;
 use App\Services\Qa\ConsistencyQaService;
 use App\Services\ToolCallAuditService;
 use Illuminate\Http\JsonResponse;
@@ -32,6 +31,8 @@ class QaController extends Controller
      */
     public function review(Request $request, Project $project): JsonResponse
     {
+        $this->authorize('analyze', $project);
+
         $validated = $request->validate([
             'scope' => ['sometimes', 'in:selected,all,culled'],
             'focus' => ['sometimes', 'array'],

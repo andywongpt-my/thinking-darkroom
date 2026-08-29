@@ -16,6 +16,8 @@ class DecisionHistoryController extends Controller
     /** get_decision_history */
     public function index(Request $request, Project $project): JsonResponse
     {
+        $this->authorize('view', $project);
+
         $decisions = $project->decisions()
             ->with('proposal', 'photographer:id,name')
             ->orderByDesc('id')
