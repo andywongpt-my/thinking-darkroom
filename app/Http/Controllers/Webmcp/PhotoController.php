@@ -6,6 +6,7 @@ use App\Domain\Domain;
 use App\Http\Controllers\Controller;
 use App\Models\Photo;
 use App\Models\Project;
+use App\Services\Media\MediaStore;
 use App\Services\ToolCallAuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -92,7 +93,7 @@ class PhotoController extends Controller
         return [
             'id' => $p->id,
             'filename' => $p->filename,
-            'url' => $p->path ? asset('storage/'.ltrim($p->path, '/')) : null,
+            'url' => MediaStore::publicUrl($p->path),
             'mime' => $p->mime,
             'width' => $p->width,
             'height' => $p->height,

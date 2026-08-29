@@ -115,4 +115,31 @@ class MediaStoreTest extends TestCase
         $this->expectException(RuntimeException::class);
         app(MediaStore::class)->write('project-1', 'bytes');
     }
+
+    public function test_public_url_passes_absolute_urls_through_unwrapped(): void
+    {
+        $blobUrl = 'https://store.public.blob.vercel-storage.com/project-1/photo.png';
+
+        $this->assertSame($blobUrl, MediaStore::publicUrl($blobUrl));
+        $this->assertStringStartsWith('https://blob.vercel-storage.com', MediaStore::publicUrl('https://blob.vercel-storage.com/x.jpg'));
+    }
+
+    public function test_public_url_wraps_only_relative_paths_with_storage_base(): void
+    {
+        $url = MediaStore::publicUrl('project-1/photo.png');
+
+        $this->assertStringEndsWith('/storage/project-1/photo.png', (string) $url);
+        $this->assertStringContainsString('/storage/project-1/photo.png', (string) $url);
+        $this->assertNull(MediaStore::publicUrl(null));
+        $this->assertNull(MediaStore::publicUrl('   '));
+    }
+
+    public function test_public_url_never_nests_an_absolute_url_under_storage(): void
+    {
+        // Regression: durable photos rendered as /storage/https://... dead links.
+        $blobUrl = 'https://zav0b2xgow4pv27p.public.blob.vercel-storage.com/project-1/photo.png';
+
+        $this->assertSame($blobUrl, MediaStore::publicUrl($blobUrl));
+        $this->assertStringNotContainsString('/storage/http', (string) MediaStore::publicUrl($blobUrl));
+    }
 }

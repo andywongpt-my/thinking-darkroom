@@ -9,9 +9,9 @@ use App\Models\PhotoObservationRecord;
 use App\Models\Project;
 use App\Models\User;
 use App\Services\CreativeRoomService;
+use App\Services\Media\MediaStore;
 use App\Services\ToolCallAuditService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Sprint 3 — context-aware culling decision layer.
@@ -170,7 +170,7 @@ class ContextAwareCullingService
             $recommendation['photo'] = [
                 'id' => $photo->id,
                 'filename' => $photo->filename,
-                'url' => $photo->path ? asset('storage/'.ltrim($photo->path, '/')) : null,
+                'url' => MediaStore::publicUrl($photo->path),
                 'selection_state' => $photo->selection_state,
                 'original_name' => $photo->original_name,
             ];
@@ -607,7 +607,7 @@ class ContextAwareCullingService
     private function gradedScore(string $value, array $map): float
     {
         $v = strtolower(trim($value));
-        if ($v === '' ) {
+        if ($v === '') {
             return 0.4;
         }
         if (isset($map[$v])) {

@@ -46,7 +46,7 @@ class WorkspacePageController extends Controller
             ->map(fn (Photo $p) => [
                 'id' => $p->id,
                 'filename' => $p->filename,
-                'url' => $p->path ? asset('storage/'.ltrim($p->path, '/')) : null,
+                'url' => MediaStore::publicUrl($p->path),
                 'mime' => $p->mime,
                 'width' => $p->width,
                 'height' => $p->height,
@@ -295,7 +295,7 @@ class WorkspacePageController extends Controller
         $derivativeUrl = null;
         if ($derivative && $disk->exists($derivative->storage_path)) {
             $derivativeSha = hash('sha256', (string) $disk->get($derivative->storage_path));
-            $derivativeUrl = asset('storage/'.ltrim($derivative->storage_path, '/'));
+            $derivativeUrl = MediaStore::publicUrl($derivative->storage_path);
         }
 
         return [
@@ -308,7 +308,7 @@ class WorkspacePageController extends Controller
                 'height' => $photo->height,
             ] : null,
             'original' => [
-                'url' => $photo && $photo->path ? asset('storage/'.ltrim($photo->path, '/')) : null,
+                'url' => $photo && $photo->path ? MediaStore::publicUrl($photo->path) : null,
                 'sha256' => $originalSha,
             ],
             'derivative' => $derivative ? [

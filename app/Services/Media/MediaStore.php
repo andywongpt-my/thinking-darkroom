@@ -28,6 +28,25 @@ class MediaStore
     }
 
     /**
+     * Resolve the browser-facing URL for a stored media path.
+     *
+     * Durable records keep the full public Blob URL in the path column and are
+     * returned unchanged; relative local-disk paths are wrapped with the
+     * /storage asset base. Never wrap an absolute URL — doing so produced
+     * /storage/https://... dead links for durable photos (2026-08-29).
+     */
+    public static function publicUrl(?string $path): ?string
+    {
+        if ($path === null || trim($path) === '') {
+            return null;
+        }
+
+        return str_starts_with($path, 'http')
+            ? $path
+            : asset('storage/'.ltrim($path, '/'));
+    }
+
+    /**
      * @return array{path: string, url: string}
      */
     public function write(string $dir, UploadedFile|string $content): array
