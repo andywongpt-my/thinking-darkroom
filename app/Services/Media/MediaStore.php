@@ -227,7 +227,7 @@ class MediaStore
         return ($dir === '' ? '' : $dir.'/').ltrim($filename, '/');
     }
 
-    private function isHttpPath(string $path): bool
+    public function isHttpPath(string $path): bool
     {
         return str_starts_with($path, 'http');
     }

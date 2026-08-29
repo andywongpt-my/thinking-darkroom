@@ -265,6 +265,30 @@ class ProposalController extends Controller
             );
 
             return response()->json(['error' => $e->getMessage()], 409);
+        } catch (\Throwable $e) {
+            // Last-resort honesty net (found live 2026-08-29): an unexpected
+            // error inside the applicator (e.g. a visibility Error from a
+            // private helper) must NOT surface as a bare 500 "Server Error".
+            // The transaction has already rolled back, so the proposal stays
+            // approved — report it as a retryable execution failure.
+            report($e);
+
+            $this->audit->record(
+                $request,
+                $project,
+                $request->user(),
+                'apply_approved_plan',
+                Domain::AUTHORITY_EXECUTE,
+                ['proposal_id' => $proposal->id],
+                ['error' => $e->getMessage(), 'code' => 'execution_failed', 'exception' => class_basename($e)],
+                Domain::RESULT_ERROR,
+                (hrtime(true) - $start) / 1e6,
+            );
+
+            return response()->json([
+                'error' => 'Execution failed unexpectedly: '.$e->getMessage(),
+                'code' => 'execution_failed',
+            ], 422);
         }
 
         $this->audit->record(

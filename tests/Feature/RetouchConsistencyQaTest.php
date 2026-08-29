@@ -21,6 +21,7 @@ use App\Support\WebmcpToolCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
+use Mockery;
 use Tests\TestCase;
 
 /**
@@ -446,6 +447,88 @@ class RetouchConsistencyQaTest extends TestCase
             ->assertJsonPath('code', 'execution_failed');
 
         // Rolled back: proposal still approved and retryable, item not stuck failed.
+        $this->assertSame(Domain::STATE_APPROVED, $proposal->fresh()->status);
+        $this->assertNull($proposal->fresh()->executed_at);
+        $this->assertDatabaseHas('agent_tool_calls', [
+            'tool_name' => 'apply_approved_plan',
+            'result_status' => Domain::RESULT_ERROR,
+        ]);
+    }
+
+    public function test_execution_with_stale_double_prefixed_derivative_row_does_not_500(): void
+    {
+        // Regression (live 2026-08-29, production): a photo carrying a stale
+        // double-prefixed approved_render row from the pre-e1633ec bug hit
+        // MediaStore::isHttpPath() — then PRIVATE — from inside
+        // ProposalApplicator's idempotency check. The visibility Error was
+        // not one of the controller's caught exception types, so the WebMCP
+        // execute endpoint returned a bare 500 "Server Error" and the whole
+        // production E2E arc stalled. Only photos WITH an existing
+        // approved_render derivative row took this branch, which is why the
+        // e1633ec test run (fresh photos, no stale rows) stayed green.
+        [$photographer, $agent, $project] = $this->makeWorld();
+        $proposal = $this->makeRetouchProposal([$photographer, $agent, $project], $agent, ['exposure' => 0.12, 'contrast' => 0.1]);
+        $photo = $project->photos()->first();
+        $this->putRealJpeg($photo);
+
+        // Same-shape stale row the production photo carried: an absolute URL
+        // whose pathname double-embeds the store origin. Derivatives hang off
+        // the project (no Photo::derivatives relation), matching production
+        // data exactly: one approved_render row for this photo.
+        PhotoDerivative::create([
+            'project_id' => $project->id,
+            'photo_id' => $photo->id,
+            'type' => Domain::DERIVATIVE_APPROVED_RENDER,
+            'storage_path' => 'https://store.public.blob.vercel-storage.com/'
+                .'https%3A//store.public.blob.vercel-storage.com/project-1/original.retouched.jpg',
+            'adjustments' => ['exposure' => 0],
+            'provenance' => 'demo',
+            'created_by' => $photographer->id,
+        ]);
+
+        $this->service->approve($proposal, $photographer);
+
+        $response = $this->actingAs($agent)
+            ->postJson(route('api.webmcp.proposals.execute', [$project->id, $proposal->id]))
+            ->assertOk();
+
+        $response->assertJsonPath('proposal.status', Domain::STATE_EXECUTED);
+
+        // Derivative lineage points at the fresh execution, and the stored
+        // pathname is clean (no double prefix).
+        $derivative = PhotoDerivative::where('photo_id', $photo->id)->sole();
+        $this->assertSame($proposal->id, $derivative->proposal_id);
+        $this->assertStringNotContainsString('https%3A', (string) $derivative->storage_path);
+
+        // Original stays byte-for-byte untouched (applicator never writes to
+        // originals; covered exhaustively by test_execution_creates_derivative…).
+    }
+
+    public function test_execution_unexpected_error_returns_422_not_500_and_stays_retryable(): void
+    {
+        // Regression (live 2026-08-29): any unexpected \Throwable inside the
+        // applicator surfaced as a bare 500 "Server Error" through the WebMCP
+        // route. The honesty contract requires a 422 execution_failed that
+        // leaves the approved proposal retryable.
+        [$photographer, $agent, $project] = $this->makeWorld();
+        $proposal = $this->makeRetouchProposal([$photographer, $agent, $project], $agent);
+        $photo = $project->photos()->first();
+        $this->putRealJpeg($photo);
+
+        $this->service->approve($proposal, $photographer);
+
+        // Force an unexpected error class (not RuntimeException) out of the
+        // applicator, mimicking the visibility Error found in production.
+        $applicator = Mockery::mock(ProposalApplicator::class)->makePartial();
+        $applicator->shouldReceive('apply')->once()->andThrow(new \Error('Call to private method (simulated)'));
+
+        $this->instance(ProposalApplicator::class, $applicator);
+
+        $this->actingAs($agent)
+            ->postJson(route('api.webmcp.proposals.execute', [$project->id, $proposal->id]))
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'execution_failed');
+
         $this->assertSame(Domain::STATE_APPROVED, $proposal->fresh()->status);
         $this->assertNull($proposal->fresh()->executed_at);
         $this->assertDatabaseHas('agent_tool_calls', [
