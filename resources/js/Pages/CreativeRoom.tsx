@@ -103,6 +103,12 @@ function dimensionEntries(content: Record<string, unknown> | null | undefined): 
     ]);
 }
 
+function apiErrorReason(error: string | null, status: number): string {
+    const message = error?.trim();
+    if (message) return message;
+    return status > 0 ? `request failed (HTTP ${status})` : 'request failed without a response';
+}
+
 /* ---------------------------------------------------------------- helpers */
 
 /**
@@ -110,7 +116,7 @@ function dimensionEntries(content: Record<string, unknown> | null | undefined): 
  * without a DOM: subscribe to WebMCP concept-mutating activity and refresh
  * the concept list. Returns the unsubscribe function for useEffect cleanup.
  */
-export function bindConceptAutoRefresh(refreshList: () => Promise<void> | void): () => void {
+export function bindConceptAutoRefresh(refreshList: () => Promise<unknown> | unknown): () => void {
     return onConceptMutatingActivity(() => {
         void refreshList();
     });
@@ -148,6 +154,7 @@ export default function CreativeRoom() {
     const [mergeSelection, setMergeSelection] = useState<number[]>([]);
     const [busy, setBusy] = useState<string | null>(null);
     const [notify, setNotify] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+    const [conceptsError, setConceptsError] = useState<string | null>(null);
     const [activity, setActivity] = useState(initialActivity);
 
     const adopted = useMemo(
@@ -155,12 +162,25 @@ export default function CreativeRoom() {
         [concepts, adoptedId],
     );
 
-    const refreshList = useCallback(async () => {
-        const res = await webmcpApi.listConcepts(project.id);
-        if (res.ok && res.data) {
-            setConcepts(res.data.concepts);
-            const a = res.data.concepts.find((c) => c.status === 'adopted');
-            setAdoptedId(a ? a.id : null);
+    const refreshList = useCallback(async (): Promise<boolean> => {
+        try {
+            const res = await webmcpApi.listConcepts(project.id);
+            if (res.ok && res.data) {
+                setConceptsError(null);
+                setConcepts(res.data.concepts);
+                const a = res.data.concepts.find((c) => c.status === 'adopted');
+                setAdoptedId(a ? a.id : null);
+                return true;
+            }
+            const reason = apiErrorReason(res.error, res.status);
+            setConceptsError(reason);
+            setNotify({ kind: 'err', text: `Concepts failed: ${reason}` });
+            return false;
+        } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error);
+            setConceptsError(reason);
+            setNotify({ kind: 'err', text: `Concepts failed: ${reason}` });
+            return false;
         }
     }, [project.id]);
 
@@ -221,7 +241,8 @@ export default function CreativeRoom() {
         const res = await webmcpApi.adoptConcept(project.id, concept.id);
         setBusy(null);
         if (res.ok && res.data) {
-            await refreshList();
+            const refreshed = await refreshList();
+            if (!refreshed) return;
             setBrief((b) => b ?? null);
             setNotify({ kind: 'ok', text: `Creative direction adopted: "${concept.title}". Structured brief persisted.` });
             reloadPage();
@@ -261,7 +282,8 @@ export default function CreativeRoom() {
         setBusy(null);
         if (res.ok && res.data) {
             setMergeSelection([]);
-            await refreshList();
+            const refreshed = await refreshList();
+            if (!refreshed) return;
             setNotify({ kind: 'ok', text: `Merged concept created with lineage from ${mergeSelection.length} sources.` });
         } else {
             setNotify({ kind: 'err', text: `Merge failed: ${res.error}` });
@@ -303,6 +325,9 @@ export default function CreativeRoom() {
                 )}
                 {notify && (
                     <div
+                        role="status"
+                        aria-live="polite"
+                        data-testid="creative-room-notify"
                         className={`mb-4 rounded-lg border px-4 py-3 text-sm ${notify.kind === 'ok' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}
                     >
                         {notify.text}
@@ -319,7 +344,7 @@ export default function CreativeRoom() {
                                     Creative Canvas — current project intent
                                 </h3>
                                 {brainstorm && (
-                                    <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700">
+                                    <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-bold text-indigo-700">
                                         BRAINSTORM #{brainstorm.id} · {brainstorm.photographer ?? 'photographer'}
                                     </span>
                                 )}
@@ -334,7 +359,7 @@ export default function CreativeRoom() {
                                         const value = entries[0]?.[1];
                                         return (
                                             <div key={key} className="rounded-lg border border-gray-100 bg-gray-50 p-2.5">
-                                                <dt className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">{label}</dt>
+                                                <dt className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</dt>
                                                 <dd className="mt-0.5 text-xs text-gray-800">{value || '—'}</dd>
                                             </div>
                                         );
@@ -416,7 +441,23 @@ export default function CreativeRoom() {
                                 )}
                             </div>
 
-                            {concepts.length === 0 ? (
+                            {conceptsError ? (
+                                <div
+                                    role="alert"
+                                    data-testid="concepts-error"
+                                    className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"
+                                >
+                                    <p className="font-medium">Could not load concepts: {conceptsError}</p>
+                                    <button
+                                        type="button"
+                                        onClick={() => void refreshList()}
+                                        disabled={busy !== null}
+                                        className="mt-2 rounded border border-rose-300 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-40"
+                                    >
+                                        Retry concepts
+                                    </button>
+                                </div>
+                            ) : concepts.length === 0 ? (
                                 <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500">
                                     No concepts yet. The agent proposes them through the{' '}
                                     <code className="rounded bg-gray-100 px-1">propose_concepts</code> WebMCP tool.
@@ -452,14 +493,14 @@ export default function CreativeRoom() {
                                                             <dt className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">
                                                                 {k.replace(/_/g, ' ')}
                                                             </dt>
-                                                            <dd className="text-[11px] text-gray-700">{v}</dd>
+                                                            <dd className="text-xs text-gray-700">{v}</dd>
                                                         </div>
                                                     ))}
                                                 </dl>
 
                                                 {/* lineage */}
                                                 {(c.parent_concept_id !== null || (c.lineage_basis && c.lineage_basis.length > 0)) && (
-                                                    <p className="mb-2 text-[10px] text-gray-500">
+                                                    <p className="mb-2 text-xs text-gray-500">
                                                         <span className="font-semibold">Lineage:</span>{' '}
                                                         {c.parent_concept_id !== null && (
                                                             <>revised from #{c.parent_concept_id}{' · '}</>
@@ -472,7 +513,7 @@ export default function CreativeRoom() {
                                                     </p>
                                                 )}
 
-                                                <p className="text-[10px] text-gray-400">
+                                                <p className="text-xs text-gray-400">
                                                     {c.creator_is_agent ? '🤖 agent' : '👤 photographer'} · {fmtTime(c.created_at ?? null)}
                                                 </p>
 
@@ -482,27 +523,27 @@ export default function CreativeRoom() {
                                                         <button
                                                             onClick={() => doExplore(c)}
                                                             disabled={busy !== null}
-                                                            className="rounded bg-sky-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-sky-500 disabled:opacity-40"
+                                                            className="rounded bg-sky-600 px-2 py-1 text-xs font-semibold text-white hover:bg-sky-500 disabled:opacity-40"
                                                         >
                                                             Explore
                                                         </button>
                                                         <button
                                                             onClick={() => doReject(c)}
                                                             disabled={busy !== null}
-                                                            className="rounded bg-rose-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-rose-500 disabled:opacity-40"
+                                                            className="rounded bg-rose-600 px-2 py-1 text-xs font-semibold text-white hover:bg-rose-500 disabled:opacity-40"
                                                         >
                                                             Reject
                                                         </button>
                                                         <button
                                                             onClick={() => toggleMergeSelect(c.id)}
-                                                            className={`rounded px-2 py-1 text-[10px] font-semibold ${mergeSelection.includes(c.id) ? 'bg-violet-700 text-white' : 'border border-violet-300 text-violet-700 hover:bg-violet-50'}`}
+                                                            className={`rounded px-2 py-1 text-xs font-semibold ${mergeSelection.includes(c.id) ? 'bg-violet-700 text-white' : 'border border-violet-300 text-violet-700 hover:bg-violet-50'}`}
                                                         >
                                                             {mergeSelection.includes(c.id) ? '✓ Selected' : 'Select'}
                                                         </button>
                                                         <button
                                                             onClick={() => doAdopt(c)}
                                                             disabled={busy !== null}
-                                                            className="ms-auto rounded bg-emerald-600 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-emerald-500 disabled:opacity-40"
+                                                            className="ms-auto rounded bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-emerald-500 disabled:opacity-40"
                                                             title="Adopt as the project's current Creative Direction"
                                                         >
                                                             Adopt as Creative Direction
@@ -521,7 +562,7 @@ export default function CreativeRoom() {
                     <aside className="space-y-5">
                         <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                             <h3 className="mb-2 text-sm font-semibold text-gray-800">Agent Collaboration</h3>
-                            <p className="mb-2 text-[11px] leading-relaxed text-gray-500">
+                            <p className="mb-2 text-xs leading-relaxed text-gray-500">
                                 The agent <b>explores · analyzes · proposes · remembers</b>. It can never adopt,
                                 reject or commit a creative direction — those are photographer-only actions.
                             </p>
@@ -541,12 +582,12 @@ export default function CreativeRoom() {
                                             <span className={`rounded-full px-1.5 text-[8px] font-bold ${AUTHORITY_COLOR[t.authority] ?? 'bg-gray-100 text-gray-600'}`}>
                                                 {t.authority}
                                             </span>
-                                            <code className="text-[10px] text-gray-600">{t.name}</code>
+                                            <code className="text-xs text-gray-600">{t.name}</code>
                                         </li>
                                     ))}
                                 </ul>
                             </div>
-                            <div className="mt-2 rounded-lg bg-gray-50 p-2.5 text-[10px] text-gray-500">
+                            <div className="mt-2 rounded-lg bg-gray-50 p-2.5 text-xs text-gray-500">
                                 <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">Current context</p>
                                 <p className="mt-1">
                                     Concepts: <b>{concepts.length}</b> · Adopted: <b>{adopted ? `#${adopted.id}` : 'none'}</b> ·
@@ -566,7 +607,7 @@ export default function CreativeRoom() {
                                             <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[a.result_status] ?? 'bg-gray-400'}`} />
                                             <div className="min-w-0">
                                                 <div className="flex flex-wrap items-center gap-1.5">
-                                                    <code className="rounded bg-gray-100 px-1 text-[10px] font-semibold text-gray-800">{a.tool_name}</code>
+                                                    <code className="rounded bg-gray-100 px-1 text-xs font-semibold text-gray-800">{a.tool_name}</code>
                                                     <span className={`rounded-full px-1.5 text-[8px] font-bold ${AUTHORITY_COLOR[a.authority] ?? 'bg-gray-100 text-gray-600'}`}>
                                                         {a.authority}
                                                     </span>
@@ -587,7 +628,7 @@ export default function CreativeRoom() {
                         {brief && (
                             <section className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 shadow-sm">
                                 <h3 className="mb-1 text-sm font-semibold text-emerald-800">Structured Creative Brief</h3>
-                                <p className="text-[10px] text-emerald-700">
+                                <p className="text-xs text-emerald-700">
                                     {brief.creative_direction} · adopted {fmtTime(brief.adopted_at)}
                                 </p>
                                 <pre className="mt-2 max-h-56 overflow-auto rounded-lg bg-white p-2 text-[9px] leading-relaxed text-gray-700">
@@ -600,7 +641,7 @@ export default function CreativeRoom() {
 
                 {/* Authority legend — the state language, explicit for judges */}
                 <div className="mt-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                    <h4 className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Authority state language</h4>
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Authority state language</h4>
                     <div className="mt-2 flex flex-wrap gap-2">
                         {Object.entries(STATUS_STYLE).map(([k, v]) => (
                             <span key={k} className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold tracking-wide ${v.badge}`}>
@@ -608,7 +649,7 @@ export default function CreativeRoom() {
                             </span>
                         ))}
                     </div>
-                    <p className="mt-2 text-[10px] text-gray-400">
+                    <p className="mt-2 text-xs text-gray-400">
                         AI PROPOSAL = created by the agent, awaiting the photographer. ADOPTED BY PHOTOGRAPHER =
                         the photographer's committed creative direction. No agent tool can move a concept into the adopted state.
                     </p>

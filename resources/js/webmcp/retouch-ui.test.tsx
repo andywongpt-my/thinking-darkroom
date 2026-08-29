@@ -390,6 +390,15 @@ describe('Sprint 4 — Workspace retouch / QA / creative-memory UI + registry ce
         expect(html).toContain('src="/storage/derivatives/p/02-approved-render.jpg"');
     });
 
+    it('3b. renders an explicit error when an executed retouch has no derivative', () => {
+        const html = mount(baseProps({
+            retouchCard: { ...RETOUCH_CARD, derivative: null },
+        }));
+        expect(html).toContain('data-testid="retouch-render-error"');
+        expect(text(html)).toContain('Retouch render failed');
+        expect(text(html)).toContain('no approved derivative was stored');
+    });
+
     it('4. original and derivative URLs differ (two distinct sources)', () => {
         const html = mount(baseProps());
         expect(html).toContain('src="/storage/p/02.jpg"');
