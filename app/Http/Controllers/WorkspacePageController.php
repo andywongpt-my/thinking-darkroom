@@ -7,6 +7,7 @@ use App\Models\Photo;
 use App\Models\PhotoDerivative;
 use App\Models\Project;
 use App\Services\Culling\ContextAwareCullingService;
+use App\Services\Media\MediaStore;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -342,9 +343,13 @@ class WorkspacePageController extends Controller
             'photos.*' => ['image', 'mimes:jpeg,jpg,png,webp', 'max:15360'],
         ]);
 
+        $media = app(MediaStore::class);
+
         foreach ($validated['photos'] as $file) {
-            $filename = $file->hashName();
-            $path = $file->store('project-'.$project->id, 'public');
+            // Store the raw bytes (Vercel Blob when durable, public disk otherwise),
+            // then persist the DB row in a second step so a failed storage write
+            // can never produce a photo record whose bytes are missing.
+            $stored = $media->write('project-'.$project->id, $file);
 
             $img = null;
             $dims = null;
@@ -355,18 +360,26 @@ class WorkspacePageController extends Controller
                 $dims = null;
             }
 
-            Photo::create([
-                'project_id' => $project->id,
-                'filename' => $filename,
-                'original_name' => $file->getClientOriginalName(),
-                'path' => $path,
-                'mime' => $file->getMimeType(),
-                'size_bytes' => $file->getSize(),
-                'width' => $dims['w'] ?? null,
-                'height' => $dims['h'] ?? null,
-                'selection_state' => Domain::SELECTION_UNREVIEWED,
-                'retouch_state' => Domain::RETOUCH_NONE,
-            ]);
+            try {
+                Photo::create([
+                    'project_id' => $project->id,
+                    'filename' => $file->hashName(),
+                    'original_name' => $file->getClientOriginalName(),
+                    'path' => $media->recordPath($stored),
+                    'mime' => $file->getMimeType(),
+                    'size_bytes' => $file->getSize(),
+                    'width' => $dims['w'] ?? null,
+                    'height' => $dims['h'] ?? null,
+                    'selection_state' => Domain::SELECTION_UNREVIEWED,
+                    'retouch_state' => Domain::RETOUCH_NONE,
+                ]);
+            } catch (\Throwable $e) {
+                // Compensating delete: never orphan uploaded bytes behind a
+                // failed row insert (Sol P2: partial-failure compensation).
+                $media->delete($stored['path']);
+
+                throw $e;
+            }
         }
 
         return back()->with('flash', ['success' => 'Photos uploaded.']);

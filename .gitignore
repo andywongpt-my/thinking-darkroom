@@ -40,8 +40,9 @@ Thumbs.db
 
 # Vercel build-time seed bundle (generated during build, ephemeral demo data)
 /database/seed.sqlite
-/seed-storage/
 /storage-seed/
+# seed-storage/ is now COMMITTED: immutable synthetic demo media (no PII),
+# bundled deterministically into every lambda (2026-08-29 durable-mode fix)
 /vercel-out/
 
 # E2E-only environment override (localhost:8091)

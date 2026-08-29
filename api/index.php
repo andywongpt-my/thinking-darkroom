@@ -3,11 +3,16 @@
 /**
  * Vercel serverless entry — Thinking Darkroom.
  *
- * Cold start: copy the build-time seed bundle (database/seed.sqlite +
- * seed-storage/) into /tmp, the only writable location in the lambda.
- * Every cold start serves the same deterministic demo dataset; writes
- * within a warm instance live in /tmp and vanish on recycle (documented
- * serverless limitation for this demo).
+ * Durable mode (DB_CONNECTION=mysql|pgsql): the database lives in an
+ * external managed server and media lives in Vercel Blob — nothing
+ * mutable lives in /tmp, so state survives cold starts, instance
+ * recycling, and deploys (fixes the 2026-08-29 upload 404 incident:
+ * /tmp was per-lambda, so uploads and their DB rows never survived
+ * another instance or a recycle).
+ *
+ * Snapshot mode (DB_CONNECTION=sqlite): local/dev only. Copies the
+ * build-time seed bundle (database/seed.sqlite + seed-storage/) into
+ * /tmp; every cold start serves the same deterministic demo dataset.
  *
  * Runtime-only file: not part of the certified application code.
  */
@@ -16,15 +21,20 @@
 $bundleDb = __DIR__.'/../database/seed.sqlite';
 $bundleStorage = __DIR__.'/../seed-storage';
 $releaseMarker = '/tmp/.thinking-darkroom-release';
-$releaseFingerprint = hash('sha256', implode('|', array_map(
-    static fn (string $path): string => (string) (is_file($path) ? hash_file('sha256', $path) : ''),
-    [
-        __FILE__,
-        __DIR__.'/../bootstrap/app.php',
-        __DIR__.'/../composer.lock',
-        __DIR__.'/../vercel.json',
-        $bundleDb,
-    ],
+$dbDriver = strtolower((string) (getenv('DB_CONNECTION') ?: 'sqlite'));
+$durableDb = in_array($dbDriver, ['mysql', 'mariadb', 'pgsql', 'sqlsrv'], true);
+$releaseFingerprint = hash('sha256', implode('|', array_merge(
+    [$dbDriver],
+    array_map(
+        static fn (string $path): string => (string) (is_file($path) ? hash_file('sha256', $path) : ''),
+        [
+            __FILE__,
+            __DIR__.'/../bootstrap/app.php',
+            __DIR__.'/../composer.lock',
+            __DIR__.'/../vercel.json',
+            $bundleDb,
+        ],
+    ),
 )));
 $runtimeCachePaths = [
     getenv('APP_CONFIG_CACHE') ?: '/tmp/config.php',
@@ -43,18 +53,27 @@ if ($needsRefresh) {
         }
     }
 
-    if (is_file('/tmp/database.sqlite')) {
-        unlink('/tmp/database.sqlite');
-    }
-    shell_exec('rm -rf /tmp/storage /tmp/views');
+    if ($durableDb) {
+        // Never touch /tmp/database.sqlite in durable mode: there is no
+        // local DB and resetting it could only destroy shared state.
+        shell_exec('rm -rf /tmp/storage /tmp/views');
+    } else {
+        if (is_file('/tmp/database.sqlite')) {
+            unlink('/tmp/database.sqlite');
+        }
+        shell_exec('rm -rf /tmp/storage /tmp/views');
 
-    if (is_file($bundleDb)) {
-        copy($bundleDb, '/tmp/database.sqlite');
+        if (is_file($bundleDb)) {
+            copy($bundleDb, '/tmp/database.sqlite');
+        }
     }
+
     shell_exec('mkdir -p /tmp/storage/app/public /tmp/storage/framework/sessions /tmp/storage/framework/cache /tmp/storage/framework/views /tmp/storage/logs /tmp/views');
-    if (is_dir($bundleStorage)) {
+
+    if (! $durableDb && is_dir($bundleStorage)) {
         shell_exec('cp -r '.escapeshellarg($bundleStorage).'/. /tmp/storage/app/public/');
     }
+
     file_put_contents($releaseMarker, $releaseFingerprint, LOCK_EX);
 }
 

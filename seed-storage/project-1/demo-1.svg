@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="hsl(0, 55%, 42%)"/>
+      <stop offset="100%" stop-color="hsl(40, 60%, 26%)"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" fill="url(#g)"/>
+  <circle cx="880" cy="250" r="150" fill="rgba(255,255,255,0.12)"/>
+  <circle cx="300" cy="640" r="210" fill="rgba(0,0,0,0.10)"/>
+  <text x="600" y="420" font-family="sans-serif" font-size="52" fill="rgba(255,255,255,0.85)" text-anchor="middle">DEMO demo-0</text>
+  <text x="600" y="480" font-family="sans-serif" font-size="24" fill="rgba(255,255,255,0.55)" text-anchor="middle">WebMCP Challenge placeholder</text>
+</svg>

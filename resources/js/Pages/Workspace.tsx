@@ -741,14 +741,21 @@ export default function Workspace({
         router.post(route('workspace.upload', project.id), form, {
             forceFormData: true,
             preserveScroll: true,
+            // Success copy is owned by the backend flash (set only after the
+            // storage write AND DB row are verified). onSuccess must not
+            // claim success on its own: Inertia also resolves onSuccess for
+            // redirect responses that carry flash errors (truthful-state fix,
+            // 2026-08-29 audit P1-1).
             onSuccess: () => {
                 setBusy(null);
-                setNotify({ kind: 'ok', text: `${files.length} photo(s) uploaded.` });
                 window.location.reload();
             },
-            onError: () => {
+            onError: (errors) => {
                 setBusy(null);
-                setNotify({ kind: 'err', text: 'Upload failed.' });
+                const first = errors && typeof errors === 'object'
+                    ? (Object.values(errors).find((v): v is string => typeof v === 'string') ?? null)
+                    : null;
+                setNotify({ kind: 'err', text: first ? `Upload failed: ${first}` : 'Upload failed.' });
             },
         });
     };
