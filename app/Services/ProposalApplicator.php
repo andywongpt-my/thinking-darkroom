@@ -11,9 +11,10 @@ use App\Models\PhotoDerivative;
 use App\Models\Proposal;
 use App\Models\ProposalItem;
 use App\Models\QaFinding;
+use App\Services\Media\MediaStore;
 use App\Services\Retouch\RetouchRenderer;
-use Illuminate\Support\Facades\Storage;
 use RuntimeException;
+use Throwable;
 
 /**
  * Applies an APPROVED proposal to the authoritative creative state.
@@ -208,16 +209,25 @@ class ProposalApplicator
             return null;
         }
 
-        $path = $this->derivativePath($photo);
+        // Persist through MediaStore so durable deployments store the
+        // derivative bytes in Vercel Blob and the row keeps the public URL
+        // (never a lambda-local /tmp path — Sol Max P0).
+        $media = app(MediaStore::class);
+        $filename = pathinfo($this->derivativePath($photo), PATHINFO_BASENAME);
 
-        $disk = Storage::disk('public');
-        if ($existing && $existing->storage_path === $path && $disk->exists($path)) {
+        if ($existing && $existing->storage_path === $this->derivativePath($photo) && $media->exists($existing->storage_path)) {
             // Already-rendered with the same target path: overwrite with the
             // fresh (identical) bytes only if adjustments differ; otherwise
             // keep the existing file untouched.
             if ($existing->adjustments !== $adjustments->toArray()) {
-                $disk->put($path, $rendered['jpeg']);
+                $stored = $media->writeBytes(
+                    trim(dirname($this->derivativePath($photo)), '.'),
+                    $rendered['jpeg'],
+                    $filename,
+                    'image/jpeg',
+                );
                 $existing->forceFill([
+                    'storage_path' => $media->recordPath($stored),
                     'adjustments' => $adjustments->toArray(),
                     'proposal_id' => $proposal->id,
                 ])->save();
@@ -226,12 +236,18 @@ class ProposalApplicator
             return $existing;
         }
 
-        $disk->put($path, $rendered['jpeg']);
+        $stored = $media->writeBytes(
+            trim(dirname($this->derivativePath($photo)), '.'),
+            $rendered['jpeg'],
+            $filename,
+            'image/jpeg',
+        );
+        $storagePath = $media->recordPath($stored);
 
         if ($existing) {
             // Same photo re-rendered but path changed (rare) — move the row.
             $existing->forceFill([
-                'storage_path' => $path,
+                'storage_path' => $storagePath,
                 'adjustments' => $adjustments->toArray(),
                 'proposal_id' => $proposal->id,
             ])->save();
@@ -239,16 +255,24 @@ class ProposalApplicator
             return $existing;
         }
 
-        return PhotoDerivative::create([
-            'project_id' => $proposal->project_id,
-            'photo_id' => $photo->id,
-            'proposal_id' => $proposal->id,
-            'type' => Domain::DERIVATIVE_APPROVED_RENDER,
-            'storage_path' => $path,
-            'adjustments' => $adjustments->toArray(),
-            'provenance' => $rendered['provenance'],
-            'created_by' => $proposal->created_by,
-        ]);
+        try {
+            return PhotoDerivative::create([
+                'project_id' => $proposal->project_id,
+                'photo_id' => $photo->id,
+                'proposal_id' => $proposal->id,
+                'type' => Domain::DERIVATIVE_APPROVED_RENDER,
+                'storage_path' => $storagePath,
+                'adjustments' => $adjustments->toArray(),
+                'provenance' => $rendered['provenance'],
+                'created_by' => $proposal->created_by,
+            ]);
+        } catch (Throwable $e) {
+            // Compensating delete: never orphan stored derivative bytes
+            // behind a failed row insert.
+            $media->delete($stored['path']);
+
+            throw $e;
+        }
     }
 
     /** Deterministic derivative storage path — distinct from the original. */
@@ -267,14 +291,13 @@ class ProposalApplicator
             return null;
         }
 
-        $disk = Storage::disk('public');
-        if (! $disk->exists($photo->path)) {
+        try {
+            $bytes = app(MediaStore::class)->read($photo->path);
+        } catch (Throwable) {
             return null;
         }
 
-        $bytes = $disk->get($photo->path);
-
-        return $bytes === false || $bytes === '' ? null : hash('sha256', $bytes);
+        return $bytes === '' ? null : hash('sha256', $bytes);
     }
 
     private function applyQaResolution(ProposalItem $item): array

@@ -229,6 +229,25 @@ class ProposalController extends Controller
                 'error' => $e->getMessage(),
                 'code' => 'renderer_unavailable',
             ], 422);
+        } catch (\RuntimeException $e) {
+            // Honest execution failure: 0 items applied — proposal stays
+            // approved and retryable. Audit + surface, never fake success.
+            $this->audit->record(
+                $request,
+                $project,
+                $request->user(),
+                'apply_approved_plan',
+                Domain::AUTHORITY_EXECUTE,
+                ['proposal_id' => $proposal->id],
+                ['error' => $e->getMessage(), 'code' => 'execution_failed'],
+                Domain::RESULT_ERROR,
+                (hrtime(true) - $start) / 1e6,
+            );
+
+            return response()->json([
+                'error' => $e->getMessage(),
+                'code' => 'execution_failed',
+            ], 422);
         } catch (\LogicException $e) {
             $this->audit->record(
                 $request,

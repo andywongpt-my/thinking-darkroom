@@ -5,8 +5,9 @@ namespace App\Services\Culling;
 use App\Domain\Culling\PhotoObservation;
 use App\Domain\Domain;
 use App\Models\Photo;
+use App\Services\Media\MediaStore;
 use App\Support\GdAvailability;
-use Illuminate\Support\Facades\Storage;
+use Throwable;
 
 /**
  * Deterministic demo analysis provider — the honest hackathon implementation.
@@ -31,8 +32,7 @@ class DemoPhotoAnalysisProvider implements PhotoAnalysisProvider
 {
     public function __construct(
         private readonly GdAvailability $gd = new GdAvailability,
-    ) {
-    }
+    ) {}
 
     public function name(): string
     {
@@ -113,13 +113,15 @@ class DemoPhotoAnalysisProvider implements PhotoAnalysisProvider
             return null;
         }
 
-        $disk = Storage::disk('public');
-        if (! $disk->exists($photo->path)) {
+        // Route byte access through MediaStore so durable Vercel Blob URLs
+        // (stored as absolute http paths) resolve exactly like local disks.
+        try {
+            $bytes = app(MediaStore::class)->read($photo->path);
+        } catch (Throwable) {
             return null;
         }
 
-        $bytes = $disk->get($photo->path);
-        if ($bytes === false || $bytes === '') {
+        if ($bytes === '') {
             return null;
         }
 
@@ -290,13 +292,16 @@ class DemoPhotoAnalysisProvider implements PhotoAnalysisProvider
             return [];
         }
 
-        $disk = Storage::disk('public');
+        // Sidecars live next to the original bytes — same MediaStore dual
+        // path (durable http vs local disk).
         $sidecarPath = $photo->path.'.obs.json';
-        if (! $disk->exists($sidecarPath)) {
+        try {
+            $raw = app(MediaStore::class)->read($sidecarPath);
+        } catch (Throwable) {
             return [];
         }
 
-        $decoded = json_decode((string) $disk->get($sidecarPath), true);
+        $decoded = json_decode($raw, true);
 
         return is_array($decoded) ? $decoded : [];
     }

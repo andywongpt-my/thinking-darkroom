@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\CreativeRoomService;
 use App\Services\Media\MediaStore;
 use App\Services\ToolCallAuditService;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 
 /**
@@ -63,14 +64,20 @@ class ContextAwareCullingService
 
             $observation = $this->provider->observe($photo);
 
-            PhotoObservationRecord::create([
-                'photo_id' => $photo->id,
-                'project_id' => $project->id,
-                'payload' => $observation->toArray(),
-                'provider' => $observation->provider,
-                'provenance' => $observation->provenance,
-                'similarity_group' => $observation->similarityGroup,
-            ]);
+            try {
+                PhotoObservationRecord::create([
+                    'photo_id' => $photo->id,
+                    'project_id' => $project->id,
+                    'payload' => $observation->toArray(),
+                    'provider' => $observation->provider,
+                    'provenance' => $observation->provenance,
+                    'similarity_group' => $observation->similarityGroup,
+                ]);
+            } catch (UniqueConstraintViolationException) {
+                // Concurrent analyzer raced us on the photo_id unique index —
+                // the other writer's row is identical evidence; keep it.
+                continue;
+            }
 
             $analyzed++;
         }

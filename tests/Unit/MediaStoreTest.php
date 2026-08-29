@@ -71,6 +71,56 @@ class MediaStoreTest extends TestCase
         $this->assertSame($bytes, $request->body());
     }
 
+    public function test_write_bytes_uses_explicit_filename_and_mime_for_local_storage(): void
+    {
+        $result = app(MediaStore::class)->writeBytes('project-1', 'jpeg-bytes', 'photo.jpg', 'image/jpeg');
+
+        $this->assertSame('project-1/photo.jpg', $result['path']);
+        $this->assertArrayHasKey('url', $result);
+        $this->assertTrue(app(MediaStore::class)->exists($result['path']));
+        Storage::disk('public')->assertExists($result['path']);
+    }
+
+    public function test_write_bytes_sends_explicit_filename_and_mime_to_vercel_blob(): void
+    {
+        putenv('BLOB_READ_WRITE_TOKEN=vercel_blob_rw_store-test_secret');
+        $blobUrl = 'https://blob.vercel-storage.com/project-1/photo.jpg';
+
+        Http::fake([
+            'https://vercel.com/api/blob*' => Http::response(['url' => $blobUrl], 200),
+        ]);
+
+        $result = app(MediaStore::class)->writeBytes('project-1', 'jpeg-bytes', 'photo.jpg', 'image/jpeg');
+
+        $this->assertSame('project-1/photo.jpg', $result['path']);
+        $this->assertSame($blobUrl, $result['url']);
+        $request = Http::recorded()[0][0];
+        parse_str(parse_url($request->url(), PHP_URL_QUERY), $query);
+        $this->assertSame('project-1/photo.jpg', $query['pathname']);
+        $this->assertSame('image/jpeg', $request->header('Content-Type')[0]);
+        $this->assertSame('jpeg-bytes', $request->body());
+    }
+
+    public function test_exists_checks_remote_media_with_a_head_request_and_returns_false_on_failure(): void
+    {
+        $existingUrl = 'https://blob.vercel-storage.com/project-1/existing.jpg';
+        $missingUrl = 'https://blob.vercel-storage.com/project-1/missing.jpg';
+
+        Http::fake([
+            $existingUrl => Http::response([], 200),
+            $missingUrl => Http::response([], 404),
+        ]);
+
+        $store = app(MediaStore::class);
+
+        $this->assertTrue($store->exists($existingUrl));
+        $this->assertFalse($store->exists($missingUrl));
+        $this->assertSame(
+            ['HEAD', 'HEAD'],
+            Http::recorded()->map(fn ($recorded) => $recorded[0]->method())->all(),
+        );
+    }
+
     public function test_durable_read_and_delete_use_http_with_failures_exposed(): void
     {
         putenv('BLOB_READ_WRITE_TOKEN=vercel_blob_rw_store-test_secret');

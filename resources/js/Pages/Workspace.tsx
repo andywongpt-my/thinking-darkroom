@@ -583,6 +583,9 @@ export default function Workspace({
                 headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content ?? '' },
             });
             const j = await resp.json().catch(() => null);
+            if (resp.status === 419) {
+                throw new Error('CSRF token mismatch (419) — reload the page and retry.');
+            }
             if (resp.ok && j?.proposal) {
                 setLocalProposals((ps) => ps.map((p) => (p.id === proposal.id ? { ...p, status: 'approved' } : p)));
                 addActivity({ tool_name: 'photographer_approve', authority: 'EXECUTE', result_status: 'completed', output_summary: { proposal_id: proposal.id, by: request.user.name } });
@@ -624,7 +627,14 @@ export default function Workspace({
             setLocalProposals((ps) => ps.map((p) => (p.id === eligibleProposal!.id ? { ...p, status: 'executed', executed_at: new Date().toISOString() } : p)));
             addActivity({ tool_name: 'apply_approved_plan', authority: 'EXECUTE', result_status: 'completed', output_summary: { proposal_id: eligibleProposal.id } });
             registry?.markExecuted();
-            setNotify({ kind: 'ok', text: `Proposal #${eligibleProposal.id} executed — apply_approved_plan removed.` });
+            // Honest partial/failure accounting from the backend execution summary.
+            const execution = (res.data as { payload?: { execution?: { items_applied?: number; items_failed?: number; items_skipped?: number; items_attempted?: number } } }).payload?.execution;
+            const partial = execution && ((execution.items_failed ?? 0) > 0 || (execution.items_skipped ?? 0) > 0);
+            if (partial) {
+                setNotify({ kind: 'err', text: `Proposal #${eligibleProposal.id} executed with issues — applied ${execution?.items_applied ?? 0}/${execution?.items_attempted ?? 0}, ${execution?.items_failed ?? 0} failed, ${execution?.items_skipped ?? 0} skipped.` });
+            } else {
+                setNotify({ kind: 'ok', text: `Proposal #${eligibleProposal.id} executed — apply_approved_plan removed.` });
+            }
             // refresh photo state from server
             webmcpApi.listProjectPhotos(project.id).then((r) => {
                 if (r.ok && r.data) window.location.reload();
@@ -735,6 +745,19 @@ export default function Workspace({
 
     const doUpload = (files: FileList | null) => {
         if (!files || files.length === 0) return;
+        // Client-side contract guard: Vercel hard-caps request bodies at 4.5MB,
+        // so oversized selections must be rejected before the edge does (Sol P1).
+        const MAX_PER_FILE = 4.3 * 1024 * 1024;
+        const MAX_COUNT = 10;
+        const oversized = Array.from(files).filter((f) => f.size > MAX_PER_FILE);
+        if (oversized.length > 0) {
+            setNotify({ kind: 'err', text: `Upload failed: ${oversized[0].name} is ${(oversized[0].size / 1024 / 1024).toFixed(1)}MB — each file must be under 4.3MB on this deployment.` });
+            return;
+        }
+        if (files.length > MAX_COUNT) {
+            setNotify({ kind: 'err', text: `Upload failed: up to ${MAX_COUNT} photos per batch.` });
+            return;
+        }
         const form = new FormData();
         Array.from(files).forEach((f) => form.append('photos[]', f));
         setBusy('upload');
@@ -782,7 +805,7 @@ export default function Workspace({
                     <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{flash.success}</div>
                 )}
                 {notify && (
-                    <div className={`mb-4 rounded-lg border px-4 py-3 text-sm ${notify.kind === 'ok' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>
+                    <div role="status" aria-live="polite" data-testid="workspace-notify" className={`mb-4 rounded-lg border px-4 py-3 text-sm ${notify.kind === 'ok' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>
                         {notify.text}
                     </div>
                 )}
@@ -1180,7 +1203,7 @@ export default function Workspace({
                                                 <img src={retouchCard.derivative.url} alt="approved derivative" data-testid="derivative-image" className="w-full rounded-lg border-2 border-emerald-300" />
                                             ) : (
                                                 <div className="flex h-28 items-center justify-center rounded-lg border border-dashed border-gray-300 text-xs text-gray-400" data-testid="derivative-placeholder">
-                                                    {retouchCard.executed || retouchCard.status === 'approved' ? 'Rendering…' : 'Not executed yet'}
+                                                    {retouchCard.executed || retouchCard.status === 'approved' ? 'Not rendered yet — re-run the plan if this persists' : 'Not executed yet'}
                                                 </div>
                                             )}
                                         </figure>

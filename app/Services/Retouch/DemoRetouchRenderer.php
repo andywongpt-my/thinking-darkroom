@@ -7,9 +7,10 @@ use App\Domain\Retouch\InvalidAdjustmentException;
 use App\Domain\Retouch\RendererUnavailableException;
 use App\Domain\Retouch\RetouchAdjustmentSet;
 use App\Models\Photo;
+use App\Services\Media\MediaStore;
 use App\Support\GdAvailability;
-use Illuminate\Support\Facades\Storage;
 use RuntimeException;
+use Throwable;
 
 /**
  * Sprint 4 — deterministic GD-based demo renderer.
@@ -34,8 +35,7 @@ class DemoRetouchRenderer implements RetouchRenderer
 
     public function __construct(
         private readonly GdAvailability $gd = new GdAvailability,
-    ) {
-    }
+    ) {}
 
     /** clamps a byte value to 0..255 */
     private static function clamp(int $value): int
@@ -75,7 +75,7 @@ class DemoRetouchRenderer implements RetouchRenderer
                     throw new RuntimeException('GD failed to encode the derivative JPEG.');
                 }
                 $jpeg = (string) ob_get_clean();
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
                 if (ob_get_level() > 0) {
                     ob_end_clean();
                 }
@@ -102,13 +102,14 @@ class DemoRetouchRenderer implements RetouchRenderer
             throw new RuntimeException("Photo [{$photo->id}] has no stored file to render from.");
         }
 
-        $disk = Storage::disk('public');
-        if (! $disk->exists($photo->path)) {
-            throw new RuntimeException("Original file for photo [{$photo->id}] is missing from storage.");
+        // MediaStore resolves durable Vercel Blob URLs and local disks alike.
+        try {
+            $bytes = app(MediaStore::class)->read($photo->path);
+        } catch (Throwable $e) {
+            throw new RuntimeException("Original file for photo [{$photo->id}] is missing from storage.", 0, $e);
         }
 
-        $bytes = $disk->get($photo->path);
-        $image = $bytes === false || $bytes === '' ? null : @imagecreatefromstring($bytes);
+        $image = $bytes === '' ? null : @imagecreatefromstring($bytes);
 
         if ($image === false || $image === null) {
             throw new RuntimeException("Original file for photo [{$photo->id}] could not be decoded as an image.");

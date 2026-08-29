@@ -197,7 +197,7 @@ class ProposalService
                 'type' => $proposal->type,
                 'status' => $photographerEdited ? Domain::STATE_PENDING_REVIEW : Domain::STATE_DRAFT,
                 'summary' => ($note ? $note.' — ' : 'Revised plan based on photographer feedback. ')
-                    . ($modifications['summary'] ?? ''),
+                    .($modifications['summary'] ?? ''),
                 'payload' => [
                     'refines' => $proposal->id,
                     'feedback' => $modifications,
@@ -257,15 +257,41 @@ class ProposalService
                 throw new \LogicException('Proposal has already been executed or invalidated.');
             }
 
-            $applicator($proposal);
+            $summary = $applicator($locked);
 
-            $proposal->forceFill([
+            $attempted = (int) ($summary['items_attempted'] ?? 0);
+            $applied = (int) ($summary['items_applied'] ?? 0);
+            $failed = (int) ($summary['items_failed'] ?? 0);
+            $skipped = (int) ($summary['items_skipped'] ?? 0);
+
+            // Honesty gate (Sol Max P1): if NOTHING applied, do not mark the
+            // proposal executed. The transaction rolls back — the proposal
+            // stays approved so the photographer can retry after the fix.
+            if ($attempted > 0 && $applied === 0) {
+                $firstFailure = collect($summary['items'] ?? [])
+                    ->first(fn ($i) => ($i['status'] ?? '') !== 'applied')['reason']
+                    ?? 'unknown reason';
+
+                throw new \RuntimeException(
+                    "Execution failed: 0 of {$attempted} items applied — proposal remains approved and retryable. First failure: {$firstFailure}",
+                );
+            }
+
+            if ($failed > 0 || $skipped > 0) {
+                // Partial success: still executed, but the full summary is
+                // persisted in the payload so the UI/API can show honestly.
+                $locked->forceFill([
+                    'payload' => array_merge((array) ($locked->payload ?? []), ['execution' => $summary]),
+                ]);
+            }
+
+            $locked->forceFill([
                 'status' => Domain::STATE_EXECUTED,
                 'executed_at' => now(),
-                'reviewed_by' => $proposal->reviewed_by ?? $actor->id,
+                'reviewed_by' => $locked->reviewed_by ?? $actor->id,
             ])->save();
 
-            return $proposal->fresh(['items.photo']);
+            return $locked->fresh(['items.photo']);
         });
     }
 

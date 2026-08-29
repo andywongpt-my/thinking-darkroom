@@ -10,9 +10,9 @@ use App\Services\Culling\ContextAwareCullingService;
 use App\Services\Media\MediaStore;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response;
+use Throwable;
 
 class WorkspacePageController extends Controller
 {
@@ -237,7 +237,7 @@ class WorkspacePageController extends Controller
 
         $photo = $item->photo;
         $originalPath = $photo?->path;
-        $disk = Storage::disk('public');
+        $media = app(MediaStore::class);
 
         // Agent-original values: the superseding proposal's payload preserves
         // them byte-for-byte; otherwise the proposal's own item params.
@@ -288,13 +288,19 @@ class WorkspacePageController extends Controller
             ?? data_get($item->result, 'operations')
             ?? null;
 
-        $originalSha = $originalPath && $disk->exists($originalPath)
-            ? hash('sha256', (string) $disk->get($originalPath))
-            : null;
+        try {
+            $originalSha = $originalPath ? hash('sha256', (string) $media->read($originalPath)) : null;
+        } catch (Throwable) {
+            $originalSha = null;
+        }
         $derivativeSha = null;
         $derivativeUrl = null;
-        if ($derivative && $disk->exists($derivative->storage_path)) {
-            $derivativeSha = hash('sha256', (string) $disk->get($derivative->storage_path));
+        if ($derivative) {
+            try {
+                $derivativeSha = hash('sha256', (string) $media->read($derivative->storage_path));
+            } catch (Throwable) {
+                $derivativeSha = null;
+            }
             $derivativeUrl = MediaStore::publicUrl($derivative->storage_path);
         }
 
@@ -339,8 +345,10 @@ class WorkspacePageController extends Controller
         $this->authorize('upload', $project);
 
         $validated = $request->validate([
-            'photos' => ['required', 'array', 'min:1', 'max:20'],
-            'photos.*' => ['image', 'mimes:jpeg,jpg,png,webp', 'max:15360'],
+            // Vercel caps request bodies at 4.5MB — keep a single-file request
+            // under the edge cap (4.3MB per file, ≤10 files per batch).
+            'photos' => ['required', 'array', 'min:1', 'max:10'],
+            'photos.*' => ['image', 'mimes:jpeg,jpg,png,webp', 'max:4400'],
         ]);
 
         $media = app(MediaStore::class);
@@ -356,7 +364,7 @@ class WorkspacePageController extends Controller
             try {
                 $img = @getimagesize($file->getRealPath());
                 $dims = $img ? ['w' => $img[0], 'h' => $img[1]] : null;
-            } catch (\Throwable) {
+            } catch (Throwable) {
                 $dims = null;
             }
 
@@ -373,7 +381,7 @@ class WorkspacePageController extends Controller
                     'selection_state' => Domain::SELECTION_UNREVIEWED,
                     'retouch_state' => Domain::RETOUCH_NONE,
                 ]);
-            } catch (\Throwable $e) {
+            } catch (Throwable $e) {
                 // Compensating delete: never orphan uploaded bytes behind a
                 // failed row insert (Sol P2: partial-failure compensation).
                 $media->delete($stored['path']);

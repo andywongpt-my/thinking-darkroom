@@ -52,6 +52,15 @@ class MediaStore
     public function write(string $dir, UploadedFile|string $content): array
     {
         [$bytes, $filename, $mime] = $this->contentDetails($content);
+
+        return $this->writeBytes($dir, $bytes, $filename, $mime);
+    }
+
+    /**
+     * @return array{path: string, url: string}
+     */
+    public function writeBytes(string $dir, string $bytes, string $filename, string $mime): array
+    {
         $path = $this->targetPath($dir, $filename);
 
         if ($this->isDurable()) {
@@ -96,6 +105,22 @@ class MediaStore
         }
 
         return $bytes;
+    }
+
+    public function exists(string $path): bool
+    {
+        try {
+            if ($this->isHttpPath($path)) {
+                return Http::connectTimeout(self::CONNECT_TIMEOUT_SECONDS)
+                    ->timeout(self::REQUEST_TIMEOUT_SECONDS)
+                    ->head($path)
+                    ->successful();
+            }
+
+            return Storage::disk('public')->exists($path);
+        } catch (Throwable) {
+            return false;
+        }
     }
 
     public function delete(string $path): bool

@@ -9,9 +9,9 @@ use App\Models\PhotographerDecision;
 use App\Models\Project;
 use App\Models\Proposal;
 use App\Models\ProposalItem;
-use App\Models\QaFinding;
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 
 class DatabaseSeeder extends Seeder
@@ -25,7 +25,7 @@ class DatabaseSeeder extends Seeder
             ['email' => 'photographer@webmcp.test'],
             [
                 'name' => 'Maya Tanaka (Photographer)',
-                'password' => \Illuminate\Support\Facades\Hash::make('password'),
+                'password' => Hash::make('password'),
                 'email_verified_at' => now(),
                 'is_agent' => false,
             ],
@@ -35,7 +35,7 @@ class DatabaseSeeder extends Seeder
             ['email' => 'agent@webmcp.test'],
             [
                 'name' => 'WebMCP Agent',
-                'password' => \Illuminate\Support\Facades\Hash::make('password'),
+                'password' => Hash::make('password'),
                 'email_verified_at' => now(),
                 'is_agent' => true,
             ],
@@ -81,30 +81,42 @@ class DatabaseSeeder extends Seeder
         $this->seedPlaceholderPhotos($project);
 
         // ---------------------------------------------------------------
-        // Small decision-history for the Agent Activity panel demo
+        // Small decision-history for the Agent Activity panel demo.
+        // Idempotent (Sol Max P2): firstOrCreate keyed on project + summary
+        // so re-seeding never duplicates demo proposals/decisions.
         // ---------------------------------------------------------------
         $photos = $project->photos()->get();
         if ($photos->count() >= 6) {
-            $cull = Proposal::query()->create([
-                'project_id' => $project->id,
-                'created_by' => $agent->id,
-                'type' => Domain::TYPE_CULL,
-                'status' => Domain::STATE_REJECTED,
-                'summary' => 'Cull 3 technically-weak frames (motion blur / soft focus) before selects.',
-                'payload' => ['created_via' => 'webmcp', 'tool' => 'propose_cull'],
-                'reviewed_by' => $photographer->id,
-                'reviewed_at' => now()->subDays(2),
-            ]);
-            $this->attachCullItems($cull, $photos, 3);
+            $cull = Proposal::query()->firstOrCreate(
+                [
+                    'project_id' => $project->id,
+                    'type' => Domain::TYPE_CULL,
+                    'summary' => 'Cull 3 technically-weak frames (motion blur / soft focus) before selects.',
+                ],
+                [
+                    'created_by' => $agent->id,
+                    'status' => Domain::STATE_REJECTED,
+                    'payload' => ['created_via' => 'webmcp', 'tool' => 'propose_cull'],
+                    'reviewed_by' => $photographer->id,
+                    'reviewed_at' => now()->subDays(2),
+                ],
+            );
+            if ($cull->wasRecentlyCreated) {
+                $this->attachCullItems($cull, $photos, 3);
+            }
 
-            PhotographerDecision::query()->create([
-                'project_id' => $project->id,
-                'proposal_id' => $cull->id,
-                'photographer_id' => $photographer->id,
-                'decision' => 'reject',
-                'note' => 'Keep those — motion blur on frame 7 is actually intentional.',
-                'created_at' => now()->subDays(2),
-            ]);
+            PhotographerDecision::query()->firstOrCreate(
+                [
+                    'project_id' => $project->id,
+                    'proposal_id' => $cull->id,
+                    'decision' => 'reject',
+                ],
+                [
+                    'photographer_id' => $photographer->id,
+                    'note' => 'Keep those — motion blur on frame 7 is actually intentional.',
+                    'created_at' => now()->subDays(2),
+                ],
+            );
         }
     }
 
@@ -177,7 +189,7 @@ class DatabaseSeeder extends Seeder
     private function svgPlaceholder(string $label, int $hue): string
     {
         $c1 = "hsl({$hue}, 55%, 42%)";
-        $c2 = "hsl(".((($hue + 40) % 360)).", 60%, 26%)";
+        $c2 = 'hsl('.((($hue + 40) % 360)).', 60%, 26%)';
 
         return <<<SVG
         <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">

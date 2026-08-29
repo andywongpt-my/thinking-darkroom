@@ -71,8 +71,18 @@ export const proposalTools = (projectId: number): ModelContextTool[] => [
                             photoId: { type: 'integer' },
                             operation: {
                                 type: 'string',
-                                enum: ['exposure', 'white_balance', 'crop', 'spot_heal', 'tone_curve'],
-                                description: 'Type of retouch operation.',
+                                // Must mirror Domain::RETOUCH_ADJUSTMENTS on the
+                                // backend — unsupported operations are skipped
+                                // at execution time (Sol Max P1 drift finding).
+                                enum: [
+                                    'exposure',
+                                    'contrast',
+                                    'saturation',
+                                    'warmth',
+                                    'highlight_recovery',
+                                    'shadow_lift',
+                                ],
+                                description: 'Adjustment parameter applied to the photo. Each is a normalized -1.0..+1.0 offset.',
                             },
                             params: {
                                 type: 'object',

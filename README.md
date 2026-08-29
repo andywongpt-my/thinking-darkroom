@@ -2,7 +2,14 @@
 
 A photographer-first photo workspace where a WebMCP AI agent can inspect,
 analyze, propose — and the photographer alone decides. Built as a hackathon
-project on Laravel 12 + Inertia + React.
+project for the WebMCP Challenge on Laravel 13 + Inertia v2 + React 18.
+
+**Live demo:** https://thinking-darkroom.vercel.app
+
+**Demo credentials:**
+
+- Photographer (human decision-maker): `photographer@webmcp.test` / `password`
+- Agent (WebMCP agent account): `agent@webmcp.test` / `password`
 
 ## What it demonstrates
 
@@ -87,6 +94,11 @@ There is deliberately **no** WebMCP tool for finalizing culls, approving
 proposals, overriding decisions, or deleting originals — those are
 photographer-only actions.
 
+The retouch vocabulary (`propose_retouch_plan` operations) mirrors
+`Domain::RETOUCH_ADJUSTMENTS` exactly: exposure, contrast, saturation,
+warmth, highlight_recovery, shadow_lift — each a normalized −1.0…+1.0
+offset interpreted by the deterministic demo renderer.
+
 ## Demo dataset
 
 `database/demo/culling-dataset/` contains 12 synthetic JPEGs (960×640)
@@ -96,7 +108,7 @@ image and a provenance README. No third-party photography is included. See
 
 ## Architecture
 
-- **Laravel 12** API + Inertia/React workspace UI.
+- **Laravel 13** API + Inertia v2/React 18 workspace UI.
 - **Context-aware culling:** `ContextAwareCullingService` combines
   `PhotoObservation`s (from `DemoPhotoAnalysisProvider` pixel statistics)
   with `CreativeRoomService::structuredIntentFor()` to produce
@@ -108,6 +120,31 @@ image and a provenance README. No third-party photography is included. See
   quality, creative fit, WHY rationale, `influenced_by`, confidence,
   provenance labels, and similarity grouping — with keyboard-accessible
   photographer override.
+- **Durable media on serverless:** `app/Services/Media/MediaStore.php`
+  writes originals and retouched derivatives to Vercel Blob (public URLs
+  stored in DB path columns) when `BLOB_READ_WRITE_TOKEN` is present, with
+  a local public-disk fallback for development and tests. Analysis, hashing,
+  and rendering read bytes through the same service, so durable photos work
+  end to end.
+
+## Deployment (Vercel + Neon)
+
+Production runs Laravel on Vercel serverless with:
+
+- **Neon Postgres** via the Vercel Neon integration — `DATABASE_URL` and
+  `DB_CONNECTION=pgsql` are injected as Vercel env vars. The schema is
+  initialized once with `scripts/init-durable-db.sh` (migrate + seed against
+  the external DB).
+- **Vercel Blob** store for all mutable media (originals + derivatives) —
+  created with `vercel blob` CLI; `BLOB_READ_WRITE_TOKEN` is a Vercel env
+  var. Without the token the app transparently falls back to local disk.
+- **Encrypted cookie sessions** so login survives lambda recycling.
+- `api/index.php` durable mode skips all sqlite/`/tmp` unpacking; seed demo
+  assets are immutable and served from the committed `seed-storage/`
+  directory.
+
+Upload contract: up to 10 images per batch, each under 4.3MB — this keeps a
+single-file request under Vercel's 4.5MB body limit.
 
 ## Demo dataset licensing
 
@@ -129,8 +166,20 @@ composer run dev
 Run the test suites:
 
 ```bash
-php artisan test        # backend (84 tests / 538 assertions)
-npm test                # frontend (46 tests)
-npm run typecheck
+php artisan test        # backend feature + unit suite
+npx vitest run          # frontend (77 tests)
+npx tsc -p tsconfig.json --noEmit
 npm run build
 ```
+
+## Judge walkthrough
+
+1. Log in as `photographer@webmcp.test` (or the agent account to see the
+   restricted surface — agent accounts get 403 on every human-only
+   endpoint).
+2. Upload photos (≤10 files, ≤4.3MB each), run culling analysis, override a
+   cull, adopt a Creative Brief.
+3. Let the agent propose a retouch plan; drag an adjustment value yourself;
+   approve. `apply_approved_plan` appears in the WebMCP tool list, executes,
+   and vanishes. The executed derivative reflects YOUR values.
+4. Refresh — everything (photos, decisions, derivatives, memory) persists.
