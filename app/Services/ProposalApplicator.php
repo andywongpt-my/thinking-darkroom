@@ -213,15 +213,26 @@ class ProposalApplicator
         // derivative bytes in Vercel Blob and the row keeps the public URL
         // (never a lambda-local /tmp path — Sol Max P0).
         $media = app(MediaStore::class);
-        $filename = pathinfo($this->derivativePath($photo), PATHINFO_BASENAME);
+        $relativePath = $this->derivativePath($photo);
+        $dir = trim(dirname($relativePath), '.');
+        $filename = pathinfo($relativePath, PATHINFO_BASENAME);
 
-        if ($existing && $existing->storage_path === $this->derivativePath($photo) && $media->exists($existing->storage_path)) {
+        // Idempotency: the row's storage_path is store-relative for local
+        // records and an absolute Blob URL for durable records. Match either
+        // shape against the resolved relative target — comparing only the
+        // raw pathname never matches a durable URL, which silently disabled
+        // the idempotent skip for durable photos.
+        if ($existing
+            && ($existing->storage_path === $relativePath
+                || ($media->isHttpPath((string) $existing->storage_path)
+                    && str_ends_with((string) parse_url((string) $existing->storage_path, PHP_URL_PATH), '/'.$relativePath)))
+            && $media->exists($existing->storage_path)) {
             // Already-rendered with the same target path: overwrite with the
             // fresh (identical) bytes only if adjustments differ; otherwise
             // keep the existing file untouched.
             if ($existing->adjustments !== $adjustments->toArray()) {
                 $stored = $media->writeBytes(
-                    trim(dirname($this->derivativePath($photo)), '.'),
+                    $dir,
                     $rendered['jpeg'],
                     $filename,
                     'image/jpeg',
@@ -237,7 +248,7 @@ class ProposalApplicator
         }
 
         $stored = $media->writeBytes(
-            trim(dirname($this->derivativePath($photo)), '.'),
+            $dir,
             $rendered['jpeg'],
             $filename,
             'image/jpeg',
@@ -275,11 +286,33 @@ class ProposalApplicator
         }
     }
 
-    /** Deterministic derivative storage path — distinct from the original. */
+    /**
+     * Deterministic derivative storage pathname — distinct from the original,
+     * and always STORE-RELATIVE (never an absolute URL). For durable photos
+     * the path column holds an absolute Blob URL; taking dirname() of that
+     * produced a double-prefixed pathname
+     * (https://…store/https%3A//…store/project-1/x.retouched.jpg — found in
+     * the 2026-08-29 production E2E). Parse the URL path instead so the
+     * derivative lands beside the original at a clean relative pathname;
+     * MediaStore::recordPath converts it back to an absolute durable URL.
+     */
     private function derivativePath(Photo $photo): string
     {
-        $dir = dirname((string) $photo->path);
-        $name = pathinfo((string) $photo->path, PATHINFO_FILENAME);
+        $path = (string) $photo->path;
+
+        if (str_starts_with($path, 'http')) {
+            $queryPos = strpos($path, '?');
+            $urlPath = $queryPos === false ? $path : substr($path, 0, $queryPos);
+            $segments = explode('/', ltrim((string) parse_url($urlPath, PHP_URL_PATH), '/'));
+
+            $name = (string) pathinfo((string) array_pop($segments), PATHINFO_FILENAME);
+            $dir = implode('/', $segments);
+
+            return ($dir === '' ? '' : $dir.'/').$name.'.retouched.jpg';
+        }
+
+        $dir = dirname($path);
+        $name = pathinfo($path, PATHINFO_FILENAME);
 
         return ($dir === '.' ? '' : $dir.'/').$name.'.retouched.jpg';
     }
