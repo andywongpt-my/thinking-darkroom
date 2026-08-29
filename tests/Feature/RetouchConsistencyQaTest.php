@@ -20,6 +20,7 @@ use App\Support\GdAvailability;
 use App\Support\WebmcpToolCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Mockery;
 use Tests\TestCase;
@@ -453,6 +454,38 @@ class RetouchConsistencyQaTest extends TestCase
             'tool_name' => 'apply_approved_plan',
             'result_status' => Domain::RESULT_ERROR,
         ]);
+    }
+
+    public function test_runtime_execution_failure_emits_compact_post_report_diagnostic(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+        $proposal = $this->makeRetouchProposal([$photographer, $agent, $project], $agent);
+        $this->service->approve($proposal, $photographer);
+
+        $cause = new \RuntimeException('Blob PUT rejected', 401);
+        $applicator = Mockery::mock(ProposalApplicator::class)->makePartial();
+        $applicator->shouldReceive('apply')->once()->andThrow(
+            new \RuntimeException('Unable to write remote media.', 0, $cause),
+        );
+        $this->instance(ProposalApplicator::class, $applicator);
+        $log = Log::spy();
+
+        $this->actingAs($agent)
+            ->postJson(route('api.webmcp.proposals.execute', [$project->id, $proposal->id]))
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'execution_failed');
+
+        $log->shouldHaveReceived('error')
+            ->with(
+                'webmcp_execute_failure',
+                Mockery::on(function (array $context) use ($proposal): bool {
+                    return $context['proposal_id'] === $proposal->id
+                        && $context['exception'] === \RuntimeException::class
+                        && $context['cause_exception'] === \RuntimeException::class
+                        && $context['cause_code'] === 401;
+                }),
+            )
+            ->once();
     }
 
     public function test_execution_with_stale_double_prefixed_derivative_row_does_not_500(): void

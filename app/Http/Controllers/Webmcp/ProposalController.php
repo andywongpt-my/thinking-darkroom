@@ -15,6 +15,7 @@ use App\Services\Retouch\ContextAwareRetouchService;
 use App\Services\ToolCallAuditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class ProposalController extends Controller
@@ -237,6 +238,7 @@ class ProposalController extends Controller
             // Honest execution failure: 0 items applied — proposal stays
             // approved and retryable. Audit + surface, never fake success.
             report($e);
+            $this->logExecutionFailure($proposal, $e);
 
             $this->audit->record(
                 $request,
@@ -274,6 +276,7 @@ class ProposalController extends Controller
             // The transaction has already rolled back, so the proposal stays
             // approved — report it as a retryable execution failure.
             report($e);
+            $this->logExecutionFailure($proposal, $e);
 
             $this->audit->record(
                 $request,
@@ -309,6 +312,23 @@ class ProposalController extends Controller
     }
 
     /* ---------------------------------- helpers ---------------------------------- */
+
+    /**
+     * Emit after report() so a bounded root-cause record survives a truncated
+     * Lambda stderr payload without exposing exception messages or response bodies.
+     */
+    private function logExecutionFailure(Proposal $proposal, \Throwable $exception): void
+    {
+        $cause = $exception->getPrevious();
+
+        Log::error('webmcp_execute_failure', [
+            'proposal_id' => $proposal->id,
+            'exception' => $exception::class,
+            'exception_code' => $exception->getCode(),
+            'cause_exception' => $cause ? $cause::class : null,
+            'cause_code' => $cause?->getCode(),
+        ]);
+    }
 
     private function assertCanExecute(Request $request, Project $project, Proposal $proposal): void
     {
