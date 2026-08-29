@@ -4,6 +4,7 @@ namespace App\Services\Media;
 
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use Throwable;
@@ -206,6 +207,21 @@ class MediaStore
                 ->throw();
             $url = $response->json('url');
         } catch (Throwable $e) {
+            // Structured diagnostics (2026-08-29): the PUT succeeded via local
+            // curl with identical headers but failed inside the lambda with no
+            // visible cause. Log exception class, HTTP status and the response
+            // body so Vercel runtime logs carry the root cause.
+            $status = isset($response) ? $response->status() : 0;
+            Log::error('blob_put_failed', [
+                'path' => $path,
+                'bytes' => strlen($bytes),
+                'mime' => $mime,
+                'exception' => $e::class,
+                'message' => $e->getMessage(),
+                'http_status' => $status,
+                'response' => isset($response) ? mb_substr($response->body(), 0, 500) : null,
+            ]);
+
             throw new RuntimeException("Unable to write remote media [{$path}].", 0, $e);
         }
 

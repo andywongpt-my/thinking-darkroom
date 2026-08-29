@@ -236,6 +236,8 @@ class ProposalController extends Controller
         } catch (\RuntimeException $e) {
             // Honest execution failure: 0 items applied — proposal stays
             // approved and retryable. Audit + surface, never fake success.
+            report($e);
+
             $this->audit->record(
                 $request,
                 $project,
