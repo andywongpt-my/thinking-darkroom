@@ -421,6 +421,39 @@ class RetouchConsistencyQaTest extends TestCase
         ]);
     }
 
+    public function test_execution_with_zero_applied_items_returns_422_and_stays_retryable(): void
+    {
+        // Regression (live 2026-08-29): the controller's applicator callable
+        // dropped its return value, so execute() saw summary = null, the
+        // honesty gate never fired, and an all-failed execution was marked
+        // executed with the item left failed. It must 422, roll back, and
+        // keep the proposal approved for retry.
+        [$photographer, $agent, $project] = $this->makeWorld();
+
+        $proposal = $this->service->createProposal(
+            $project,
+            $agent,
+            Domain::TYPE_RETOUCH,
+            // Item with NO photo attached → applyRetouchItem() fails.
+            [['photo_id' => null, 'action' => 'retouch', 'params' => ['exposure' => 0.3], 'rationale' => 'agent rationale']],
+            'Will fail — no photo attached.',
+        );
+        $this->service->approve($proposal, $photographer);
+
+        $this->actingAs($agent)
+            ->postJson(route('api.webmcp.proposals.execute', [$project->id, $proposal->id]))
+            ->assertStatus(422)
+            ->assertJsonPath('code', 'execution_failed');
+
+        // Rolled back: proposal still approved and retryable, item not stuck failed.
+        $this->assertSame(Domain::STATE_APPROVED, $proposal->fresh()->status);
+        $this->assertNull($proposal->fresh()->executed_at);
+        $this->assertDatabaseHas('agent_tool_calls', [
+            'tool_name' => 'apply_approved_plan',
+            'result_status' => Domain::RESULT_ERROR,
+        ]);
+    }
+
     public function test_execution_creates_derivative_and_original_remains_untouched(): void
     {
         [$photographer, $agent, $project] = $this->makeWorld();

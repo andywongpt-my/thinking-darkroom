@@ -210,7 +210,11 @@ class ProposalController extends Controller
 
         try {
             $executed = $this->proposals->execute($proposal, $request->user(), function (Proposal $p) {
-                $this->applicator->apply($p);
+                // MUST return the summary: execute()'s honesty gate (0 items
+                // applied → 422 + rollback) reads it. Dropping the return
+                // made every all-failed execution look successful
+                // (found live 2026-08-29 — proposal executed with a failed item).
+                return $this->applicator->apply($p);
             });
         } catch (RendererUnavailableException $e) {
             $this->audit->record(
