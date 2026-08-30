@@ -70,7 +70,9 @@ vi.mock('@/Layouts/AuthenticatedLayout', () => ({
 (globalThis as Record<string, unknown>).route = (name: string, id?: number) =>
     name === 'workspace.show' ? `/projects/${id}` : `/${name}`;
 
-const WorkspacePage = (await import('@/Pages/Workspace')).default as React.FC;
+const workspaceModule = await import('@/Pages/Workspace');
+const WorkspacePage = workspaceModule.default as React.FC;
+const { isPhotoAnalysisRequired } = workspaceModule;
 
 /* ------------------------------------------------------------- webmcp fixture */
 
@@ -473,21 +475,26 @@ describe('Sprint 3 — Workspace culling UI + registry certification', () => {
         for (const t of s2) expect(r.registeredNames()).toContain(t);
     });
 
-    it('20. makes ANALYZE reachable for the agent and labels an unanalysed frame honestly', async () => {
+    it('20. makes ANALYZE reachable at the frame that needs it without mislabeling the documented pre-analysis state as a failure', async () => {
         const pendingContext = {
             ...CULLING_CONTEXT,
             context: { ...CULLING_CONTEXT.context, photos_observed: 0 },
             recommendations: [],
         };
 
+        expect(isPhotoAnalysisRequired(409)).toBe(true);
+        expect(isPhotoAnalysisRequired(500)).toBe(false);
+
         const agentHtml = mount(baseProps({
             request: { user: { id: 2, name: 'Agent', is_agent: true } },
             permissions: { can_upload: false, can_photographer_act: false, can_execute: true },
         }), { culling: pendingContext });
         expect(agentHtml).toContain('Analyze Project Photos');
+        expect(agentHtml).toContain('data-testid="analysis-required-action"');
         expect(agentHtml).toContain('Analysis has not run for this frame');
 
         const photographerHtml = mount(baseProps(), { culling: pendingContext });
+        expect(photographerHtml).not.toContain('data-testid="analysis-required-action"');
         expect(photographerHtml).not.toContain('Analyze Project Photos');
         expect(photographerHtml).toContain('Analysis has not run for this frame');
     });

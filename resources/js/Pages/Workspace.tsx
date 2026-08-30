@@ -190,6 +190,14 @@ export function apiErrorReason(error: string | null, status: number): string {
     return status > 0 ? `request failed (HTTP ${status})` : 'request failed without a response';
 }
 
+/**
+ * The per-photo READ endpoint documents 409 as the normal pre-analysis state:
+ * observations do not exist until the agent explicitly runs ANALYZE.
+ */
+export function isPhotoAnalysisRequired(status: number): boolean {
+    return status === 409;
+}
+
 /** "+0.25 exposure · +0.08 warmth" style formatting for adjustment sets. */
 export function fmtAdjustments(params: Record<string, number> | null | undefined): string {
     if (!params || Object.keys(params).length === 0) return '—';
@@ -419,6 +427,12 @@ export default function Workspace({
                 if (!live) return;
                 if (res.ok && res.data) {
                     setAnalysis(res.data);
+                    return;
+                }
+                if (isPhotoAnalysisRequired(res.status)) {
+                    // 409 is the documented, non-error state before the
+                    // agent has persisted observations with ANALYZE.
+                    setAnalysis(null);
                     return;
                 }
                 const reason = apiErrorReason(res.error, res.status);
@@ -1202,6 +1216,17 @@ export default function Workspace({
                                                 ? 'Run Analyze Project Photos to create non-final observations before requesting a recommendation.'
                                                 : 'An agent must explicitly analyze project photos before this frame can receive a recommendation.'}
                                         </p>
+                                        {isAgent && (
+                                            <button
+                                                type="button"
+                                                onClick={runAnalyze}
+                                                disabled={busy !== null}
+                                                data-testid="analysis-required-action"
+                                                className="mt-2 rounded border border-amber-300 bg-white px-2 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
+                                            >
+                                                {busy === 'analyze' ? 'Analyzing…' : 'Analyze Project Photos'}
+                                            </button>
+                                        )}
                                     </div>
                                 )}
                             </>
