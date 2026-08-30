@@ -93,7 +93,8 @@ class ContextAwareCullingTest extends TestCase
         $this->actingAs($this->agent)
             ->postJson(route('api.webmcp.culling.analyze', [$this->project->id]))
             ->assertOk()
-            ->assertJsonPath('newly_analyzed', 12);
+            ->assertJsonPath('newly_analyzed', 12)
+            ->assertJsonPath('refreshed_observations', 0);
 
         $this->assertSame(12, PhotoObservationRecord::where('project_id', $this->project->id)->count());
     }
@@ -142,7 +143,9 @@ class ContextAwareCullingTest extends TestCase
         DemoPhotoAnalysisProvider::resetSimilarityMemory();
 
         $service = app(ContextAwareCullingService::class);
-        $this->assertSame(12, $service->analyzeProject($this->project));
+        $run = $service->analyzeProject($this->project);
+        $this->assertSame(12, $run->created);
+        $this->assertSame(0, $run->refreshed);
 
         $observations = $service->observationsFor($this->project);
         $candid = $this->observationForFile($observations, '01-candid-laugh-sharp.jpg');
@@ -151,6 +154,49 @@ class ContextAwareCullingTest extends TestCase
         $this->assertGreaterThan(0.0, $candid->sharpness()['confidence']);
         $this->assertNotSame('unobserved', $candid->emotionStrength());
         $this->assertNotSame([], $candid->mood());
+    }
+
+    public function test_analysis_recovers_stale_unavailable_seed_observations(): void
+    {
+        $unavailablePayload = [
+            'technical' => [
+                'sharpness' => ['assessment' => 'unknown', 'confidence' => 0],
+                'exposure' => ['assessment' => 'unknown', 'confidence' => 0],
+                'motion_blur' => ['assessment' => 'unknown', 'confidence' => 0],
+                'highlight_clipping' => ['assessment' => 'unknown', 'confidence' => 0],
+                'eyes_open' => null,
+            ],
+            'creative' => [
+                'expression' => 'unobserved',
+                'candidness' => 'unobserved',
+                'environmental_storytelling' => 'unobserved',
+                'mood' => [],
+                'compositional_fit' => 'unobserved',
+                'emotion_strength' => 'unobserved',
+            ],
+        ];
+
+        PhotoObservationRecord::where('project_id', $this->project->id)
+            ->get()
+            ->each(fn (PhotoObservationRecord $record) => $record->forceFill([
+                'payload' => $unavailablePayload,
+                'provider' => Domain::OBSERVATION_PROVIDER_DEMO,
+                'provenance' => Domain::OBSERVATION_PROVENANCES[Domain::OBSERVATION_PROVIDER_DEMO],
+            ])->save());
+
+        DemoPhotoAnalysisProvider::resetSimilarityMemory();
+        $this->actingAs($this->agent)
+            ->postJson(route('api.webmcp.culling.analyze', [$this->project->id]))
+            ->assertOk()
+            ->assertJsonPath('newly_analyzed', 0)
+            ->assertJsonPath('refreshed_observations', 12);
+
+        $candid = $this->observationForFile(
+            app(ContextAwareCullingService::class)->observationsFor($this->project),
+            '01-candid-laugh-sharp.jpg',
+        );
+        $this->assertSame('sharp', $candid->sharpness()['assessment']);
+        $this->assertNotSame('unobserved', $candid->emotionStrength());
     }
 
     public function test_technically_different_images_produce_distinguishable_observations(): void
@@ -206,7 +252,9 @@ class ContextAwareCullingTest extends TestCase
         DemoPhotoAnalysisProvider::resetSimilarityMemory();
 
         $service = app(ContextAwareCullingService::class);
-        $this->assertSame(12, $service->analyzeProject($this->project));
+        $run = $service->analyzeProject($this->project);
+        $this->assertSame(12, $run->created);
+        $this->assertSame(0, $run->refreshed);
 
         $observations = $service->observationsFor($this->project);
         $observation = $this->observationForFile($observations, '02-soft-emotive-gaze.jpg');
@@ -218,6 +266,10 @@ class ContextAwareCullingTest extends TestCase
             // semantic requirement is exactly-zero confidence, not a PHP type.
             $this->assertEqualsWithDelta(0.0, $observation->technical[$dimension]['confidence'], 0.0001);
         }
+
+        $retry = $service->analyzeProject($this->project);
+        $this->assertSame(0, $retry->created);
+        $this->assertSame(0, $retry->refreshed);
 
         // similarityGroupFromPixels must also degrade without calling any GD
         // function, while preserving a human-authored sidecar group.

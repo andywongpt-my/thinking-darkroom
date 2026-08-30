@@ -14,14 +14,15 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Sprint 3 — context-aware culling READ tools.
+ * Sprint 3 — context-aware culling endpoints.
  *
- * These expose STRUCTURED OBSERVATIONS and RECOMMENDATIONS to the agent —
- * never final decisions. Every response labels its provenance:
+ * Read endpoints expose structured observations and recommendations to the
+ * agent — never final decisions. Every response labels its provenance:
  *   technical → pixel_analysis (deterministic GD statistics)
  *   creative  → demo_sidecar_annotation (human-authored demo labels)
  *
- * All are READ authority: analysis and recommendation only.
+ * `analyzeProject` is explicitly ANALYZE authority and persists only
+ * non-final observations; it never changes selections or proposals.
  */
 class CullingController extends Controller
 {
@@ -113,11 +114,10 @@ class CullingController extends Controller
     }
 
     /**
-     * analyze_project_photos — ANALYZE-authority analysis run. Idempotent:
-     * already-observed photos keep their stable evidence. This only ever
-     * creates photo_observations rows — never selection changes, never
-     * proposals. (ANALYZE, not READ: the run persists non-final evidence,
-     * so it is honestly advertised as mutating/non-read-only.)
+     * analyze_project_photos — ANALYZE-authority analysis run. Stable evidence
+     * stays untouched, except the explicit unavailable-asset signature is
+     * refreshed into corrected non-final evidence. It never alters selections
+     * or proposals. (ANALYZE, not READ: the run persists evidence.)
      */
     public function analyzeProject(Request $request, Project $project): JsonResponse
     {
@@ -125,7 +125,7 @@ class CullingController extends Controller
 
         $start = hrtime(true);
 
-        $analyzed = $this->culling->analyzeProject($project);
+        $run = $this->culling->analyzeProject($project);
         $observations = $this->culling->observationsFor($project);
 
         // ANALYZE authority: this run PERSISTS photo_observations (non-final
@@ -135,7 +135,8 @@ class CullingController extends Controller
             $request, $project, $request->user(), 'analyze_project_photos', Domain::AUTHORITY_ANALYZE,
             ['project_id' => $project->id],
             [
-                'newly_analyzed' => $analyzed,
+                'newly_analyzed' => $run->created,
+                'refreshed_observations' => $run->refreshed,
                 'total_observed' => count($observations),
                 'duration_ms' => (hrtime(true) - $start) / 1e6,
             ],
@@ -144,7 +145,8 @@ class CullingController extends Controller
         return response()->json([
             'project_id' => $project->id,
             'provider' => $this->culling->contextSummary($project)['provider'],
-            'newly_analyzed' => $analyzed,
+            'newly_analyzed' => $run->created,
+            'refreshed_observations' => $run->refreshed,
             'total_observed' => count($observations),
             'observations' => collect($observations)
                 ->map(fn (PhotoObservation $o) => $this->observationPayload($o))

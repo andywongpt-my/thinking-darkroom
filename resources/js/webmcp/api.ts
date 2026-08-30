@@ -310,6 +310,7 @@ export interface AnalyzeProjectResponse {
     project_id: number;
     provider: string;
     newly_analyzed: number;
+    refreshed_observations: number;
     total_observed: number;
     observations: PhotoObservationPayload[];
 }

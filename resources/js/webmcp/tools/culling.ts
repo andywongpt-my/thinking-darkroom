@@ -51,7 +51,7 @@ export const cullingReadTools = (projectId: number): ModelContextTool[] => [
     {
         name: 'analyze_project_photos',
         description:
-            'Runs deterministic photo analysis over any photos not yet observed (idempotent — already-observed photos keep their stable evidence). Persists NON-FINAL photo_observations only (ANALYZE authority): never proposals, never selection changes — the photographer still makes every final call.',
+            'Runs deterministic photo analysis for unobserved photos and refreshes only the explicit prior unavailable-asset signature. Persists NON-FINAL photo_observations only (ANALYZE authority): never proposals, never selection changes — the photographer still makes every final call.',
         inputSchema: {
             type: 'object',
             additionalProperties: false,

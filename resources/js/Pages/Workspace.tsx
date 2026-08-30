@@ -671,12 +671,18 @@ export default function Workspace({
                     result_status: 'completed',
                     output_summary: {
                         newly_analyzed: res.data.newly_analyzed,
+                        refreshed_observations: res.data.refreshed_observations,
                         total_observed: res.data.total_observed,
                     },
                 });
                 await loadCulling();
                 setAnalysisRefresh((version) => version + 1);
-                setNotify({ kind: 'ok', text: `Analysis complete — ${res.data.newly_analyzed} new observation(s).` });
+                setNotify({
+                    kind: 'ok',
+                    text: res.data.refreshed_observations > 0
+                        ? `Analysis refreshed ${res.data.refreshed_observations} prior unavailable observation(s)${res.data.newly_analyzed > 0 ? ` and created ${res.data.newly_analyzed} new observation(s)` : ''}.`
+                        : `Analysis complete — ${res.data.newly_analyzed} new observation(s).`,
+                });
             } else {
                 addActivity({
                     tool_name: 'analyze_project_photos',

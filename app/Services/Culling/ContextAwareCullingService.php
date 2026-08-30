@@ -46,32 +46,45 @@ class ContextAwareCullingService
     /* ------------------------------- analysis ------------------------------- */
 
     /**
-     * Analyze every unobserved photo in the project with the configured
-     * provider and persist observations. Returns the number analyzed.
-     * Already-analyzed photos are NOT re-analyzed (stable evidence).
+     * Analyze every unobserved photo in the project and persist observations.
+     * Existing evidence stays stable except the explicit signature of a prior
+     * unavailable asset: all technical fields are unknown at zero confidence
+     * and every creative field is unobserved despite demo pixel provenance.
      */
-    public function analyzeProject(Project $project): int
+    public function analyzeProject(Project $project): CullingAnalysisRun
     {
-        $analyzed = 0;
+        $created = 0;
+        $refreshed = 0;
 
         $photos = $project->photos()->orderBy('id')->get();
 
         foreach ($photos as $photo) {
-            $exists = PhotoObservationRecord::where('photo_id', $photo->id)->exists();
-            if ($exists) {
+            $existing = PhotoObservationRecord::where('photo_id', $photo->id)->first();
+            if ($existing && ! $this->isUnavailableAssetObservation($existing)) {
                 continue;
             }
 
             $observation = $this->provider->observe($photo);
+            $attributes = [
+                'payload' => $observation->toArray(),
+                'provider' => $observation->provider,
+                'provenance' => $observation->provenance,
+                'similarity_group' => $observation->similarityGroup,
+            ];
+
+            if ($existing) {
+                // A retry is safe: the signature means the prior row contains
+                // no useful observation, never a photographer decision.
+                $existing->forceFill($attributes)->save();
+                $refreshed++;
+                continue;
+            }
 
             try {
                 PhotoObservationRecord::create([
                     'photo_id' => $photo->id,
                     'project_id' => $project->id,
-                    'payload' => $observation->toArray(),
-                    'provider' => $observation->provider,
-                    'provenance' => $observation->provenance,
-                    'similarity_group' => $observation->similarityGroup,
+                    ...$attributes,
                 ]);
             } catch (UniqueConstraintViolationException) {
                 // Concurrent analyzer raced us on the photo_id unique index —
@@ -79,10 +92,43 @@ class ContextAwareCullingService
                 continue;
             }
 
-            $analyzed++;
+            $created++;
         }
 
-        return $analyzed;
+        return new CullingAnalysisRun($created, $refreshed);
+    }
+
+    /**
+     * Detect the exact honest-but-degraded signature produced when a demo
+     * asset was unavailable to both the pixel reader and sidecar loader.
+     * Missing GD has its own provenance and is deliberately never retried.
+     */
+    private function isUnavailableAssetObservation(PhotoObservationRecord $record): bool
+    {
+        if ($record->provider !== Domain::OBSERVATION_PROVIDER_DEMO
+            || $record->provenance !== Domain::OBSERVATION_PROVENANCES[Domain::OBSERVATION_PROVIDER_DEMO]) {
+            return false;
+        }
+
+        $payload = $record->payload ?? [];
+        $technical = is_array($payload['technical'] ?? null) ? $payload['technical'] : [];
+        foreach (['sharpness', 'exposure', 'motion_blur', 'highlight_clipping'] as $dimension) {
+            $assessment = $technical[$dimension] ?? null;
+            if (! is_array($assessment)
+                || ($assessment['assessment'] ?? null) !== 'unknown'
+                || (float) ($assessment['confidence'] ?? -1) !== 0.0) {
+                return false;
+            }
+        }
+
+        $creative = is_array($payload['creative'] ?? null) ? $payload['creative'] : [];
+        foreach (['expression', 'candidness', 'environmental_storytelling', 'compositional_fit', 'emotion_strength'] as $field) {
+            if (($creative[$field] ?? null) !== 'unobserved') {
+                return false;
+            }
+        }
+
+        return (array) ($creative['mood'] ?? []) === [];
     }
 
     /**
@@ -730,4 +776,16 @@ class ContextAwareCullingService
             $request, $project, $actor, $tool, Domain::AUTHORITY_READ, $input, $output, $status,
         );
     }
+}
+
+/**
+ * Outcome of one explicit ANALYZE run. Created observations and corrected
+ * prior asset-unavailable observations stay distinct for an honest UI/API.
+ */
+final readonly class CullingAnalysisRun
+{
+    public function __construct(
+        public int $created,
+        public int $refreshed,
+    ) {}
 }
