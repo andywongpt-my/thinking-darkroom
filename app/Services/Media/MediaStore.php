@@ -60,12 +60,17 @@ class MediaStore
     /**
      * @return array{path: string, url: string}
      */
-    public function writeBytes(string $dir, string $bytes, string $filename, string $mime): array
-    {
+    public function writeBytes(
+        string $dir,
+        string $bytes,
+        string $filename,
+        string $mime,
+        bool $allowOverwrite = false,
+    ): array {
         $path = $this->targetPath($dir, $filename);
 
         if ($this->isDurable()) {
-            return $this->writeToBlob($path, $bytes, $mime);
+            return $this->writeToBlob($path, $bytes, $mime, $allowOverwrite);
         }
 
         $disk = Storage::disk('public');
@@ -189,7 +194,7 @@ class MediaStore
     /**
      * @return array{path: string, url: string}
      */
-    private function writeToBlob(string $path, string $bytes, string $mime): array
+    private function writeToBlob(string $path, string $bytes, string $mime, bool $allowOverwrite): array
     {
         $token = $this->blobToken();
         if ($token === null) {
@@ -199,7 +204,7 @@ class MediaStore
         $endpoint = self::BLOB_ENDPOINT.'?pathname='.rawurlencode($path);
 
         try {
-            $response = Http::withHeaders($this->blobHeaders($token, $mime))
+            $response = Http::withHeaders($this->blobHeaders($token, $mime, $allowOverwrite))
                 ->connectTimeout(self::CONNECT_TIMEOUT_SECONDS)
                 ->timeout(self::REQUEST_TIMEOUT_SECONDS)
                 ->withBody($bytes, $mime)
@@ -261,9 +266,9 @@ class MediaStore
     /**
      * @return array<string, string>
      */
-    private function blobHeaders(string $token, string $contentType): array
+    private function blobHeaders(string $token, string $contentType, bool $allowOverwrite = false): array
     {
-        return [
+        $headers = [
             'Authorization' => 'Bearer '.$token,
             'x-vercel-blob-store-id' => $this->blobStoreId($token),
             'x-api-version' => '12',
@@ -272,6 +277,12 @@ class MediaStore
             'x-content-type' => $contentType,
             'Content-Type' => $contentType,
         ];
+
+        if ($allowOverwrite) {
+            $headers['x-allow-overwrite'] = '1';
+        }
+
+        return $headers;
     }
 
     private function blobStoreId(string $token): string

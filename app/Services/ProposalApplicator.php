@@ -236,6 +236,7 @@ class ProposalApplicator
                     $rendered['jpeg'],
                     $filename,
                     'image/jpeg',
+                    allowOverwrite: true,
                 );
                 $existing->forceFill([
                     'storage_path' => $media->recordPath($stored),
@@ -252,6 +253,7 @@ class ProposalApplicator
             $rendered['jpeg'],
             $filename,
             'image/jpeg',
+            allowOverwrite: true,
         );
         $storagePath = $media->recordPath($stored);
 

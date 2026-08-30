@@ -20,6 +20,7 @@ use App\Support\GdAvailability;
 use App\Support\WebmcpToolCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Mockery;
@@ -535,6 +536,55 @@ class RetouchConsistencyQaTest extends TestCase
 
         // Original stays byte-for-byte untouched (applicator never writes to
         // originals; covered exhaustively by test_execution_creates_derivative…).
+    }
+
+    public function test_execution_allows_overwriting_a_durable_derivative_at_its_stable_path(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+        $proposal = $this->makeRetouchProposal([$photographer, $agent, $project], $agent, ['exposure' => 0.12]);
+        $photo = $project->photos()->first();
+        $this->putRealJpeg($photo);
+
+        $originalPath = (string) $photo->path;
+        $directory = trim(dirname($originalPath), '.');
+        $relativePath = ($directory === '' ? '' : $directory.'/')
+            .pathinfo($originalPath, PATHINFO_FILENAME).'.retouched.jpg';
+        $blobUrl = 'https://store.public.blob.vercel-storage.com/'.$relativePath;
+
+        PhotoDerivative::create([
+            'project_id' => $project->id,
+            'photo_id' => $photo->id,
+            'type' => Domain::DERIVATIVE_APPROVED_RENDER,
+            'storage_path' => $blobUrl,
+            'adjustments' => ['exposure' => 0],
+            'provenance' => 'demo',
+            'created_by' => $photographer->id,
+        ]);
+
+        $previousBlobToken = getenv('BLOB_READ_WRITE_TOKEN');
+        putenv('BLOB_READ_WRITE_TOKEN=vercel_blob_rw_store-test_secret');
+
+        try {
+            Http::fake([
+                'https://store.public.blob.vercel-storage.com/*' => Http::response('', 200),
+                'https://vercel.com/api/blob*' => Http::response(['url' => $blobUrl], 200),
+            ]);
+
+            $this->approveAndExecute([$photographer, $agent, $project], $proposal);
+
+            $putRequest = Http::recorded()
+                ->map(fn ($recorded) => $recorded[0])
+                ->first(fn ($request) => $request->method() === 'PUT');
+
+            $this->assertNotNull($putRequest);
+            $this->assertSame(['1'], $putRequest->header('x-allow-overwrite'));
+        } finally {
+            if ($previousBlobToken === false) {
+                putenv('BLOB_READ_WRITE_TOKEN');
+            } else {
+                putenv('BLOB_READ_WRITE_TOKEN='.$previousBlobToken);
+            }
+        }
     }
 
     public function test_execution_unexpected_error_returns_422_not_500_and_stays_retryable(): void
