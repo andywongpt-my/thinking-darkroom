@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useWebmcpRegistry } from '@/webmcp/use-webmcp';
 import { webmcpApi } from '@/webmcp/api';
 import type {
+    AgentPresence,
     CullingContext,
     CullingRecommendationEntry,
     PhotographerDecisionPayload,
@@ -130,8 +131,9 @@ interface PageProps extends Record<string, unknown> {
     decisions: WorkspaceDecision[];
     activity: ActivityEntry[];
     request: {
-        user: { id: number; name: string; is_agent: boolean };
+        user: { id: number; name: string; is_agent: boolean; presence_eligible?: boolean };
     };
+    presence?: AgentPresence;
     permissions?: {
         can_upload: boolean;
         can_photographer_act: boolean;
@@ -181,6 +183,28 @@ const STATUS_DOT: Record<string, string> = {
 function fmtTime(iso: string | null): string {
     if (!iso) return '—';
     return new Date(iso).toLocaleString();
+}
+
+/** The server supplies this eligibility bit from both agent boundaries. */
+export function canHeartbeatPresence(user: { is_agent: boolean; presence_eligible?: boolean }): boolean {
+    return user.is_agent === true && user.presence_eligible === true;
+}
+
+/** Use the write endpoint only for an eligible agent; everyone else reads. */
+export function requestWorkspacePresence(
+    projectId: number,
+    user: { is_agent: boolean; presence_eligible?: boolean },
+) {
+    return canHeartbeatPresence(user)
+        ? webmcpApi.heartbeatAgentPresence(projectId)
+        : webmcpApi.getAgentPresence(projectId);
+}
+
+function latestAgentSeenAt(agents: AgentPresence['agents']): string | null {
+    return agents.reduce<string | null>((latest, agent) => {
+        if (!agent.last_seen_at) return latest;
+        return latest === null || agent.last_seen_at > latest ? agent.last_seen_at : latest;
+    }, null);
 }
 
 /** Preserve the server/network reason when an API response cannot be rendered. */
@@ -297,15 +321,28 @@ export default function Workspace({
     initialAnalysis?: PhotoAnalysisResponse | null;
 } = {}) {
     const page = usePage<PageProps>();
-    const { project, brief, photos, proposals, decisions, activity, request, permissions: pagePermissions, flash, initialCulling: pageInitialCulling, retouchCard: pageRetouchCard, qaFindings: pageQaFindings, creativeMemories: pageCreativeMemories } = page.props;
+    const { project, brief, photos, proposals, decisions, activity, request, permissions: pagePermissions, flash, initialCulling: pageInitialCulling, retouchCard: pageRetouchCard, qaFindings: pageQaFindings, creativeMemories: pageCreativeMemories, presence: pagePresence } = page.props;
 
     const isAgent = request.user.is_agent;
+    const heartbeatEligible = canHeartbeatPresence(request.user);
     const permissions = pagePermissions ?? {
         can_upload: false,
         can_photographer_act: false,
         can_execute: false,
     };
     const canPhotographerAct = permissions.can_photographer_act;
+
+    const [agentPresence, setAgentPresence] = useState<AgentPresence>(() => pagePresence ?? {
+        project_id: project.id,
+        online: false,
+        agents: [],
+        checked_at: '',
+    });
+    const lastActiveAt = latestAgentSeenAt(agentPresence.agents);
+    const activeAgentNames = agentPresence.agents
+        .filter((agent) => agent.status === 'online')
+        .map((agent) => agent.name)
+        .join(', ');
 
     const [selectedId, setSelectedId] = useState<number | null>(photos[0]?.id ?? null);
     const [localProposals, setLocalProposals] = useState<WorkspaceProposal[]>(proposals);
@@ -360,6 +397,34 @@ export default function Workspace({
     );
 
     const selected = photos.find((p) => p.id === selectedId) ?? null;
+
+    // Presence is operational state: eligible agents heartbeat, everyone else reads.
+    // Failed refreshes intentionally leave the last server-confirmed state intact.
+    useEffect(() => {
+        let live = true;
+
+        const syncPresence = async (): Promise<void> => {
+            try {
+                const response = await requestWorkspacePresence(project.id, request.user);
+
+                if (live && response.ok && response.data) {
+                    setAgentPresence(response.data);
+                }
+            } catch {
+                // Keep the last known server state when a refresh cannot complete.
+            }
+        };
+
+        void syncPresence();
+        const interval = window.setInterval(() => {
+            void syncPresence();
+        }, 30_000);
+
+        return () => {
+            live = false;
+            window.clearInterval(interval);
+        };
+    }, [project.id, heartbeatEligible]);
 
     /* ---------------- Sprint 3 — context-aware culling state ---------------- */
 
@@ -857,6 +922,33 @@ export default function Workspace({
             <Head title={project.name} />
 
             <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+                <div
+                    role="status"
+                    aria-live="polite"
+                    data-testid="agent-presence-strip"
+                    data-status={agentPresence.online ? 'online' : 'offline'}
+                    className={`mb-4 flex items-start gap-3 rounded-lg border px-4 py-3 ${agentPresence.online ? 'border-emerald-200 bg-emerald-50' : 'border-gray-200 bg-gray-50'}`}
+                >
+                    <span
+                        aria-hidden="true"
+                        data-testid="agent-presence-dot"
+                        className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${agentPresence.online ? 'bg-emerald-500' : 'bg-gray-400'}`}
+                    />
+                    <div>
+                        <p className={`text-sm font-semibold ${agentPresence.online ? 'text-emerald-800' : 'text-gray-700'}`}>
+                            {agentPresence.online
+                                ? 'Agent online · active in this workspace'
+                                : 'Agent offline · waiting for an agent'}
+                        </p>
+                        {agentPresence.online && activeAgentNames && (
+                            <p className="mt-0.5 text-xs text-emerald-700">Active agent: {activeAgentNames}</p>
+                        )}
+                        {!agentPresence.online && lastActiveAt && (
+                            <p className="mt-0.5 text-xs text-gray-500">Last active {fmtTime(lastActiveAt)}</p>
+                        )}
+                    </div>
+                </div>
+
                 {/* WebMCP availability banner */}
                 {webmcpUnavailable && (
                     <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">

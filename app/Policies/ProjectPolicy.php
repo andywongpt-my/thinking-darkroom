@@ -33,6 +33,12 @@ class ProjectPolicy
         return $this->propose($user, $project);
     }
 
+    /** Only a machine agent account with an agent project role may heartbeat. */
+    public function heartbeat(User $user, Project $project): bool
+    {
+        return $user->isAgent() && $this->roleFor($user, $project) === Domain::ROLE_AGENT;
+    }
+
     /** Originals may only be uploaded by a human owner or photographer. */
     public function upload(User $user, Project $project): bool
     {

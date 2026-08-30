@@ -62,6 +62,20 @@ export interface WorkspaceContext {
     generated_at: string;
 }
 
+export interface AgentPresenceEntry {
+    id: number;
+    name: string;
+    status: 'online' | 'offline';
+    last_seen_at: string | null;
+}
+
+export interface AgentPresence {
+    project_id: number;
+    online: boolean;
+    agents: AgentPresenceEntry[];
+    checked_at: string;
+}
+
 export interface DecisionEntry {
     id: number;
     proposal_id: number | null;
@@ -334,6 +348,8 @@ const projectApiPath = (projectId: number, suffix: string): string =>
 const projectApiPaths = {
     workspaceContext: (projectId: number) =>
         projectApiPath(projectId, '/workspace/context'),
+    presence: (projectId: number) => projectApiPath(projectId, '/presence'),
+    presenceHeartbeat: (projectId: number) => projectApiPath(projectId, '/presence/heartbeat'),
     photos: (projectId: number) => projectApiPath(projectId, '/photos'),
     photo: (projectId: number, photoId: number) =>
         projectApiPath(projectId, `/photos/${photoId}`),
@@ -395,6 +411,14 @@ async function post<T>(url: string, body?: Record<string, unknown>): Promise<Too
 export const webmcpApi = {
     getWorkspaceContext(projectId: number) {
         return get<WorkspaceContext>(projectApiPaths.workspaceContext(projectId));
+    },
+
+    getAgentPresence(projectId: number) {
+        return get<AgentPresence>(projectApiPaths.presence(projectId));
+    },
+
+    heartbeatAgentPresence(projectId: number) {
+        return post<AgentPresence>(projectApiPaths.presenceHeartbeat(projectId), {});
     },
 
     listProjectPhotos(projectId: number) {

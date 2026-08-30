@@ -3,7 +3,6 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
-use App\Domain\Domain;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -43,6 +42,11 @@ class User extends Authenticatable
         return $this->belongsToMany(Project::class, 'project_members')
             ->withTimestamps()
             ->withPivot('role');
+    }
+
+    public function agentPresences(): HasMany
+    {
+        return $this->hasMany(AgentPresence::class);
     }
 
     public function decisions(): HasMany

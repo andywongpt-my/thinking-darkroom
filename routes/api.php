@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AgentPresenceController;
 use App\Http\Controllers\Webmcp\BriefController;
 use App\Http\Controllers\Webmcp\CreativeRoomController;
 use App\Http\Controllers\Webmcp\CullingController;
@@ -11,6 +12,10 @@ use App\Http\Controllers\Webmcp\WorkspaceController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth:sanctum', 'webmcp.agent-or-user'])->group(function () {
+    // Project-scoped liveness is operational state, not a WebMCP tool or activity record.
+    Route::get('projects/{project}/presence', [AgentPresenceController::class, 'show'])->name('api.presence.show');
+    Route::post('projects/{project}/presence/heartbeat', [AgentPresenceController::class, 'heartbeat'])->name('api.presence.heartbeat');
+
     Route::get('projects/{project}/workspace/context', [WorkspaceController::class, 'context'])->name('api.webmcp.context');
 
     Route::get('projects/{project}/photos', [PhotoController::class, 'index'])->name('api.webmcp.photos.index');

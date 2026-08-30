@@ -6,6 +6,7 @@ use App\Domain\Domain;
 use App\Models\Photo;
 use App\Models\PhotoDerivative;
 use App\Models\Project;
+use App\Services\AgentPresenceService;
 use App\Services\Culling\ContextAwareCullingService;
 use App\Services\Media\MediaStore;
 use Illuminate\Http\RedirectResponse;
@@ -39,6 +40,8 @@ class WorkspacePageController extends Controller
             Domain::ROLE_OWNER,
             Domain::ROLE_PHOTOGRAPHER,
         ], true);
+        $presenceEligible = $user->isAgent() && $role === Domain::ROLE_AGENT;
+        $presence = app(AgentPresenceService::class)->forProject($project);
 
         $photos = $project->photos()
             ->orderBy('id')
@@ -176,8 +179,10 @@ class WorkspacePageController extends Controller
                     'id' => $user->id,
                     'name' => $user->name,
                     'is_agent' => $user->isAgent(),
+                    'presence_eligible' => $presenceEligible,
                 ],
             ],
+            'presence' => $presence,
             'permissions' => [
                 'can_upload' => $canPhotographerAct,
                 'can_photographer_act' => $canPhotographerAct,

@@ -72,7 +72,7 @@ vi.mock('@/Layouts/AuthenticatedLayout', () => ({
 
 const workspaceModule = await import('@/Pages/Workspace');
 const WorkspacePage = workspaceModule.default as React.FC;
-const { isPhotoAnalysisRequired } = workspaceModule;
+const { isPhotoAnalysisRequired, canHeartbeatPresence, requestWorkspacePresence } = workspaceModule;
 
 /* ------------------------------------------------------------- webmcp fixture */
 
@@ -497,5 +497,70 @@ describe('Sprint 3 — Workspace culling UI + registry certification', () => {
         expect(photographerHtml).not.toContain('data-testid="analysis-required-action"');
         expect(photographerHtml).not.toContain('Analyze Project Photos');
         expect(photographerHtml).toContain('Analysis has not run for this frame');
+    });
+
+    it('21. renders the truthful offline strip and last active time from server presence', async () => {
+        const html = mount(baseProps({
+            presence: {
+                project_id: 7,
+                online: false,
+                agents: [{ id: 2, name: 'Darkroom Agent', status: 'offline', last_seen_at: '2026-08-30T11:58:29.000Z' }],
+                checked_at: '2026-08-30T12:00:00.000Z',
+            },
+        }));
+
+        expect(html).toContain('data-testid="agent-presence-strip"');
+        expect(html).toContain('Agent offline');
+        expect(html).toContain('waiting for an agent');
+        expect(html).toContain('Last active');
+    });
+
+    it('22. renders the truthful online strip with the active agent display name', async () => {
+        const html = mount(baseProps({
+            presence: {
+                project_id: 7,
+                online: true,
+                agents: [{ id: 2, name: 'Darkroom Agent', status: 'online', last_seen_at: '2026-08-30T12:00:00.000Z' }],
+                checked_at: '2026-08-30T12:00:00.000Z',
+            },
+        }));
+
+        expect(html).toContain('Agent online');
+        expect(html).toContain('active in this workspace');
+        expect(html).toContain('Darkroom Agent');
+        expect(html).not.toContain('darkroom@example.test');
+    });
+
+    it('23. only an account and project-role agent is eligible for heartbeat client usage', async () => {
+        expect(canHeartbeatPresence({ is_agent: true, presence_eligible: true })).toBe(true);
+        expect(canHeartbeatPresence({ is_agent: true, presence_eligible: false })).toBe(false);
+        expect(canHeartbeatPresence({ is_agent: false, presence_eligible: true })).toBe(false);
+        expect(canHeartbeatPresence({ is_agent: false, presence_eligible: false })).toBe(false);
+    });
+
+    it('24. uses heartbeat only for an eligible agent and reads presence for everyone else', async () => {
+        const presence = { project_id: 7, online: false, agents: [], checked_at: '2026-08-30T12:00:00.000Z' };
+        const heartbeatSpy = vi.spyOn(webmcpApi, 'heartbeatAgentPresence').mockResolvedValue({
+            ok: true, status: 200, data: { ...presence, online: true }, error: null,
+        });
+        const getSpy = vi.spyOn(webmcpApi, 'getAgentPresence').mockResolvedValue({
+            ok: true, status: 200, data: presence, error: null,
+        });
+
+        try {
+            await requestWorkspacePresence(7, { is_agent: true, presence_eligible: true });
+            expect(heartbeatSpy).toHaveBeenCalledWith(7);
+            expect(getSpy).not.toHaveBeenCalled();
+
+            heartbeatSpy.mockClear();
+            getSpy.mockClear();
+
+            await requestWorkspacePresence(7, { is_agent: true, presence_eligible: false });
+            expect(getSpy).toHaveBeenCalledWith(7);
+            expect(heartbeatSpy).not.toHaveBeenCalled();
+        } finally {
+            heartbeatSpy.mockRestore();
+            getSpy.mockRestore();
+        }
     });
 });

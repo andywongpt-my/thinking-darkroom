@@ -32,6 +32,11 @@ class Project extends Model
             ->withPivot('role');
     }
 
+    public function agentPresences(): HasMany
+    {
+        return $this->hasMany(AgentPresence::class);
+    }
+
     public function photos(): HasMany
     {
         return $this->hasMany(Photo::class);
@@ -78,7 +83,6 @@ class Project extends Model
     {
         return $this->hasMany(CreativeMemory::class);
     }
-
 
     public function brainstormSessions(): HasMany
     {
