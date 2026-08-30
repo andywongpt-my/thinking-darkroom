@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Domain\Domain;
+use App\Models\AgentPresence;
 use App\Models\Photo;
 use App\Models\PhotographerDecision;
 use App\Models\Project;
@@ -92,6 +93,63 @@ class DashboardTest extends TestCase
         $this->assertSame($firstCounts, $secondCounts);
         $this->assertSame(1, Proposal::query()->where('summary', 'Cull 3 technically-weak frames (motion blur / soft focus) before selects.')->count());
         $this->assertSame(1, PhotographerDecision::query()->where('decision', 'reject')->count());
+    }
+
+    public function test_dashboard_exposes_tool_inventory_and_agent_presence_for_the_darkroom_view(): void
+    {
+        $user = User::factory()->create();
+        $agent = User::factory()->agent()->create();
+        $project = Project::factory()->withPhotos(2)->create([
+            'name' => 'Authority ladder project',
+            'owner_id' => $user->id,
+        ]);
+        $project->members()->attach($user->id, ['role' => Domain::ROLE_OWNER]);
+        $project->members()->attach($agent->id, ['role' => Domain::ROLE_AGENT]);
+
+        AgentPresence::query()->create([
+            'project_id' => $project->id,
+            'user_id' => $agent->id,
+            'last_seen_at' => now(),
+        ]);
+
+        $page = $this->inertiaPage(
+            $this->actingAs($user)->get(route('dashboard'))->assertOk()->getContent()
+        );
+
+        $tools = $page['props']['tools'];
+        $this->assertSame(22, $tools['total']);
+        $this->assertSame(12, $tools['byAuthority']['READ']);
+        $this->assertSame(2, $tools['byAuthority']['ANALYZE']);
+        $this->assertSame(7, $tools['byAuthority']['PROPOSE']);
+        $this->assertSame(1, $tools['byAuthority']['EXECUTE']);
+        $this->assertSame('apply_approved_plan', $tools['dynamic']['name']);
+
+        $agentPayload = $page['props']['agent'];
+        $this->assertSame('WebMCP Agent', $agentPayload['name']);
+        $this->assertTrue($agentPayload['online']);
+        $this->assertNotNull($agentPayload['last_seen_at']);
+        $this->assertArrayHasKey('now', $page['props']);
+    }
+
+    public function test_agent_presence_is_offline_outside_the_presence_window(): void
+    {
+        $user = User::factory()->create();
+        $agent = User::factory()->agent()->create();
+        $project = Project::factory()->create(['owner_id' => $user->id]);
+        $project->members()->attach($user->id, ['role' => Domain::ROLE_OWNER]);
+        $project->members()->attach($agent->id, ['role' => Domain::ROLE_AGENT]);
+
+        AgentPresence::query()->create([
+            'project_id' => $project->id,
+            'user_id' => $agent->id,
+            'last_seen_at' => now()->subMinutes(30),
+        ]);
+
+        $page = $this->inertiaPage(
+            $this->actingAs($user)->get(route('dashboard'))->assertOk()->getContent()
+        );
+
+        $this->assertFalse($page['props']['agent']['online']);
     }
 
     /**
