@@ -113,6 +113,46 @@ class ContextAwareCullingTest extends TestCase
         }
     }
 
+    public function test_reseeding_the_certification_dataset_removes_stale_observations(): void
+    {
+        $this->assertSame(12, PhotoObservationRecord::where('project_id', $this->project->id)->count());
+
+        $this->seed(Sprint3CullingSeeder::class);
+
+        $this->assertSame(0, PhotoObservationRecord::where('project_id', $this->project->id)->count());
+    }
+
+    public function test_analysis_reads_the_committed_seed_bundle_when_the_runtime_public_disk_is_empty(): void
+    {
+        PhotoObservationRecord::where('project_id', $this->project->id)->delete();
+        Storage::disk('public')->deleteDirectory("project-{$this->project->id}");
+
+        // The build bundle is made after both seeders run, whereas this isolated
+        // test only runs the Sprint 3 seeder. Resolve its actual directory
+        // instead of assuming test IDs match the production bundle IDs.
+        $bundlePhoto = glob(base_path('seed-storage/project-*/01-candid-laugh-sharp.jpg'));
+        $this->assertIsArray($bundlePhoto);
+        $this->assertCount(1, $bundlePhoto, 'the committed Sprint 3 photo must be in the deployed seed bundle');
+        $bundleProjectDirectory = basename(dirname($bundlePhoto[0]));
+
+        foreach ($this->project->photos()->get() as $photo) {
+            $photo->update(['path' => $bundleProjectDirectory.'/'.$photo->filename]);
+        }
+
+        DemoPhotoAnalysisProvider::resetSimilarityMemory();
+
+        $service = app(ContextAwareCullingService::class);
+        $this->assertSame(12, $service->analyzeProject($this->project));
+
+        $observations = $service->observationsFor($this->project);
+        $candid = $this->observationForFile($observations, '01-candid-laugh-sharp.jpg');
+
+        $this->assertSame('sharp', $candid->sharpness()['assessment']);
+        $this->assertGreaterThan(0.0, $candid->sharpness()['confidence']);
+        $this->assertNotSame('unobserved', $candid->emotionStrength());
+        $this->assertNotSame([], $candid->mood());
+    }
+
     public function test_technically_different_images_produce_distinguishable_observations(): void
     {
         $observations = app(ContextAwareCullingService::class)->observationsFor($this->project);

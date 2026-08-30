@@ -103,14 +103,53 @@ class MediaStore
         try {
             $bytes = Storage::disk('public')->get($path);
         } catch (Throwable $e) {
+            $seedBytes = $this->readBundledSeedAsset($path);
+            if ($seedBytes !== null) {
+                return $seedBytes;
+            }
+
             throw new RuntimeException("Unable to read local media [{$path}].", 0, $e);
         }
 
         if (! is_string($bytes)) {
+            $seedBytes = $this->readBundledSeedAsset($path);
+            if ($seedBytes !== null) {
+                return $seedBytes;
+            }
+
             throw new RuntimeException("Unable to read local media [{$path}].");
         }
 
         return $bytes;
+    }
+
+    /**
+     * Read an immutable demo asset directly from the deployed bundle when a
+     * durable runtime has no lambda-local public-disk copy. This fallback
+     * cannot escape seed-storage and never handles user-uploaded Blob URLs.
+     */
+    private function readBundledSeedAsset(string $path): ?string
+    {
+        $root = realpath(base_path('seed-storage'));
+        if ($root === false) {
+            return null;
+        }
+
+        $relative = ltrim(str_replace('\\', '/', $path), '/');
+        if ($relative === '' || str_contains($relative, "\0")) {
+            return null;
+        }
+
+        $candidate = realpath($root.DIRECTORY_SEPARATOR.$relative);
+        if ($candidate === false
+            || ! str_starts_with($candidate, $root.DIRECTORY_SEPARATOR)
+            || ! is_file($candidate)) {
+            return null;
+        }
+
+        $bytes = file_get_contents($candidate);
+
+        return is_string($bytes) ? $bytes : null;
     }
 
     public function exists(string $path): bool

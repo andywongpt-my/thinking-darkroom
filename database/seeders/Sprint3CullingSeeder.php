@@ -65,6 +65,12 @@ class Sprint3CullingSeeder extends Seeder
 
         $this->seedDatasetPhotos($project);
 
+        // The bundled certification assets are immutable, but their derived
+        // pixel/sidecar observations are not. Re-seeding this demo must drop
+        // only its stale evidence so the next ANALYZE run reads the current
+        // committed bundle instead of preserving a prior degraded result.
+        self::resetObservations($project);
+
         $this->seedAdoptedDirection($project, $photographer, $agent);
     }
 
