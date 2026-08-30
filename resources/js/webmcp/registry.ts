@@ -186,6 +186,7 @@ export class WebmcpRegistry {
         switch (name) {
             case 'propose_cull':
             case 'propose_retouch_plan':
+            case 'reply_to_agent_conversation':
             case 'propose_concepts':
             case 'propose_concept_revision':
             case 'propose_concept_merge':

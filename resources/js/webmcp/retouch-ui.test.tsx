@@ -29,8 +29,8 @@
  *  19. Creative Memory explicitly does NOT claim ML personalization
  *  20. run_consistency_review is ANALYZE
  *  21. run_consistency_review has readOnlyHint=false (and PERSISTS qa_findings)
- *  22. static tool count = 19
- *  23. apply_approved_plan remains dynamic/conditional (19 → 20 → 19)
+ *  22. static tool count = 21
+ *  23. apply_approved_plan remains dynamic/conditional (21 → 22 → 21)
  *  24. forbidden human-authority WebMCP tools are absent
  *  25. Sprint 1 registry regression
  *  26. Sprint 2 Creative Room regression
@@ -576,25 +576,25 @@ describe('Sprint 4 — Workspace retouch / QA / creative-memory UI + registry ce
         expect(tool?.description).toContain('ANALYZE authority');
     });
 
-    it('22. the static registry contains EXACTLY 19 tools', async () => {
+    it('22. the static registry contains EXACTLY 21 tools', async () => {
         const { WebmcpRegistry } = await import('@/webmcp/registry');
         const r = new WebmcpRegistry(7);
         const snap = r.begin();
-        expect(snap.registered).toHaveLength(19);
+        expect(snap.registered).toHaveLength(21);
         expect(snap.registered.filter((t) => t.name === 'apply_approved_plan')).toHaveLength(0);
     });
 
-    it('23. apply_approved_plan remains dynamic/conditional (19 → 20 → 19)', async () => {
+    it('23. apply_approved_plan remains dynamic/conditional (21 → 22 → 21)', async () => {
         const { WebmcpRegistry } = await import('@/webmcp/registry');
         const r = new WebmcpRegistry(7);
         r.begin();
-        expect(r.registeredNames()).toHaveLength(19);
+        expect(r.registeredNames()).toHaveLength(21);
         expect(r.registeredNames()).not.toContain('apply_approved_plan');
         const approved = r.reconcileEligibleProposal(42);
-        expect(approved.registered).toHaveLength(20);
+        expect(approved.registered).toHaveLength(22);
         expect(approved.registered.map((t) => t.name)).toContain('apply_approved_plan');
         const executed = r.markExecuted();
-        expect(executed.registered).toHaveLength(19);
+        expect(executed.registered).toHaveLength(21);
         expect(executed.registered.map((t) => t.name)).not.toContain('apply_approved_plan');
     });
 
@@ -643,11 +643,11 @@ describe('Sprint 4 — Workspace retouch / QA / creative-memory UI + registry ce
         const { proposalTools } = await import('@/webmcp/tools/proposals');
         const { qaTools } = await import('@/webmcp/tools/qa');
         const s1 = [...workspaceTools(7), ...proposalTools(7), ...qaTools(7)];
-        expect(s1).toHaveLength(8);
+        expect(s1).toHaveLength(10);
         const r = new WebmcpRegistry(7);
         const snap = r.begin();
         expect(r.registeredNames()).toEqual(expect.arrayContaining(s1.map((t) => t.name)));
-        expect(snap.registered).toHaveLength(19);
+        expect(snap.registered).toHaveLength(21);
     });
 
     it('26. Sprint 2 regression: all 8 creative tools remain registered', async () => {

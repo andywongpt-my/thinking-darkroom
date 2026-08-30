@@ -37,6 +37,11 @@ class Project extends Model
         return $this->hasMany(AgentPresence::class);
     }
 
+    public function agentConversationMessages(): HasMany
+    {
+        return $this->hasMany(AgentConversationMessage::class);
+    }
+
     public function photos(): HasMany
     {
         return $this->hasMany(Photo::class);

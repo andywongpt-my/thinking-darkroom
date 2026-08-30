@@ -1,15 +1,16 @@
 <?php
 
+use App\Http\Controllers\AgentConversationController;
 use App\Http\Controllers\CreativeMemoryController;
 use App\Http\Controllers\CreativeRoomPageController;
 use App\Http\Controllers\CreativeRoomReviewController;
 use App\Http\Controllers\CullingDecisionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PhotographerReviewController;
-use App\Http\Controllers\WorkspacePageController;
-use App\Http\Controllers\WebmcpDiagnosticsController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QaFindingReviewController;
+use App\Http\Controllers\WebmcpDiagnosticsController;
+use App\Http\Controllers\WorkspacePageController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [WorkspacePageController::class, 'root'])->name('root');
@@ -20,6 +21,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // One main project workspace.
     Route::get('/projects/{project}', [WorkspacePageController::class, 'show'])->name('workspace.show');
     Route::post('/projects/{project}/photos', [WorkspacePageController::class, 'upload'])->name('workspace.upload');
+
+    // Durable project-scoped conversation. Messages are discussion only: they
+    // never approve, execute, or bypass the photographer authority boundary.
+    Route::get('/projects/{project}/agent-conversation/messages', [AgentConversationController::class, 'index'])
+        ->name('agent-conversation.index');
+    Route::post('/projects/{project}/agent-conversation/messages', [AgentConversationController::class, 'store'])
+        ->middleware('throttle:30,1')
+        ->name('agent-conversation.store');
 
     // Sprint 2 — Creative Room (visual creative workspace page).
     Route::get('/projects/{project}/creative', [CreativeRoomPageController::class, 'show'])

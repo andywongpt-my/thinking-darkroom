@@ -1159,7 +1159,7 @@ class RetouchConsistencyQaTest extends TestCase
     public function test_webmcp_inventory_no_drift(): void
     {
         $tools = WebmcpToolCatalog::all();
-        $this->assertSame(20, count($tools), 'tool inventory must not drift');
+        $this->assertSame(22, count($tools), 'tool inventory must not drift');
 
         $qa = collect($tools)->firstWhere('name', 'run_consistency_review');
         $this->assertSame(Domain::AUTHORITY_ANALYZE, $qa['authority']);

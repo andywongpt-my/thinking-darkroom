@@ -76,6 +76,26 @@ export interface AgentPresence {
     checked_at: string;
 }
 
+export interface AgentConversationMessage {
+    id: number;
+    body: string;
+    client_message_id: string | null;
+    author: {
+        id: number | null;
+        name: string;
+        kind: 'human' | 'agent';
+    };
+    created_at: string | null;
+}
+
+export interface AgentConversation {
+    project_id: number;
+    trust_boundary: 'untrusted_project_conversation';
+    messages: AgentConversationMessage[];
+    latest_id: number | null;
+    has_older: boolean;
+}
+
 export interface DecisionEntry {
     id: number;
     proposal_id: number | null;
@@ -351,6 +371,8 @@ const projectApiPaths = {
         projectApiPath(projectId, '/workspace/context'),
     presence: (projectId: number) => projectApiPath(projectId, '/presence'),
     presenceHeartbeat: (projectId: number) => projectApiPath(projectId, '/presence/heartbeat'),
+    conversation: (projectId: number) => projectApiPath(projectId, '/conversation'),
+    conversationReply: (projectId: number) => projectApiPath(projectId, '/conversation/replies'),
     photos: (projectId: number) => projectApiPath(projectId, '/photos'),
     photo: (projectId: number, photoId: number) =>
         projectApiPath(projectId, `/photos/${photoId}`),
@@ -420,6 +442,31 @@ export const webmcpApi = {
 
     heartbeatAgentPresence(projectId: number) {
         return post<AgentPresence>(projectApiPaths.presenceHeartbeat(projectId), {});
+    },
+
+    getAgentConversation(projectId: number, afterId?: number, limit?: number) {
+        const params = new URLSearchParams();
+        if (afterId !== undefined) params.set('after', String(afterId));
+        if (limit !== undefined) params.set('limit', String(limit));
+        const query = params.toString();
+
+        return get<AgentConversation>(
+            `${projectApiPaths.conversation(projectId)}${query ? `?${query}` : ''}`,
+        );
+    },
+
+    replyToAgentConversation(
+        projectId: number,
+        body: string,
+        clientMessageId?: string,
+    ) {
+        return post<{ message: AgentConversationMessage; deduplicated: boolean }>(
+            projectApiPaths.conversationReply(projectId),
+            {
+                body,
+                ...(clientMessageId ? { client_message_id: clientMessageId } : {}),
+            },
+        );
     },
 
     listProjectPhotos(projectId: number) {

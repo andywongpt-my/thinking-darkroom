@@ -648,9 +648,9 @@ class ContextAwareCullingTest extends TestCase
         );
         $this->assertCount(3, $culling);
 
-        // Certified totals: 19 static tools, 20 only with the dynamic EXECUTE.
+        // Certified totals: 21 static tools, 22 only with the dynamic EXECUTE.
         $static = array_filter($catalog, fn (array $t) => ! $t['dynamic']);
-        $this->assertCount(19, $static);
+        $this->assertCount(21, $static);
         $this->assertSame(1, count(array_filter($catalog, fn (array $t) => $t['dynamic'])));
 
         // Every tool authority stays inside the agent vocabulary (HUMAN absent).

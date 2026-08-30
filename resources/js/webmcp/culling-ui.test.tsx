@@ -21,8 +21,8 @@
  *  12. persisted override state renders
  *  13. no human-action WebMCP tool exists
  *  14. analyze tool has readOnlyHint=false
- *  15. base registry = 19
- *  16. dynamic registry = 20 only when eligible
+ *  15. base registry = 21
+ *  16. dynamic registry = 22 only when eligible
  *  17. Creative Room auto-refresh module stays green
  *  18. Sprint 1 registry remains green
  *  19. Sprint 2 Creative Room remains green (see creative-room.test.tsx — asserted via registry parity here)
@@ -417,23 +417,23 @@ describe('Sprint 3 — Workspace culling UI + registry certification', () => {
         expect(ctx?.annotations?.readOnlyHint).toBe(true);
     });
 
-    it('15. the base registry contains EXACTLY 19 tools', async () => {
+    it('15. the base registry contains EXACTLY 21 tools', async () => {
         const { WebmcpRegistry } = await import('@/webmcp/registry');
         const r = new WebmcpRegistry(7);
         const snap = r.begin();
-        expect(snap.registered).toHaveLength(19);
+        expect(snap.registered).toHaveLength(21);
         expect(snap.registered.filter((t) => t.name === 'apply_approved_plan')).toHaveLength(0);
     });
 
-    it('16. the registry becomes EXACTLY 20 only when an eligible approved proposal exists', async () => {
+    it('16. the registry becomes EXACTLY 22 only when an eligible approved proposal exists', async () => {
         const { WebmcpRegistry } = await import('@/webmcp/registry');
         const r = new WebmcpRegistry(7);
         r.begin();
-        expect(r.registeredNames()).toHaveLength(19);
+        expect(r.registeredNames()).toHaveLength(21);
         const approved = r.reconcileEligibleProposal(42);
-        expect(approved.registered).toHaveLength(20);
+        expect(approved.registered).toHaveLength(22);
         const executed = r.markExecuted();
-        expect(executed.registered).toHaveLength(19);
+        expect(executed.registered).toHaveLength(21);
     });
 
     it('17. Creative Room auto-refresh module remains green (concept mutation events)', async () => {
@@ -449,13 +449,13 @@ describe('Sprint 3 — Workspace culling UI + registry certification', () => {
         expect(seen).toEqual(['propose_concepts']);
     });
 
-    it('18. Sprint 1 registry remains green: 8 static tools + conditional EXECUTE', async () => {
+    it('18. Sprint 1 registry remains green: 10 static tools + conditional EXECUTE', async () => {
         const { WebmcpRegistry } = await import('@/webmcp/registry');
         const { workspaceTools } = await import('@/webmcp/tools/workspace');
         const { proposalTools } = await import('@/webmcp/tools/proposals');
         const { qaTools } = await import('@/webmcp/tools/qa');
         const s1 = [...workspaceTools(7), ...proposalTools(7), ...qaTools(7)];
-        expect(s1).toHaveLength(8);
+        expect(s1).toHaveLength(10);
         const r = new WebmcpRegistry(7);
         r.begin();
         expect(r.registeredNames()).toEqual(

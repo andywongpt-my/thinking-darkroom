@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AgentPresenceController;
+use App\Http\Controllers\Webmcp\AgentConversationController;
 use App\Http\Controllers\Webmcp\BriefController;
 use App\Http\Controllers\Webmcp\CreativeRoomController;
 use App\Http\Controllers\Webmcp\CullingController;
@@ -15,6 +16,13 @@ Route::middleware(['auth:sanctum', 'webmcp.agent-or-user'])->group(function () {
     // Project-scoped liveness is operational state, not a WebMCP tool or activity record.
     Route::get('projects/{project}/presence', [AgentPresenceController::class, 'show'])->name('api.presence.show');
     Route::post('projects/{project}/presence/heartbeat', [AgentPresenceController::class, 'heartbeat'])->name('api.presence.heartbeat');
+
+    Route::get('projects/{project}/conversation', [AgentConversationController::class, 'index'])
+        ->middleware('throttle:120,1')
+        ->name('api.webmcp.conversation.index');
+    Route::post('projects/{project}/conversation/replies', [AgentConversationController::class, 'reply'])
+        ->middleware('throttle:30,1')
+        ->name('api.webmcp.conversation.reply');
 
     Route::get('projects/{project}/workspace/context', [WorkspaceController::class, 'context'])->name('api.webmcp.context');
 

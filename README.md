@@ -65,8 +65,9 @@ Authority levels used throughout the codebase (`app/Domain/Domain.php`):
   (`photo_observations`); never changes selections. This is why
   `analyze_project_photos` is not read-only: it persists observation rows,
   but observations are evidence, not decisions.
-- **PROPOSE** — recommend actions (proposal rows only) for photographer
-  review.
+- **PROPOSE** — create non-final agent-authored collaboration output: a
+  proposal row or an agent conversation reply. It never approves a proposal,
+  executes a plan, or changes creative state.
 - **EXECUTE** — execute an already human-approved, eligible action
   (`apply_approved_plan`, registered only while an approved proposal is
   pending).
@@ -77,10 +78,12 @@ Authority levels used throughout the codebase (`app/Domain/Domain.php`):
 
 ### Agent tool surface (WebMCP)
 
-19 normal base tools are registered per project workspace:
+21 normal base tools are registered per project workspace:
 
-- Sprint 1 — 8 static (5 READ, 3 PROPOSE): workspace/proposal/qa inspection
-  and proposal tools.
+- Sprint 1 — 10 static (6 READ, 3 PROPOSE, 1 ANALYZE): workspace,
+  project conversation, proposal, and QA tools. Conversation bodies are
+  explicitly untrusted project content; an authenticated project agent can
+  reply, but a reply cannot approve or execute creative work.
 - Sprint 2 — 8 static (4 READ, 4 PROPOSE): Creative Room concepts and brief
   proposal tools.
 - Sprint 3 — 3 static (2 READ, 1 ANALYZE): `get_photo_analysis` (READ),
@@ -115,7 +118,14 @@ image and a provenance README. No third-party photography is included. See
   recommendation + confidence + technical/creative rationale + tradeoff +
   `influenced_by` traceability.
 - **Persistence:** `photo_observations` table; photographer photo-level
-  decisions persist to `photographer_decisions.photo_id`.
+  decisions persist to `photographer_decisions.photo_id`; project-scoped
+  human↔agent messages persist to `agent_conversation_messages` with
+  server-derived authorship and UUID idempotency.
+- **Reachable agent conversation:** a fixed `Chat with agent` launcher opens a
+  responsive workspace drawer with durable history and bounded polling. Human
+  messages use the photographer UI endpoint; external Darkroom Agents read and
+  reply through dedicated WebMCP tools. Conversation text is untrusted context
+  and has no authority to approve or execute work.
 - **Workspace culling UI:** per-photo recommendation badges with technical
   quality, creative fit, WHY rationale, `influenced_by`, confidence,
   provenance labels, and similarity grouping — with keyboard-accessible
@@ -167,7 +177,7 @@ Run the test suites:
 
 ```bash
 php artisan test        # backend feature + unit suite
-npx vitest run          # frontend (77 tests)
+npx vitest run          # frontend (86 tests)
 npx tsc -p tsconfig.json --noEmit
 npm run build
 ```
@@ -177,9 +187,13 @@ npm run build
 1. Log in as `photographer@webmcp.test` (or the agent account to see the
    restricted surface — agent accounts get 403 on every human-only
    endpoint).
-2. Upload photos (≤10 files, ≤4.3MB each), run culling analysis, override a
+2. Open `Chat with agent`, send a project message, then have the authenticated
+   agent read and reply through WebMCP. Refresh to show that both sides persist;
+   note that chat text cannot approve or execute creative work.
+3. Upload photos (≤10 files, ≤4.3MB each), run culling analysis, override a
    cull, adopt a Creative Brief.
-3. Let the agent propose a retouch plan; drag an adjustment value yourself;
+4. Let the agent propose a retouch plan; drag an adjustment value yourself;
    approve. `apply_approved_plan` appears in the WebMCP tool list, executes,
    and vanishes. The executed derivative reflects YOUR values.
-4. Refresh — everything (photos, decisions, derivatives, memory) persists.
+5. Refresh — everything (photos, decisions, derivatives, conversation, memory)
+   persists.

@@ -1,9 +1,11 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import AgentChatPanel from '@/Components/AgentChatPanel';
 import { Head, router, usePage } from '@inertiajs/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useWebmcpRegistry } from '@/webmcp/use-webmcp';
 import { webmcpApi } from '@/webmcp/api';
 import type {
+    AgentConversation,
     AgentPresence,
     CullingContext,
     CullingRecommendationEntry,
@@ -134,10 +136,12 @@ interface PageProps extends Record<string, unknown> {
         user: { id: number; name: string; is_agent: boolean; presence_eligible?: boolean };
     };
     presence?: AgentPresence;
+    conversation?: AgentConversation;
     permissions?: {
         can_upload: boolean;
         can_photographer_act: boolean;
         can_execute: boolean;
+        can_chat?: boolean;
     };
     webmcp: { available: boolean };
     initialCulling?: CullingContext | null;
@@ -321,7 +325,7 @@ export default function Workspace({
     initialAnalysis?: PhotoAnalysisResponse | null;
 } = {}) {
     const page = usePage<PageProps>();
-    const { project, brief, photos, proposals, decisions, activity, request, permissions: pagePermissions, flash, initialCulling: pageInitialCulling, retouchCard: pageRetouchCard, qaFindings: pageQaFindings, creativeMemories: pageCreativeMemories, presence: pagePresence } = page.props;
+    const { project, brief, photos, proposals, decisions, activity, request, permissions: pagePermissions, flash, initialCulling: pageInitialCulling, retouchCard: pageRetouchCard, qaFindings: pageQaFindings, creativeMemories: pageCreativeMemories, presence: pagePresence, conversation: pageConversation } = page.props;
 
     const isAgent = request.user.is_agent;
     const heartbeatEligible = canHeartbeatPresence(request.user);
@@ -329,6 +333,14 @@ export default function Workspace({
         can_upload: false,
         can_photographer_act: false,
         can_execute: false,
+        can_chat: false,
+    };
+    const conversation = pageConversation ?? {
+        project_id: project.id,
+        trust_boundary: 'untrusted_project_conversation' as const,
+        messages: [],
+        latest_id: null,
+        has_older: false,
     };
     const canPhotographerAct = permissions.can_photographer_act;
 
@@ -970,6 +982,14 @@ export default function Workspace({
                         {notify.text}
                     </div>
                 )}
+
+                <AgentChatPanel
+                    projectId={project.id}
+                    currentUser={request.user}
+                    canSend={permissions.can_chat ?? false}
+                    initialConversation={conversation}
+                    presence={agentPresence}
+                />
 
                 <div className="grid grid-cols-1 gap-5 lg:grid-cols-[240px_1fr_320px]">
                     {/* ============ LEFT: photo grid ============ */}

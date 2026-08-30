@@ -65,6 +65,8 @@ function removeDocument() {
 describe('WebmcpRegistry lifecycle', () => {
     const SPRINT_1 = [
         'get_workspace_context',
+        'get_agent_conversation',
+        'reply_to_agent_conversation',
         'list_project_photos',
         'inspect_photo',
         'get_creative_brief',
@@ -91,7 +93,7 @@ describe('WebmcpRegistry lifecycle', () => {
         'analyze_project_photos',
     ];
 
-    // Certified Sprint 3 inventory: 8 static + 8 static + 3 static = 19.
+    // Current inventory: 10 project tools + 8 creative tools + 3 culling tools = 21.
     const BASE = [...SPRINT_1, ...SPRINT_2, ...SPRINT_3];
 
     /** No tool may exercise final human authority (culling or creative). */
@@ -144,6 +146,7 @@ describe('WebmcpRegistry lifecycle', () => {
 
         for (const readTool of [
             'get_workspace_context',
+            'get_agent_conversation',
             'list_project_photos',
             'inspect_photo',
             'get_creative_brief',
@@ -151,7 +154,7 @@ describe('WebmcpRegistry lifecycle', () => {
         ]) {
             expect(fake.tool(readTool)?.annotations?.readOnlyHint).toBe(true);
         }
-        for (const proposeTool of ['propose_cull', 'propose_retouch_plan', 'run_consistency_review']) {
+        for (const proposeTool of ['reply_to_agent_conversation', 'propose_cull', 'propose_retouch_plan', 'run_consistency_review']) {
             expect(fake.tool(proposeTool)?.annotations?.readOnlyHint).toBe(false);
         }
         expect(fake.tool('apply_approved_plan')).toBeUndefined();

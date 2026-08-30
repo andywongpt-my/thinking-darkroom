@@ -17,7 +17,7 @@
  *  8.  Persisted Creative Brief renders in the collaboration area
  *  9.  Human action controls visible only where expected
  *  10. WebMCP registry exposes all 8 Sprint 2 tools
- *  11. Combined base registry = exactly 16 tools
+ *  11. Combined base registry = exactly 21 tools
  *  12. Forbidden authority tools are absent (explicit name list)
  *  13. Sprint 1 lifecycle stays green (dynamic tool not in base set)
  *  14. apply_approved_plan remains conditional-only
@@ -368,6 +368,8 @@ describe('Sprint 2 — Creative Room page (Task 10)', () => {
 describe('Sprint 2 — WebMCP registry integration (Task 10)', () => {
     const SPRINT_1_TOOLS = [
         'get_workspace_context',
+        'get_agent_conversation',
+        'reply_to_agent_conversation',
         'list_project_photos',
         'inspect_photo',
         'get_creative_brief',
@@ -452,11 +454,11 @@ describe('Sprint 2 — WebMCP registry integration (Task 10)', () => {
         }
     });
 
-    it('11. the normal base registry contains EXACTLY 19 tools (8 + 8 + 3 Sprint 3 culling)', async () => {
+    it('11. the normal base registry contains EXACTLY 21 tools (10 project + 8 creative + 3 culling)', async () => {
         const { WebmcpRegistry } = await import('@/webmcp/registry');
         const r = new WebmcpRegistry(7);
         const snap = r.begin();
-        expect(snap.registered).toHaveLength(19);
+        expect(snap.registered).toHaveLength(21);
         expect([...snap.registered.map((t) => t.name)].sort()).toEqual(
             [...SPRINT_1_TOOLS, ...SPRINT_2_TOOLS, ...SPRINT_3_TOOLS].sort(),
         );
@@ -487,20 +489,20 @@ describe('Sprint 2 — WebMCP registry integration (Task 10)', () => {
         const { WebmcpRegistry } = await import('@/webmcp/registry');
         const r = new WebmcpRegistry(7);
         const base = r.begin();
-        expect(base.registered).toHaveLength(19);
+        expect(base.registered).toHaveLength(21);
         expect(base.eligibleForExecution).toBe(false);
 
         const approved = r.reconcileEligibleProposal(42);
-        expect(approved.registered).toHaveLength(20);
+        expect(approved.registered).toHaveLength(22);
         expect(approved.registered.map((t) => t.name)).toContain('apply_approved_plan');
         expect(approved.eligibleForExecution).toBe(true);
 
         const executed = r.markExecuted();
-        expect(executed.registered).toHaveLength(19);
+        expect(executed.registered).toHaveLength(21);
         expect(executed.registered.map((t) => t.name)).not.toContain('apply_approved_plan');
     });
 
-    it('14. apply_approved_plan is conditional only and is NOT part of the 19 base tools', async () => {
+    it('14. apply_approved_plan is conditional only and is NOT part of the 21 base tools', async () => {
         const { WebmcpRegistry } = await import('@/webmcp/registry');
         const r = new WebmcpRegistry(7);
         const snap = r.begin();

@@ -49,6 +49,11 @@ class User extends Authenticatable
         return $this->hasMany(AgentPresence::class);
     }
 
+    public function agentConversationMessages(): HasMany
+    {
+        return $this->hasMany(AgentConversationMessage::class);
+    }
+
     public function decisions(): HasMany
     {
         return $this->hasMany(PhotographerDecision::class, 'photographer_id');

@@ -6,6 +6,7 @@ use App\Domain\Domain;
 use App\Models\Photo;
 use App\Models\PhotoDerivative;
 use App\Models\Project;
+use App\Services\AgentConversationService;
 use App\Services\AgentPresenceService;
 use App\Services\Culling\ContextAwareCullingService;
 use App\Services\Media\MediaStore;
@@ -41,7 +42,9 @@ class WorkspacePageController extends Controller
             Domain::ROLE_PHOTOGRAPHER,
         ], true);
         $presenceEligible = $user->isAgent() && $role === Domain::ROLE_AGENT;
+        $canChat = $user->can('message', $project);
         $presence = app(AgentPresenceService::class)->forProject($project);
+        $conversation = app(AgentConversationService::class)->forProject($project);
 
         $photos = $project->photos()
             ->orderBy('id')
@@ -183,10 +186,12 @@ class WorkspacePageController extends Controller
                 ],
             ],
             'presence' => $presence,
+            'conversation' => $conversation,
             'permissions' => [
                 'can_upload' => $canPhotographerAct,
                 'can_photographer_act' => $canPhotographerAct,
                 'can_execute' => $role !== Domain::ROLE_VIEWER,
+                'can_chat' => $canChat,
             ],
             'webmcp' => [
                 'available' => true,

@@ -39,6 +39,24 @@ class ProjectPolicy
         return $user->isAgent() && $this->roleFor($user, $project) === Domain::ROLE_AGENT;
     }
 
+    /** Owners, photographers, and authenticated project agents may converse. */
+    public function message(User $user, Project $project): bool
+    {
+        $role = $this->roleFor($user, $project);
+
+        if ($user->isAgent()) {
+            return $role === Domain::ROLE_AGENT;
+        }
+
+        return in_array($role, [Domain::ROLE_OWNER, Domain::ROLE_PHOTOGRAPHER], true);
+    }
+
+    /** Agent-authored replies cannot be spoofed by a human project member. */
+    public function replyAsAgent(User $user, Project $project): bool
+    {
+        return $this->heartbeat($user, $project);
+    }
+
     /** Originals may only be uploaded by a human owner or photographer. */
     public function upload(User $user, Project $project): bool
     {
