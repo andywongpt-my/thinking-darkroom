@@ -48,7 +48,7 @@ createInertiaApp({
             if (user !== null && user !== undefined) {
                 cleanupGuestRegistry?.();
                 cleanupGuestRegistry = null;
-            } else if (user === null && cleanupGuestRegistry === null) {
+            } else if (user == null && cleanupGuestRegistry === null) {
                 cleanupGuestRegistry = mountGuestRegistry();
             }
         });
