@@ -90,35 +90,39 @@ class ProposalService
      */
     public function approve(Proposal $proposal, User $photographer, ?string $note = null): Proposal
     {
-        $this->assertProposalCanBeReviewed($proposal);
+        return DB::transaction(function () use ($proposal, $photographer, $note) {
+            // Reviewability is checked on the LOCKED row (Sol P1-5): two
+            // photographers submitting approve+reject concurrently must not
+            // both pass the pre-transaction check and produce contradictory
+            // terminal decisions.
+            $locked = $this->lockReviewable($proposal->id);
 
-        DB::transaction(function () use ($proposal, $photographer, $note) {
-            $proposal->forceFill([
+            $locked->forceFill([
                 'status' => Domain::STATE_APPROVED,
                 'reviewed_by' => $photographer->id,
                 'reviewed_at' => now(),
             ])->save();
 
             PhotographerDecision::create([
-                'project_id' => $proposal->project_id,
-                'proposal_id' => $proposal->id,
+                'project_id' => $locked->project_id,
+                'proposal_id' => $locked->id,
                 'photographer_id' => $photographer->id,
                 'decision' => 'approve',
                 'note' => $note,
             ]);
 
             // Only an approved proposal may carry the approved retouch marker.
-            if (in_array($proposal->type, [Domain::TYPE_RETOUCH, Domain::TYPE_BATCH_RETOUCH], true)) {
-                $proposal->items()
+            if (in_array($locked->type, [Domain::TYPE_RETOUCH, Domain::TYPE_BATCH_RETOUCH], true)) {
+                $locked->items()
                     ->whereNotNull('photo_id')
                     ->get()
                     ->each(function (ProposalItem $item) {
                         $item->photo?->forceFill(['retouch_state' => Domain::RETOUCH_APPROVED])->saveQuietly();
                     });
             }
-        });
 
-        return $proposal->fresh(['items.photo']);
+            return $locked->fresh(['items.photo']);
+        });
     }
 
     /**
@@ -126,27 +130,27 @@ class ProposalService
      */
     public function reject(Proposal $proposal, User $photographer, ?string $note = null): Proposal
     {
-        $this->assertProposalCanBeReviewed($proposal);
+        return DB::transaction(function () use ($proposal, $photographer, $note) {
+            $locked = $this->lockReviewable($proposal->id);
 
-        DB::transaction(function () use ($proposal, $photographer, $note) {
-            $proposal->forceFill([
+            $locked->forceFill([
                 'status' => Domain::STATE_REJECTED,
                 'reviewed_by' => $photographer->id,
                 'reviewed_at' => now(),
             ])->save();
 
             PhotographerDecision::create([
-                'project_id' => $proposal->project_id,
-                'proposal_id' => $proposal->id,
+                'project_id' => $locked->project_id,
+                'proposal_id' => $locked->id,
                 'photographer_id' => $photographer->id,
                 'decision' => 'reject',
                 'note' => $note,
             ]);
 
-            $this->resetRetouchMarkers($proposal);
-        });
+            $this->resetRetouchMarkers($locked);
 
-        return $proposal->fresh(['items.photo']);
+            return $locked->fresh(['items.photo']);
+        });
     }
 
     /**
@@ -162,25 +166,25 @@ class ProposalService
         ?string $note = null,
         ?array $modifications = null,
     ): Proposal {
-        $this->assertProposalCanBeReviewed($proposal);
-
         return DB::transaction(function () use ($proposal, $photographer, $note, $modifications) {
-            $proposal->forceFill([
+            $locked = $this->lockReviewable($proposal->id);
+
+            $locked->forceFill([
                 'status' => Domain::STATE_MODIFIED,
                 'reviewed_by' => $photographer->id,
                 'reviewed_at' => now(),
             ])->save();
 
             PhotographerDecision::create([
-                'project_id' => $proposal->project_id,
-                'proposal_id' => $proposal->id,
+                'project_id' => $locked->project_id,
+                'proposal_id' => $locked->id,
                 'photographer_id' => $photographer->id,
                 'decision' => 'modify',
                 'note' => $note,
                 'modifications' => $modifications,
             ]);
 
-            $this->resetRetouchMarkers($proposal);
+            $this->resetRetouchMarkers($locked);
 
             // Sprint 4 — for retouch proposals the photographer may supply
             // edited adjustment VALUES (`modifications.adjustments`). When
@@ -246,7 +250,13 @@ class ProposalService
      */
     public function execute(Proposal $proposal, User $actor, callable $applicator): Proposal
     {
-        if (! $proposal->isEligibleForExecution()) {
+        // Eligibility is judged on a FRESH read, not the caller's possibly
+        // stale in-memory model: approve()/reject() mutate the locked row via
+        // a separate instance (Sol P1-5 CAS), so a proposal approved moments
+        // ago still reads `pending_review` in the caller's copy. The
+        // authoritative gate remains the re-lock below inside the transaction.
+        $fresh = Proposal::find($proposal->id);
+        if ($fresh === null || ! $fresh->isEligibleForExecution()) {
             throw new \LogicException('Proposal is not eligible for execution.');
         }
 
@@ -280,6 +290,7 @@ class ProposalService
             if ($failed > 0 || $skipped > 0) {
                 // Partial success: still executed, but the full summary is
                 // persisted in the payload so the UI/API can show honestly.
+                // (In-memory fill; the status save() below persists it.)
                 $locked->forceFill([
                     'payload' => array_merge((array) ($locked->payload ?? []), ['execution' => $summary]),
                 ]);
@@ -297,11 +308,27 @@ class ProposalService
 
     /* ---------------------------------- helpers ---------------------------------- */
 
-    private function assertProposalCanBeReviewed(Proposal $proposal): void
+    /**
+     * Lock the proposal row and re-verify reviewability INSIDE the caller's
+     * transaction (Sol P1-5). The pre-transaction check alone let two
+     * concurrent reviewers both observe `pending_review` and write
+     * contradictory terminal decisions (approved + rejected on one proposal).
+     *
+     * @return Proposal the locked, still-reviewable proposal
+     */
+    private function lockReviewable(int $proposalId): Proposal
     {
-        if (! in_array($proposal->status, [Domain::STATE_PENDING_REVIEW, Domain::STATE_DRAFT], true)) {
-            throw new \LogicException("Cannot review a proposal in state [{$proposal->status}].");
+        $locked = Proposal::whereKey($proposalId)->lockForUpdate()->first();
+
+        if ($locked === null) {
+            throw new \LogicException('Proposal not found.');
         }
+
+        if (! in_array($locked->status, [Domain::STATE_PENDING_REVIEW, Domain::STATE_DRAFT], true)) {
+            throw new \LogicException("Cannot review a proposal in state [{$locked->status}].");
+        }
+
+        return $locked;
     }
 
     private function resetRetouchMarkers(Proposal $proposal): void

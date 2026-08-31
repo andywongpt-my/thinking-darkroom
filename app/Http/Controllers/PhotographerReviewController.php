@@ -80,9 +80,23 @@ class PhotographerReviewController extends Controller
 
         // The agent can pick up the draft on the next proposal cycle; a
         // photographer-edited retouch supersede lands directly pending_review.
+        // The draft carries its items so the workspace can render the new
+        // pending card without a full page refresh (Sol P3-1).
         return response()->json([
             'proposal' => $proposal->only(['id', 'project_id', 'type', 'status']),
-            'superseding_draft' => $draft->only(['id', 'project_id', 'type', 'status', 'summary']),
+            'superseding_draft' => [
+                ...$draft->only(['id', 'project_id', 'type', 'status', 'summary', 'created_at']),
+                'created_by' => $draft->creator?->name,
+                'items' => $draft->items->map(fn ($i) => [
+                    'id' => $i->id,
+                    'photo_id' => $i->photo_id,
+                    'kind' => $i->kind,
+                    'action' => $i->action,
+                    'rationale' => $i->rationale,
+                    'params' => $i->params,
+                    'status' => $i->status,
+                ])->values(),
+            ],
         ]);
     }
 

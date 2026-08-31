@@ -761,32 +761,34 @@ export default function Workspace({
         }
     };
 
-    const runExecute = async () => {
-        if (!eligibleProposal) {
-            setNotify({ kind: 'err', text: 'No eligible approved proposal to execute.' });
+    const runExecute = async (target: WorkspaceProposal) => {
+        // Execute the proposal the photographer CLICKED (Sol P1-9), not
+        // whichever proposal happens to be first-eligible in state.
+        if (!target || target.status !== 'approved' || target.executed_at) {
+            setNotify({ kind: 'err', text: 'That proposal is no longer eligible for execution.' });
             return;
         }
         setBusy('execute');
-        const res = await webmcpApi.applyApprovedPlan(project.id, eligibleProposal.id);
+        const res = await webmcpApi.applyApprovedPlan(project.id, target.id);
         setBusy(null);
         if (res.ok && res.data) {
-            setLocalProposals((ps) => ps.map((p) => (p.id === eligibleProposal!.id ? { ...p, status: 'executed', executed_at: new Date().toISOString() } : p)));
-            addActivity({ tool_name: 'apply_approved_plan', authority: 'EXECUTE', result_status: 'completed', output_summary: { proposal_id: eligibleProposal.id } });
+            setLocalProposals((ps) => ps.map((p) => (p.id === target.id ? { ...p, status: 'executed', executed_at: new Date().toISOString() } : p)));
+            addActivity({ tool_name: 'apply_approved_plan', authority: 'EXECUTE', result_status: 'completed', output_summary: { proposal_id: target.id } });
             registry?.markExecuted();
             // Honest partial/failure accounting from the backend execution summary.
             const execution = (res.data as { payload?: { execution?: { items_applied?: number; items_failed?: number; items_skipped?: number; items_attempted?: number } } }).payload?.execution;
             const partial = execution && ((execution.items_failed ?? 0) > 0 || (execution.items_skipped ?? 0) > 0);
             if (partial) {
-                setNotify({ kind: 'err', text: `Proposal #${eligibleProposal.id} executed with issues — applied ${execution?.items_applied ?? 0}/${execution?.items_attempted ?? 0}, ${execution?.items_failed ?? 0} failed, ${execution?.items_skipped ?? 0} skipped.` });
+                setNotify({ kind: 'err', text: `Proposal #${target.id} executed with issues — applied ${execution?.items_applied ?? 0}/${execution?.items_attempted ?? 0}, ${execution?.items_failed ?? 0} failed, ${execution?.items_skipped ?? 0} skipped.` });
             } else {
-                setNotify({ kind: 'ok', text: `Proposal #${eligibleProposal.id} executed — apply_approved_plan removed.` });
+                setNotify({ kind: 'ok', text: `Proposal #${target.id} executed — apply_approved_plan removed.` });
             }
             // refresh photo state from server
             webmcpApi.listProjectPhotos(project.id).then((r) => {
                 if (r.ok && r.data) window.location.reload();
             });
         } else {
-            addActivity({ tool_name: 'apply_approved_plan', authority: 'EXECUTE', result_status: 'error', output_summary: { error: res.error, proposal_id: eligibleProposal.id } });
+            addActivity({ tool_name: 'apply_approved_plan', authority: 'EXECUTE', result_status: 'error', output_summary: { error: res.error, proposal_id: target.id } });
             setNotify({ kind: 'err', text: `execute failed: ${res.error}` });
         }
     };
@@ -820,7 +822,10 @@ export default function Workspace({
             });
             const j = await resp.json().catch(() => null);
             if (resp.ok && j?.superseding_draft) {
-                setLocalProposals((ps) => ps.map((p) => (p.id === proposal.id ? { ...p, status: 'modified' } : p)));
+                setLocalProposals((ps) => [
+                    normalizeProposal(j.superseding_draft),
+                    ...ps.map((p) => (p.id === proposal.id ? { ...p, status: 'modified' } : p)),
+                ]);
                 addActivity({ tool_name: 'photographer_modify', authority: 'HUMAN', result_status: 'completed', output_summary: { proposal_id: proposal.id, superseded_by: j.superseding_draft.id, adjustments } });
                 setNotify({ kind: 'ok', text: `Values saved — new proposal #${j.superseding_draft.id} is pending your review.` });
                 setModifyValues({ exposure: '', warmth: '' });
@@ -1772,7 +1777,7 @@ export default function Workspace({
                                                 {/* Server policy remains the authority for execution. */}
                                                 {permissions.can_execute && p.status === 'approved' && !p.executed_at && (
                                                     <button
-                                                        onClick={runExecute}
+                                                        onClick={() => void runExecute(p)}
                                                         disabled={busy !== null}
                                                         className="mt-2 w-full rounded bg-gray-800 px-2 py-1 text-xs font-semibold text-white hover:bg-gray-700 disabled:opacity-40"
                                                         title="Runs the dynamically-registered apply_approved_plan tool"

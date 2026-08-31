@@ -33,13 +33,24 @@ class QaFindingReviewController extends Controller
             'note' => ['sometimes', 'nullable', 'string', 'max:2000'],
         ]);
 
+        // Persist the photographer's rationale (Sol P2-7): the note is part
+        // of the QA audit trail, not a transient request field.
         $finding->forceFill([
             'status' => $validated['action'] === 'acknowledge' ? 'acknowledged' : 'resolved',
+            'details' => array_merge((array) ($finding->details ?? []), [
+                'review' => [
+                    'action' => $validated['action'],
+                    'note' => $validated['note'] ?? null,
+                    'reviewer_id' => $request->user()->id,
+                    'reviewed_at' => now()->toISOString(),
+                ],
+            ]),
         ])->save();
 
         return response()->json([
             'finding' => $finding->only(['id', 'status', 'severity', 'category', 'message']),
             'action' => $validated['action'],
+            'review' => $finding->details['review'] ?? null,
         ]);
     }
 

@@ -5,6 +5,9 @@ namespace App\Providers;
 use App\Services\Retouch\DemoRetouchRenderer;
 use App\Services\Retouch\RetouchRenderer;
 use App\Support\GdAvailability;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
 
@@ -29,5 +32,26 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Vite::prefetch(concurrency: 3);
+
+        // Project analysis can trigger image processing and write durable audit
+        // records. Scope each limiter by authenticated actor + project, so one
+        // busy project cannot exhaust another project's collaboration budget.
+        RateLimiter::for('webmcp-analysis', fn (Request $request) => Limit::perMinute(6)
+            ->by(self::actorProjectThrottleKey($request, 'analysis')));
+        RateLimiter::for('workspace-upload', fn (Request $request) => Limit::perMinute(12)
+            ->by(self::actorProjectThrottleKey($request, 'upload')));
+        RateLimiter::for('webmcp-presence', fn (Request $request) => Limit::perMinute(30)
+            ->by(self::actorProjectThrottleKey($request, 'presence')));
+    }
+
+    private static function actorProjectThrottleKey(Request $request, string $scope): string
+    {
+        $project = $request->route('project');
+        $projectId = is_object($project) && method_exists($project, 'getKey')
+            ? (string) $project->getKey()
+            : (string) $project;
+        $actorId = $request->user()?->getAuthIdentifier() ?? $request->ip();
+
+        return "{$scope}:{$actorId}:{$projectId}";
     }
 }

@@ -382,6 +382,37 @@ class ContextAwareCullingTest extends TestCase
         $this->assertContains('selection_priority.technical', $recB['influenced_by']);
     }
 
+    public function test_technical_first_brief_rejects_an_emotionally_strong_but_explicitly_avoided_soft_frame(): void
+    {
+        $observation = PhotoObservation::fromArray(9_999, [
+            'technical' => [
+                'sharpness' => ['assessment' => 'soft', 'confidence' => 0.95],
+                'motion_blur' => ['assessment' => 'strong', 'confidence' => 0.95],
+                'exposure' => ['assessment' => 'correct', 'confidence' => 0.95],
+                'highlight_clipping' => ['assessment' => 'safe', 'confidence' => 0.95],
+            ],
+            'creative' => [
+                'emotion_strength' => 'exceptional',
+                'candidness' => 'candid',
+                'environmental_storytelling' => 'strong',
+                'mood' => ['intimate'],
+            ],
+        ], 'test', 'test');
+        $technicalFirstBrief = [
+            'mood' => ['intimate'],
+            'selection_priorities' => ['technical' => 'primary', 'emotion' => 'secondary'],
+            'avoid' => ['soft focus', 'motion blur'],
+        ];
+
+        $recommendation = app(ContextAwareCullingService::class)->recommend($observation, $technicalFirstBrief);
+
+        $this->assertSame(
+            Domain::CULL_RECOMMEND_REJECT_CANDIDATE,
+            $recommendation['recommendation'],
+            'A technical-first brief that explicitly avoids soft focus and motion blur must not silently downgrade the rejection to review.',
+        );
+    }
+
     public function test_reverse_counterfactual_posed_frame_brief_b_strengthens(): void
     {
         [$observation, $briefA, $briefB] = $this->posedCounterfactual();

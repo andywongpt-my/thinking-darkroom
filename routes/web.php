@@ -20,7 +20,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // One main project workspace.
     Route::get('/projects/{project}', [WorkspacePageController::class, 'show'])->name('workspace.show');
-    Route::post('/projects/{project}/photos', [WorkspacePageController::class, 'upload'])->name('workspace.upload');
+    Route::post('/projects/{project}/photos', [WorkspacePageController::class, 'upload'])
+        ->middleware('throttle:workspace-upload')
+        ->name('workspace.upload');
 
     // Durable project-scoped conversation. Messages are discussion only: they
     // never approve, execute, or bypass the photographer authority boundary.

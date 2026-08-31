@@ -77,6 +77,7 @@ class ContextAwareCullingService
                 // no useful observation, never a photographer decision.
                 $existing->forceFill($attributes)->save();
                 $refreshed++;
+
                 continue;
             }
 
@@ -349,6 +350,8 @@ class ContextAwareCullingService
     private function decide(PhotoObservation $o, array $s): string
     {
         $avoidList = $this->lastAvoidList ?? [];
+        $avoidBlur = $this->avoidMatches($avoidList, ['blur', 'motion']);
+        $avoidSoft = $this->avoidMatches($avoidList, ['soft', 'sharp', 'focus']);
 
         $technicallyWeak = $s['technical'] < 0.45;
         $technicallyStrong = $s['technical'] >= 0.7;

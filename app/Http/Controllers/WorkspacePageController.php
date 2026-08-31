@@ -12,6 +12,7 @@ use App\Services\Culling\ContextAwareCullingService;
 use App\Services\Media\MediaStore;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use Throwable;
@@ -363,6 +364,16 @@ class WorkspacePageController extends Controller
 
         $media = app(MediaStore::class);
 
+        // Honest batch budget (Sol P1-3): Vercel caps the whole request body
+        // at 4.5MB, so a 10×4.4MB advertisement could never survive the edge.
+        // Enforce the real aggregate budget before any bytes are written.
+        $totalBytes = collect($validated['photos'])->sum(fn ($f) => (int) $f->getSize());
+        if ($totalBytes > 4_300_000) {
+            throw ValidationException::withMessages([
+                'photos' => 'This batch is '.round($totalBytes / 1_000_000, 1).'MB — the upload budget is 4.3MB per request. Upload fewer or smaller files.',
+            ]);
+        }
+
         foreach ($validated['photos'] as $file) {
             // Store the raw bytes (Vercel Blob when durable, public disk otherwise),
             // then persist the DB row in a second step so a failed storage write
@@ -394,7 +405,10 @@ class WorkspacePageController extends Controller
             } catch (Throwable $e) {
                 // Compensating delete: never orphan uploaded bytes behind a
                 // failed row insert (Sol P2: partial-failure compensation).
-                $media->delete($stored['path']);
+                // recordPath() yields the canonical handle (absolute Blob URL
+                // in durable mode) — the raw relative path would make the
+                // remote delete a no-op and orphan billable bytes (Sol P1-4).
+                $media->delete($media->recordPath($stored));
 
                 throw $e;
             }

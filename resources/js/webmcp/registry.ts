@@ -48,6 +48,8 @@ export class WebmcpRegistry {
     private listeners = new Set<RegistryListener>();
     /** Named AbortControllers for dynamic tools (keyed by proposal id). */
     private dynamicAborts = new Map<number, AbortController>();
+    /** Proposal id the currently-registered dynamic tool is bound to. */
+    private boundProposalId: number | null = null;
 
     constructor(projectId: number) {
         this.projectId = projectId;
@@ -79,6 +81,13 @@ export class WebmcpRegistry {
         const eligible = proposalId !== null && Number.isFinite(proposalId) && proposalId > 0;
         this.eligible = eligible;
 
+        // Re-register when the bound proposal changed (Sol P1-9): the tool's
+        // executor closes over a proposal id. Eligibility moving A→B must
+        // never leave the live tool submitting the stale A.
+        if (eligible && this.tools.has('apply_approved_plan') && this.boundProposalId !== proposalId) {
+            this.unregisterDynamic();
+        }
+
         // Register when we have an eligible approved proposal and it's absent.
         if (eligible && !this.tools.has('apply_approved_plan')) {
             const abort = new AbortController();
@@ -88,6 +97,7 @@ export class WebmcpRegistry {
                 proposalId!,
                 () => this.markExecuted(),
             );
+            this.boundProposalId = proposalId;
             this.track(tool, 'EXECUTE', true, abort);
         }
 
@@ -222,6 +232,7 @@ export class WebmcpRegistry {
         unregisterTool('apply_approved_plan', tracked.abort, this.context);
         this.tools.delete('apply_approved_plan');
         this.dynamicAborts.clear();
+        this.boundProposalId = null;
         this.emit();
     }
 

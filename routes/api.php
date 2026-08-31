@@ -15,7 +15,9 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['auth:sanctum', 'webmcp.agent-or-user'])->group(function () {
     // Project-scoped liveness is operational state, not a WebMCP tool or activity record.
     Route::get('projects/{project}/presence', [AgentPresenceController::class, 'show'])->name('api.presence.show');
-    Route::post('projects/{project}/presence/heartbeat', [AgentPresenceController::class, 'heartbeat'])->name('api.presence.heartbeat');
+    Route::post('projects/{project}/presence/heartbeat', [AgentPresenceController::class, 'heartbeat'])
+        ->middleware('throttle:webmcp-presence')
+        ->name('api.presence.heartbeat');
 
     Route::get('projects/{project}/conversation', [AgentConversationController::class, 'index'])
         ->middleware('throttle:120,1')
@@ -37,6 +39,7 @@ Route::middleware(['auth:sanctum', 'webmcp.agent-or-user'])->group(function () {
     Route::get('projects/{project}/culling/context', [CullingController::class, 'cullingContext'])
         ->name('api.webmcp.culling.context');
     Route::post('projects/{project}/culling/analyze', [CullingController::class, 'analyzeProject'])
+        ->middleware('throttle:webmcp-analysis')
         ->name('api.webmcp.culling.analyze');
 
     // Sprint 2 — Creative Room READ tools.
@@ -55,9 +58,12 @@ Route::middleware(['auth:sanctum', 'webmcp.agent-or-user'])->group(function () {
     Route::post('projects/{project}/proposals/cull', [ProposalController::class, 'proposeCull'])->name('api.webmcp.proposals.cull');
     Route::post('projects/{project}/proposals/retouch-plan', [ProposalController::class, 'proposeRetouchPlan'])->name('api.webmcp.proposals.retouch');
 
-    Route::post('projects/{project}/qa/review', [QaController::class, 'review'])->name('api.webmcp.qa.review');
+    Route::post('projects/{project}/qa/review', [QaController::class, 'review'])
+        ->middleware('throttle:webmcp-analysis')
+        ->name('api.webmcp.qa.review');
 
     // EXECUTE authority — dynamic tool, gated server-side.
     Route::post('projects/{project}/proposals/{proposal}/execute', [ProposalController::class, 'execute'])
+        ->middleware('throttle:webmcp-analysis')
         ->name('api.webmcp.proposals.execute');
 });

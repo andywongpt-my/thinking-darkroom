@@ -387,6 +387,12 @@ class ProposalController extends Controller
                     'status' => $item->status,
                 ])->values(),
             ],
+            // Honest partial-execution accounting (Sol P1-6): the workspace
+            // reads payload.execution to show applied/failed/skipped counts
+            // instead of presenting a partial run as clean success.
+            'payload' => [
+                'execution' => $proposal->payload['execution'] ?? null,
+            ],
         ];
     }
 }

@@ -8,6 +8,7 @@ use App\Models\PhotographerDecision;
 use App\Models\Project;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -42,27 +43,36 @@ class CullingDecisionController extends Controller
             'override' => ['sometimes', 'boolean'],
         ]);
 
-        $decision = PhotographerDecision::create([
-            'project_id' => $project->id,
-            'photo_id' => $photo->id,
-            'photographer_id' => $request->user()->id,
-            'decision' => $validated['decision'],
-            'note' => $validated['note'] ?? null,
-            'modifications' => [
-                'override' => (bool) ($validated['override'] ?? false),
-                'surface' => 'culling_ui',
-            ],
-        ]);
+        $decision = DB::transaction(function () use ($request, $project, $photo, $validated) {
+            // Decision row + photo state change commit or roll back together
+            // (Sol P2-6): the photographer's history must never disagree with
+            // the workspace's current selection state.
+            $photo = Photo::whereKey($photo->id)->lockForUpdate()->first();
 
-        // The photographer's explicit decision is the ONE thing that changes
-        // selection state directly (agents can only propose).
-        $photo->forceFill([
-            'selection_state' => match ($validated['decision']) {
-                'keep' => Domain::SELECTION_SELECTED,
-                'reject' => Domain::SELECTION_CULLED,
-                default => Domain::SELECTION_UNREVIEWED,
-            },
-        ])->save();
+            $decision = PhotographerDecision::create([
+                'project_id' => $project->id,
+                'photo_id' => $photo->id,
+                'photographer_id' => $request->user()->id,
+                'decision' => $validated['decision'],
+                'note' => $validated['note'] ?? null,
+                'modifications' => [
+                    'override' => (bool) ($validated['override'] ?? false),
+                    'surface' => 'culling_ui',
+                ],
+            ]);
+
+            // The photographer's explicit decision is the ONE thing that changes
+            // selection state directly (agents can only propose).
+            $photo->forceFill([
+                'selection_state' => match ($validated['decision']) {
+                    'keep' => Domain::SELECTION_SELECTED,
+                    'reject' => Domain::SELECTION_CULLED,
+                    default => Domain::SELECTION_UNREVIEWED,
+                },
+            ])->save();
+
+            return $decision;
+        });
 
         return response()->json([
             'decision' => [
@@ -77,7 +87,7 @@ class CullingDecisionController extends Controller
             ],
             'photo' => [
                 'id' => $photo->id,
-                'selection_state' => $photo->selection_state,
+                'selection_state' => $photo->fresh()->selection_state,
             ],
         ], 201);
     }

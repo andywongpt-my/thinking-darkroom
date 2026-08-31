@@ -281,8 +281,11 @@ class ProposalApplicator
             ]);
         } catch (Throwable $e) {
             // Compensating delete: never orphan stored derivative bytes
-            // behind a failed row insert.
-            $media->delete($stored['path']);
+            // behind a failed row insert. recordPath() yields the canonical
+            // handle (absolute Blob URL in durable mode); passing the raw
+            // relative path would silently skip the remote delete and leave
+            // orphaned billable bytes (Sol P1-4).
+            $media->delete($media->recordPath($stored));
 
             throw $e;
         }

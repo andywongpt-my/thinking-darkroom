@@ -104,6 +104,16 @@ class AgentConversationTest extends TestCase
         ]);
     }
 
+    public function test_project_agent_can_use_webmcp_api_with_a_sanctum_bearer_token(): void
+    {
+        $token = $this->agent->createToken('webmcp-integration-test')->plainTextToken;
+
+        $this->withToken($token)
+            ->getJson(route('api.webmcp.conversation.index', $this->project))
+            ->assertOk()
+            ->assertJsonPath('project_id', $this->project->id);
+    }
+
     public function test_conversation_authorization_preserves_project_and_agent_boundaries(): void
     {
         $outsider = User::factory()->agent()->create([

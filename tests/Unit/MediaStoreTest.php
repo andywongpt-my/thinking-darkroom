@@ -192,4 +192,36 @@ class MediaStoreTest extends TestCase
         $this->assertSame($blobUrl, MediaStore::publicUrl($blobUrl));
         $this->assertStringNotContainsString('/storage/http', (string) MediaStore::publicUrl($blobUrl));
     }
+
+    public function test_untrusted_remote_urls_are_never_fetched_as_media(): void
+    {
+        Http::fake();
+        $store = app(MediaStore::class);
+
+        try {
+            $store->read('http://169.254.169.254/latest/meta-data');
+            $this->fail('An untrusted remote URL must not be fetched.');
+        } catch (RuntimeException) {
+            Http::assertNothingSent();
+        }
+
+        $this->assertFalse($store->exists('https://attacker.example/internal'));
+        Http::assertNothingSent();
+    }
+
+    public function test_untrusted_remote_urls_are_never_deleted_or_exposed(): void
+    {
+        putenv('BLOB_READ_WRITE_TOKEN=vercel_blob_rw_store-test_secret');
+        Http::fake();
+        $store = app(MediaStore::class);
+
+        try {
+            $store->delete('https://attacker.example/victim.jpg');
+            $this->fail('An untrusted remote URL must not be sent to the Blob delete API.');
+        } catch (RuntimeException) {
+            Http::assertNothingSent();
+        }
+
+        $this->assertNull(MediaStore::publicUrl('https://attacker.example/victim.jpg'));
+    }
 }

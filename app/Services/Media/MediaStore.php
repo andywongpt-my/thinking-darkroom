@@ -29,6 +29,35 @@ class MediaStore
     }
 
     /**
+     * True when the runtime is a durable DEPLOYMENT whose DB rows survive
+     * cold starts — i.e. the actual Vercel serverless entry with an external
+     * DB. In that runtime a local public-disk write is a silent data-loss
+     * trap (Sol P0-1): the row would reference a lambda-local /tmp path that
+     * vanishes on the next instance. A local dev machine or test suite may
+     * legitimately use a MySQL test database with a local disk, so the DB
+     * driver alone must not decide this — the serverless runtime must.
+     */
+    public static function requiresDurableMedia(): bool
+    {
+        if (app()->runningInConsole() && ! self::isServerlessRuntime()) {
+            return false;
+        }
+
+        if (self::isServerlessRuntime()) {
+            $driver = strtolower((string) (getenv('DB_CONNECTION') ?: env('DB_CONNECTION', 'sqlite')));
+
+            return in_array($driver, ['mysql', 'mariadb', 'pgsql', 'sqlsrv'], true);
+        }
+
+        return app()->environment('production');
+    }
+
+    private static function isServerlessRuntime(): bool
+    {
+        return getenv('VERCEL') === '1';
+    }
+
+    /**
      * Resolve the browser-facing URL for a stored media path.
      *
      * Durable records keep the full public Blob URL in the path column and are
@@ -42,8 +71,12 @@ class MediaStore
             return null;
         }
 
-        return str_starts_with($path, 'http')
-            ? $path
+        if (self::isTrustedBlobUrl($path)) {
+            return $path;
+        }
+
+        return self::hasUrlScheme($path)
+            ? null
             : asset('storage/'.ltrim($path, '/'));
     }
 
@@ -73,6 +106,16 @@ class MediaStore
             return $this->writeToBlob($path, $bytes, $mime, $allowOverwrite);
         }
 
+        // Fail closed (Sol P0-1): a durable runtime (external DB / production)
+        // must never silently fall back to lambda-local storage — the DB row
+        // would outlive the ephemeral bytes. Only local/test sqlite runtimes
+        // may use the public disk.
+        if (self::requiresDurableMedia()) {
+            throw new RuntimeException(
+                'Durable media backend unavailable: refusing to write client media to ephemeral local storage.',
+            );
+        }
+
         $disk = Storage::disk('public');
         if (! $disk->put($path, $bytes)) {
             throw new RuntimeException("Unable to write media [{$path}] to the public disk.");
@@ -88,10 +131,11 @@ class MediaStore
 
     public function read(string $path): string
     {
-        if ($this->isHttpPath($path)) {
+        if ($this->isTrustedBlobUrl($path)) {
             try {
                 return Http::connectTimeout(self::CONNECT_TIMEOUT_SECONDS)
                     ->timeout(self::REQUEST_TIMEOUT_SECONDS)
+                    ->withoutRedirecting()
                     ->get($path)
                     ->throw()
                     ->body();
@@ -99,6 +143,8 @@ class MediaStore
                 throw new RuntimeException("Unable to read remote media [{$path}].", 0, $e);
             }
         }
+
+        $this->rejectUntrustedRemotePath($path);
 
         try {
             $bytes = Storage::disk('public')->get($path);
@@ -155,11 +201,16 @@ class MediaStore
     public function exists(string $path): bool
     {
         try {
-            if ($this->isHttpPath($path)) {
+            if ($this->isTrustedBlobUrl($path)) {
                 return Http::connectTimeout(self::CONNECT_TIMEOUT_SECONDS)
                     ->timeout(self::REQUEST_TIMEOUT_SECONDS)
+                    ->withoutRedirecting()
                     ->head($path)
                     ->successful();
+            }
+
+            if (self::hasUrlScheme($path)) {
+                return false;
             }
 
             return Storage::disk('public')->exists($path);
@@ -170,7 +221,7 @@ class MediaStore
 
     public function delete(string $path): bool
     {
-        if ($this->isHttpPath($path)) {
+        if ($this->isTrustedBlobUrl($path)) {
             $token = $this->blobToken();
             if ($token === null) {
                 throw new RuntimeException('Cannot delete remote media without BLOB_READ_WRITE_TOKEN.');
@@ -189,6 +240,8 @@ class MediaStore
 
             return true;
         }
+
+        $this->rejectUntrustedRemotePath($path);
 
         return Storage::disk('public')->delete($path);
     }
@@ -287,9 +340,51 @@ class MediaStore
         return ($dir === '' ? '' : $dir.'/').ltrim($filename, '/');
     }
 
+    /**
+     * True only for HTTPS public Vercel Blob URLs emitted by this application's
+     * durable storage flow. Treating every string beginning with "http" as
+     * trusted would let a corrupt DB row turn this service into an SSRF client.
+     */
+    public static function isTrustedBlobUrl(string $path): bool
+    {
+        $parts = parse_url($path);
+        if (! is_array($parts)) {
+            return false;
+        }
+
+        $scheme = strtolower((string) ($parts['scheme'] ?? ''));
+        $host = strtolower((string) ($parts['host'] ?? ''));
+        $port = $parts['port'] ?? null;
+        $isPublicBlobHost = str_ends_with($host, '.public.blob.vercel-storage.com')
+            || $host === 'blob.vercel-storage.com'; // legacy durable records
+
+        return $scheme === 'https'
+            && $host !== ''
+            && $isPublicBlobHost
+            && ! isset($parts['user'])
+            && ! isset($parts['pass'])
+            && ($port === null || $port === 443);
+    }
+
+    /**
+     * Compatibility shim for the existing derivative idempotency check.
+     * New code should use isTrustedBlobUrl() so the trust boundary is explicit.
+     */
     public function isHttpPath(string $path): bool
     {
-        return str_starts_with($path, 'http');
+        return self::isTrustedBlobUrl($path);
+    }
+
+    private static function hasUrlScheme(string $path): bool
+    {
+        return preg_match('/^[a-z][a-z0-9+.-]*:/i', trim($path)) === 1;
+    }
+
+    private function rejectUntrustedRemotePath(string $path): void
+    {
+        if (self::hasUrlScheme($path)) {
+            throw new RuntimeException('Media path is not an allow-listed HTTPS Vercel Blob URL.');
+        }
     }
 
     private function blobToken(): ?string
