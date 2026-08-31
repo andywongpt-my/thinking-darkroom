@@ -77,7 +77,7 @@ function buildLoginTool(): ModelContextTool {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        Accept: 'text/html, application/xhtml+xml',
+                        Accept: 'application/json',
                         'X-Requested-With': 'XMLHttpRequest',
                         'X-CSRF-TOKEN': csrfToken(),
                     },
@@ -89,6 +89,14 @@ function buildLoginTool(): ModelContextTool {
                 }
 
                 if (response.ok || (response.status >= 300 && response.status < 400)) {
+                    // Laravel answers an invalid HTML-form login with a 302 back
+                    // to /login (not a 422). fetch silently follows that bounce,
+                    // so a 200 whose final URL is still /login means rejection.
+                    const finalPath = new URL(response.url ?? '', 'http://localhost').pathname;
+                    if (finalPath === '/login') {
+                        return { success: false, message: 'Invalid credentials' };
+                    }
+
                     window.location.href = '/dashboard';
                     return { success: true, message: 'Logged in successfully' };
                 }

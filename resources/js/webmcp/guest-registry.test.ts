@@ -104,7 +104,7 @@ describe('guest WebMCP registry', () => {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                Accept: 'text/html, application/xhtml+xml',
+                Accept: 'application/json',
                 'X-Requested-With': 'XMLHttpRequest',
                 'X-CSRF-TOKEN': 'meta-csrf-token',
             },
@@ -133,6 +133,50 @@ describe('guest WebMCP registry', () => {
 
         expect(result).toEqual({ success: false, message: 'Invalid credentials' });
         expect(window.location.href).toBe('');
+
+        cleanup();
+    });
+
+    it('treats a followed 302 bounce back to /login as rejection, not success', async () => {
+        // Real Laravel behaviour for an HTML-form login: validation failure is a
+        // 302 redirect back to /login which fetch silently follows, surfacing a
+        // 200 whose final URL is still /login.
+        const fake = makeFake();
+        installDocument(fake);
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue({ ok: true, status: 200, url: 'https://darkroom.test/login' } as Response),
+        );
+        const cleanup = mountGuestRegistry();
+
+        const result = await fake.tool('login')?.execute({
+            email: 'wrong@example.test',
+            password: 'wrong-password',
+        });
+
+        expect(result).toEqual({ success: false, message: 'Invalid credentials' });
+        expect(window.location.href).toBe('');
+
+        cleanup();
+    });
+
+    it('follows a successful login 302 to the dashboard and reports success', async () => {
+        // Successful HTML-form login: 302 to /dashboard, fetch follows to 200.
+        const fake = makeFake();
+        installDocument(fake);
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue({ ok: true, status: 200, url: 'https://darkroom.test/dashboard' } as Response),
+        );
+        const cleanup = mountGuestRegistry();
+
+        const result = await fake.tool('login')?.execute({
+            email: 'photographer@webmcp.test',
+            password: 'password',
+        });
+
+        expect(result).toEqual({ success: true, message: 'Logged in successfully' });
+        expect(window.location.href).toBe('/dashboard');
 
         cleanup();
     });
