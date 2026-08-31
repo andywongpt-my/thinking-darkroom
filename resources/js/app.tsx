@@ -36,7 +36,9 @@ createInertiaApp({
         const root = createRoot(el);
         let cleanupGuestRegistry: (() => void) | null = null;
 
-        if (pageUser(props.initialPage as PageWithAuth) === null) {
+        if (pageUser(props.initialPage as PageWithAuth) == null) {
+            // Nullish check (AGY L-2): a page that omits the auth prop entirely
+            // still resolves as a guest and must get the guest registry.
             cleanupGuestRegistry = mountGuestRegistry();
         }
 

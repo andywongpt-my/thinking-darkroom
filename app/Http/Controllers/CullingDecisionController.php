@@ -47,7 +47,9 @@ class CullingDecisionController extends Controller
             // Decision row + photo state change commit or roll back together
             // (Sol P2-6): the photographer's history must never disagree with
             // the workspace's current selection state.
-            $photo = Photo::whereKey($photo->id)->lockForUpdate()->first();
+            // firstOrFail (AGY L-1): if the photo is deleted concurrently after
+            // authorization, return a proper 404 instead of a fatal TypeError.
+            $photo = Photo::whereKey($photo->id)->lockForUpdate()->firstOrFail();
 
             $decision = PhotographerDecision::create([
                 'project_id' => $project->id,

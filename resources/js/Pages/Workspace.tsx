@@ -1685,7 +1685,11 @@ export default function Workspace({
                                                 </div>
                                                 {p.summary && <p className="mt-1 text-xs text-gray-500">{p.summary}</p>}
                                                 <div className="mt-1 text-xs text-gray-400">
-                                                    {p.items.length} item(s) · {p.created_by ?? 'agent'} · {fmtTime(p.created_at)}
+                                                    {p.items.length === 0 && p.status === 'draft'
+                                                        ? '0 item(s) — awaiting agent generation'
+                                                        : `${p.items.length} item(s)`}
+                                                    {' · '}
+                                                    {p.created_by ?? 'agent'} · {fmtTime(p.created_at)}
                                                 </div>
 
                                                 {/* Retouch proposal value layers — makes human authority obvious */}

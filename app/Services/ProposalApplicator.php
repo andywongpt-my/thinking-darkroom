@@ -238,11 +238,20 @@ class ProposalApplicator
                     'image/jpeg',
                     allowOverwrite: true,
                 );
-                $existing->forceFill([
-                    'storage_path' => $media->recordPath($stored),
-                    'adjustments' => $adjustments->toArray(),
-                    'proposal_id' => $proposal->id,
-                ])->save();
+                try {
+                    $existing->forceFill([
+                        'storage_path' => $media->recordPath($stored),
+                        'adjustments' => $adjustments->toArray(),
+                        'proposal_id' => $proposal->id,
+                    ])->save();
+                } catch (Throwable $e) {
+                    // Compensating delete (AGY M-2): the update path writes new
+                    // bytes before the row save — a failed save must not leave
+                    // the just-written object orphaned in billable storage.
+                    $media->delete($media->recordPath($stored));
+
+                    throw $e;
+                }
             }
 
             return $existing;
@@ -259,11 +268,20 @@ class ProposalApplicator
 
         if ($existing) {
             // Same photo re-rendered but path changed (rare) — move the row.
-            $existing->forceFill([
-                'storage_path' => $storagePath,
-                'adjustments' => $adjustments->toArray(),
-                'proposal_id' => $proposal->id,
-            ])->save();
+            try {
+                $existing->forceFill([
+                    'storage_path' => $storagePath,
+                    'adjustments' => $adjustments->toArray(),
+                    'proposal_id' => $proposal->id,
+                ])->save();
+            } catch (Throwable $e) {
+                // Compensating delete (AGY M-2): unlike the same-path overwrite,
+                // the OLD bytes stay valid at the old path, but the NEW object
+                // at the new path is unreferenced after a failed row move.
+                $media->delete($storagePath);
+
+                throw $e;
+            }
 
             return $existing;
         }

@@ -44,9 +44,25 @@ class MediaStore
         }
 
         if (self::isServerlessRuntime()) {
-            $driver = strtolower((string) (getenv('DB_CONNECTION') ?: env('DB_CONNECTION', 'sqlite')));
+            // Resolve the driver through the resolved config when available
+            // (config may be cached — vercel.json sets APP_CONFIG_CACHE — and
+            // env() returns null for cached keys), then fall back to the raw
+            // environment. DATABASE_URL/DB_URL with a SQL scheme also imply a
+            // durable external DB even when DB_CONNECTION itself is absent.
+            $default = strtolower((string) (config('database.default') ?: getenv('DB_CONNECTION') ?: env('DB_CONNECTION', 'sqlite')));
 
-            return in_array($driver, ['mysql', 'mariadb', 'pgsql', 'sqlsrv'], true);
+            if (in_array($default, ['mysql', 'mariadb', 'pgsql', 'sqlsrv'], true)) {
+                return true;
+            }
+
+            foreach (['DATABASE_URL', 'DB_URL'] as $urlKey) {
+                $url = (string) (config("database.connections.{$default}.url") ?: getenv($urlKey) ?: env($urlKey, ''));
+                if (preg_match('#^(mysql|postgres(ql)?|mariadb|sqlsrv)://#', strtolower($url)) === 1) {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         return app()->environment('production');
