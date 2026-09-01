@@ -10,6 +10,11 @@ vi.mock('@inertiajs/react', () => ({
     usePage: () => ({ props: {} }),
 }));
 
+vi.mock('@/Components/Modal', () => ({
+    default: ({ children, show }: { children: React.ReactNode; show: boolean }) =>
+        show ? createElement('div', { 'data-testid': 'photo-delete-modal' }, children) : null,
+}));
+
 const WorkspacePage = await import('@/Pages/Workspace');
 
 describe('Workspace audit regressions', () => {
@@ -26,6 +31,41 @@ describe('Workspace audit regressions', () => {
         ).rejects.toThrow(networkFailure);
 
         expect(busyStates).toEqual(['reject', null]);
+    });
+
+    it('renders the selected-photo delete confirmation flow', () => {
+        const html = renderToString(
+            createElement(WorkspacePage.PhotoDeleteDialog, {
+                show: true,
+                photoName: 'frame-001.jpg',
+                processing: false,
+                onClose: vi.fn(),
+                onConfirm: vi.fn(),
+            }),
+        );
+
+        expect(html).toContain('data-testid="photo-delete-modal"');
+        expect(html).toContain('Delete photo?');
+        expect(html).toContain('frame-001.jpg');
+        expect(html).toContain('workspace-delete-photo-cancel');
+        expect(html).toContain('workspace-delete-photo-confirm');
+        expect(html).toContain('Permanently delete frame-001.jpg');
+        expect(html).toContain('permanently deleted');
+    });
+
+    it('disables the photo delete confirmation while the request is processing', () => {
+        const html = renderToString(
+            createElement(WorkspacePage.PhotoDeleteDialog, {
+                show: true,
+                photoName: 'frame-001.jpg',
+                processing: true,
+                onClose: vi.fn(),
+                onConfirm: vi.fn(),
+            }),
+        );
+
+        expect(html).toContain('DELETING');
+        expect(html).toMatch(/workspace-delete-photo-confirm[^>]*disabled=""/);
     });
 
     it('M3 renders a canonical Creative Room link for the current project', () => {

@@ -21,12 +21,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/projects', [ProjectController::class, 'store'])
         ->middleware('throttle:project-create')
         ->name('projects.store');
+    Route::patch('/projects/{project}', [ProjectController::class, 'update'])->name('projects.update');
+    Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
 
     // One main project workspace.
     Route::get('/projects/{project}', [WorkspacePageController::class, 'show'])->name('workspace.show');
     Route::post('/projects/{project}/photos', [WorkspacePageController::class, 'upload'])
         ->middleware('throttle:workspace-upload')
         ->name('workspace.upload');
+    Route::delete('/projects/{project}/photos/{photo}', [WorkspacePageController::class, 'destroyPhoto'])
+        ->name('workspace.photos.destroy');
 
     // Durable project-scoped conversation. Messages are discussion only: they
     // never approve, execute, or bypass the photographer authority boundary.

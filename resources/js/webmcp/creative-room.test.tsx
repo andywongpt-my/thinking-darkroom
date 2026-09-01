@@ -360,6 +360,20 @@ describe('Sprint 2 — Creative Room page (Task 10)', () => {
         expect(html).toContain('&quot;mood&quot;: [');
     });
 
+    it('A9 keeps a previous brainstorm visible and offers more thinking', () => {
+        const withHistory = ssrText(mountPage());
+
+        expect(withHistory).toContain('data-testid="brainstorm-history"');
+        expect(withHistory).toContain('Golden hour, calm coastal mood, honest expressions');
+        expect(withHistory).toContain('Maya');
+        expect(withHistory).toContain('2026');
+        expect(withHistory).toContain('ADD MORE THINKING');
+
+        const fresh = mountPage({ brainstorm: null });
+        expect(fresh).not.toContain('data-testid="brainstorm-history"');
+        expect(fresh).toContain('OPEN BRAINSTORM');
+    });
+
     it('9. human action controls render only for a photographer who can review, and never for agents or terminal states', () => {
         // Photographer (can_review) + live concept → actions visible.
         const withActions = mountPage({

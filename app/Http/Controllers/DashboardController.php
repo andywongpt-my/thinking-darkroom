@@ -33,12 +33,13 @@ class DashboardController extends Controller
             ->get();
 
         // Canonical payload shape — asserted key-for-key by
-        // tests/Feature/DashboardTest.php. The six keys below are the public
+        // tests/Feature/DashboardTest.php. The seven keys below are the public
         // contract; view-only extensions live in the separate `project_meta`
         // prop, never inside these items.
         $projectPayloads = $projects->map(fn (Project $p) => [
             'id' => $p->id,
             'name' => $p->name,
+            'description' => $p->description,
             'status' => $p->status,
             'photo_count' => $p->photos_count,
             'pending_proposals' => $p->pending_proposals_count,
@@ -46,6 +47,8 @@ class DashboardController extends Controller
         ]);
 
         $projectMeta = $projects->mapWithKeys(fn (Project $p) => [$p->id => [
+            'description' => $p->description,
+            'can_manage' => $p->owner_id === $user->id,
             'approved_proposals' => $p->approved_proposals_count,
             'executed_proposals' => $p->executed_proposals_count,
             'last_photo_at' => $p->last_photo_at

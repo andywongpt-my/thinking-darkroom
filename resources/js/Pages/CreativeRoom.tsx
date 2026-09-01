@@ -393,14 +393,33 @@ export default function CreativeRoom() {
                                 </div>
                             )}
 
-                            {can_review && !brainstorm && (
+                            {brainstorm && (
+                                <div
+                                    data-testid="brainstorm-history"
+                                    className="mt-4 rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-3"
+                                >
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-indigo-300">
+                                            PREVIOUS THINKING · {brainstorm.photographer ?? 'PHOTOGRAPHER'}
+                                        </p>
+                                        <time className="text-[11px] text-zinc-500" dateTime={brainstorm.created_at}>
+                                            {fmtTime(brainstorm.created_at)}
+                                        </time>
+                                    </div>
+                                    <p className="mt-2 whitespace-pre-wrap text-xs leading-relaxed text-zinc-300">
+                                        {brainstorm.input}
+                                    </p>
+                                </div>
+                            )}
+
+                            {can_review && (
                                 <div className="mt-4 border-t border-zinc-800/70 pt-4">
                                     {!brainstormOpen ? (
                                         <button
                                             onClick={() => setBrainstormOpen(true)}
                                             className="rounded-md bg-zinc-900 px-4 py-2 text-xs font-semibold text-zinc-100 hover:bg-zinc-700"
                                         >
-                                            + Open Brainstorm
+                                            {brainstorm ? 'ADD MORE THINKING' : 'OPEN BRAINSTORM'}
                                         </button>
                                     ) : (
                                         <div className="space-y-2">

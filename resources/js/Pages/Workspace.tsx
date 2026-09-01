@@ -1,5 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import AgentChatPanel from '@/Components/AgentChatPanel';
+import DangerButton from '@/Components/DangerButton';
+import Modal from '@/Components/Modal';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useWebmcpRegistry } from '@/webmcp/use-webmcp';
@@ -260,6 +262,57 @@ export function CreativeRoomLink({ projectId }: { projectId: number }) {
     );
 }
 
+export function PhotoDeleteDialog({
+    show,
+    photoName,
+    processing,
+    onClose,
+    onConfirm,
+}: {
+    show: boolean;
+    photoName: string;
+    processing: boolean;
+    onClose: () => void;
+    onConfirm: () => void;
+}) {
+    return (
+        <Modal show={show} onClose={onClose} maxWidth="md">
+            <div className="bg-zinc-900 p-6 text-zinc-100 sm:p-7">
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-rose-300">IRREVERSIBLE CUT</p>
+                <h2 id="delete-photo-title" className="mt-2 text-xl font-semibold text-zinc-100">
+                    Delete photo?
+                </h2>
+                <p className="mt-3 text-sm leading-relaxed text-zinc-400">
+                    Remove <span className="text-zinc-200">{photoName}</span> and its stored derivatives from the darkroom?
+                </p>
+                <p className="mt-3 text-xs leading-relaxed text-rose-300/80">
+                    The original and any retouch derivatives are permanently deleted. This cannot be undone.
+                </p>
+                <div className="mt-6 flex flex-wrap justify-end gap-3 border-t border-zinc-800 pt-5">
+                    <button
+                        type="button"
+                        data-testid="workspace-delete-photo-cancel"
+                        onClick={onClose}
+                        disabled={processing}
+                        className="rounded-md border border-zinc-700 px-4 py-2 text-xs font-semibold tracking-[0.12em] text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        KEEP PHOTO
+                    </button>
+                    <DangerButton
+                        type="button"
+                        data-testid="workspace-delete-photo-confirm"
+                        aria-label={`Permanently delete ${photoName}`}
+                        onClick={onConfirm}
+                        disabled={processing}
+                    >
+                        {processing ? 'DELETING…' : 'DELETE PHOTO'}
+                    </DangerButton>
+                </div>
+            </div>
+        </Modal>
+    );
+}
+
 /**
  * The per-photo READ endpoint documents 409 as the normal pre-analysis state:
  * observations do not exist until the agent explicitly runs ANALYZE.
@@ -399,6 +452,8 @@ export default function Workspace({
         .join(', ');
 
     const [selectedId, setSelectedId] = useState<number | null>(photos[0]?.id ?? null);
+    const [deletePhotoId, setDeletePhotoId] = useState<number | null>(null);
+    const [deletingPhoto, setDeletingPhoto] = useState(false);
     const [localProposals, setLocalProposals] = useState<WorkspaceProposal[]>(proposals);
     const [localActivity, setLocalActivity] = useState<ActivityEntry[]>(activity);
     const [references, setReferences] = useState<unknown[]>([]);
@@ -451,6 +506,33 @@ export default function Workspace({
     );
 
     const selected = photos.find((p) => p.id === selectedId) ?? null;
+    const deleteTarget = photos.find((p) => p.id === deletePhotoId) ?? null;
+
+    const closeDeletePhoto = () => {
+        if (!deletingPhoto) {
+            setDeletePhotoId(null);
+        }
+    };
+
+    const confirmDeletePhoto = () => {
+        const targetId = deletePhotoId;
+        if (targetId === null) {
+            return;
+        }
+
+        setDeletingPhoto(true);
+        router.delete(route('workspace.photos.destroy', [project.id, targetId]), {
+            preserveScroll: true,
+            onSuccess: () => {
+                setDeletePhotoId(null);
+                setSelectedId((current) => (current === targetId ? null : current));
+            },
+            onError: () => {
+                setNotify({ kind: 'err', text: 'Photo deletion failed.' });
+            },
+            onFinish: () => setDeletingPhoto(false),
+        });
+    };
 
     // Presence is operational state: eligible agents heartbeat, everyone else reads.
     // Failed refreshes intentionally leave the last server-confirmed state intact.
@@ -1127,18 +1209,32 @@ export default function Workspace({
                     <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 shadow-sm">
                         {selected ? (
                             <>
-                                <div className="mb-3 flex items-center justify-between">
-                                    <h3 className="text-sm font-semibold text-zinc-100">
+                                <div className="mb-3 flex items-start justify-between gap-3">
+                                    <h3 className="min-w-0 text-sm font-semibold text-zinc-100">
                                         {selected.filename}
                                         <span className="ms-2 text-xs font-normal text-zinc-500">
                                             {selected.width && selected.height ? `${selected.width}×${selected.height}` : ''}
                                         </span>
                                     </h3>
-                                    <div className="flex gap-2 text-xs">
-                                        <span className={`rounded-full px-2 py-0.5 font-medium ${selected.selection_state === 'selected' ? 'bg-emerald-500/15 text-emerald-300' : selected.selection_state === 'culled' ? 'bg-rose-500/15 text-rose-300' : 'bg-zinc-900 text-zinc-300'}`}>
-                                            {selected.selection_state}
-                                        </span>
-                                        <span className="rounded-full bg-indigo-500/15 px-2 py-0.5 font-medium text-indigo-400">{selected.retouch_state}</span>
+                                    <div className="flex shrink-0 items-center gap-2 text-xs">
+                                        <div className="flex gap-2">
+                                            <span className={`rounded-full px-2 py-0.5 font-medium ${selected.selection_state === 'selected' ? 'bg-emerald-500/15 text-emerald-300' : selected.selection_state === 'culled' ? 'bg-rose-500/15 text-rose-300' : 'bg-zinc-900 text-zinc-300'}`}>
+                                                {selected.selection_state}
+                                            </span>
+                                            <span className="rounded-full bg-indigo-500/15 px-2 py-0.5 font-medium text-indigo-400">{selected.retouch_state}</span>
+                                        </div>
+                                        {permissions.can_upload && (
+                                            <button
+                                                type="button"
+                                                aria-label={`Delete ${selected.filename}`}
+                                                data-testid="workspace-delete-photo"
+                                                onClick={() => setDeletePhotoId(selected.id)}
+                                                disabled={busy !== null || deletingPhoto}
+                                                className="rounded-md border border-rose-500/50 bg-rose-500/10 px-2.5 py-1.5 font-mono text-[10px] font-semibold tracking-[0.12em] text-rose-300 transition hover:bg-rose-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:cursor-not-allowed disabled:opacity-40"
+                                            >
+                                                DELETE
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                                 {selected.url ? (
@@ -1154,6 +1250,14 @@ export default function Workspace({
                                     <span>Shutter: <b>{selected.shutter_speed ?? '—'}</b></span>
                                     <span>Focal: <b>{selected.focal_length ?? '—'}</b></span>
                                 </div>
+
+                                <PhotoDeleteDialog
+                                    show={deletePhotoId !== null}
+                                    photoName={deleteTarget?.filename ?? 'this photo'}
+                                    processing={deletingPhoto}
+                                    onClose={closeDeletePhoto}
+                                    onConfirm={confirmDeletePhoto}
+                                />
 
                                 {analysisError && (
                                     <div

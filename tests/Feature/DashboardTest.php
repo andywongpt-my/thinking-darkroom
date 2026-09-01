@@ -58,7 +58,7 @@ class DashboardTest extends TestCase
         $payload = array_values($projects)[0];
         $this->assertIsArray($payload);
         $this->assertSame(
-            ['id', 'name', 'status', 'photo_count', 'pending_proposals', 'url'],
+            ['id', 'name', 'description', 'status', 'photo_count', 'pending_proposals', 'url'],
             array_keys($payload),
         );
         $this->assertSame($project->id, $payload['id']);

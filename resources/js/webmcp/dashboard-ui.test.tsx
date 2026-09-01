@@ -67,6 +67,14 @@ vi.mock('@/Components/Modal', () => ({
         createElement('div', { 'data-testid': 'new-project-dialog', 'data-open': String(show) }, children),
 }));
 
+vi.mock('@/Components/Dropdown', () => {
+    const Dropdown = ({ children }: { children: React.ReactNode }) => createElement('div', null, children);
+    const Trigger = ({ children }: { children: React.ReactNode }) => createElement('div', null, children);
+    const Content = ({ children }: { children: React.ReactNode }) => createElement('div', { role: 'menu' }, children);
+
+    return { default: Object.assign(Dropdown, { Trigger, Content }) };
+});
+
 vi.mock('@/Layouts/AuthenticatedLayout', () => ({
     default: ({ header, children }: { header?: React.ReactNode; children: React.ReactNode }) =>
         createElement(
@@ -90,6 +98,7 @@ function makeProps(overrides: Record<string, unknown> = {}): PageFixture['props'
             {
                 id: 1,
                 name: 'Coastal Studio — Editorial Portraits',
+                description: 'Warm coastal portraits for the autumn editorial.',
                 status: 'active',
                 photo_count: 127,
                 pending_proposals: 2,
@@ -97,7 +106,7 @@ function makeProps(overrides: Record<string, unknown> = {}): PageFixture['props'
             },
         ],
         project_meta: {
-            1: { approved_proposals: 1, executed_proposals: 9, last_photo_at: '2026-08-30T14:02:00Z' },
+            1: { description: 'Warm coastal portraits for the autumn editorial.', can_manage: false, approved_proposals: 1, executed_proposals: 9, last_photo_at: '2026-08-30T14:02:00Z' },
         },
         tools: {
             total: 22,
@@ -197,6 +206,55 @@ describe('Dashboard darkroom view', () => {
 
     it('maps project status to darkroom labels', () => {
         expect(render()).toContain('IN PROGRESS');
+    });
+
+    it('renders owner project management controls and delete confirmation copy', () => {
+        pageFixture = {
+            props: makeProps({
+                project_meta: {
+                    1: {
+                        description: 'Warm coastal portraits for the autumn editorial.',
+                        can_manage: true,
+                        approved_proposals: 1,
+                        executed_proposals: 9,
+                        last_photo_at: '2026-08-30T14:02:00Z',
+                    },
+                },
+            }),
+        };
+        const html = render();
+
+        expect(html).toContain('data-testid="dashboard-project-1-actions"');
+        expect(html).toContain('data-testid="dashboard-project-1-rename"');
+        expect(html).toContain('data-testid="dashboard-project-1-archive"');
+        expect(html).toContain('data-testid="dashboard-project-1-delete"');
+        expect(html).toContain('ARCHIVE');
+        expect(html).toContain('data-testid="delete-project-confirm-1"');
+        expect(html).toContain('permanently removes');
+        expect(html).toContain('including its photos and proposals');
+        expect(html).toContain('Warm coastal portraits for the autumn editorial.');
+    });
+
+    it('offers UNARCHIVE for an archived project', () => {
+        pageFixture = {
+            props: makeProps({
+                projects: [{
+                    id: 1,
+                    name: 'Coastal Studio — Editorial Portraits',
+                    description: 'Warm coastal portraits for the autumn editorial.',
+                    status: 'archived',
+                    photo_count: 127,
+                    pending_proposals: 2,
+                    url: '/projects/1',
+                }],
+                project_meta: { 1: { can_manage: true } },
+            }),
+        };
+
+        const html = render();
+
+        expect(html).toContain('UNARCHIVE');
+        expect(html).toContain('ARCHIVED');
     });
 
     it('renders ADD NEW PROJECT and its form for a human with or without existing projects', () => {

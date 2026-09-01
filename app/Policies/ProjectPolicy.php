@@ -63,6 +63,18 @@ class ProjectPolicy
         return $this->heartbeat($user, $project);
     }
 
+    /** Only the project owner may edit project metadata or lifecycle state. */
+    public function update(User $user, Project $project): bool
+    {
+        return $this->roleFor($user, $project) === Domain::ROLE_OWNER;
+    }
+
+    /** Only the project owner may permanently remove a project. */
+    public function destroy(User $user, Project $project): bool
+    {
+        return $this->update($user, $project);
+    }
+
     /** Originals may only be uploaded by a human owner or photographer. */
     public function upload(User $user, Project $project): bool
     {

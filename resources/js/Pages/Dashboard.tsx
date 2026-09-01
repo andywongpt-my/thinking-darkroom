@@ -1,12 +1,15 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import DangerButton from '@/Components/DangerButton';
+import Dropdown from '@/Components/Dropdown';
 import Modal from '@/Components/Modal';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import type { PageProps } from '@/types';
 import { FormEventHandler, useEffect, useRef, useState } from 'react';
 
 interface DashboardProject {
     id: number;
     name: string;
+    description?: string | null;
     status: string;
     photo_count: number;
     pending_proposals: number;
@@ -14,6 +17,8 @@ interface DashboardProject {
 }
 
 type ProjectMeta = {
+    description?: string | null;
+    can_manage?: boolean;
     approved_proposals?: number;
     executed_proposals?: number;
     last_photo_at?: string | null;
@@ -139,77 +144,329 @@ function AgentPresencePanel({ agent }: { agent: DashboardAgent }) {
     );
 }
 
-function FilmProjectCard({ p, meta }: { p: DashboardProject; meta?: ProjectMeta }) {
+function FilmProjectCard({ p, meta, canManage }: { p: DashboardProject; meta?: ProjectMeta; canManage: boolean }) {
     const executed = meta?.executed_proposals ?? 0;
     const approved = meta?.approved_proposals ?? 0;
+    const description = p.description ?? meta?.description ?? '';
+    const [showRename, setShowRename] = useState(false);
+    const [showDelete, setShowDelete] = useState(false);
+    const [deleting, setDeleting] = useState(false);
+    const nameInput = useRef<HTMLInputElement>(null);
+    const descriptionInput = useRef<HTMLTextAreaElement>(null);
+    const renameTrigger = useRef<HTMLButtonElement>(null);
+    const { data, setData, patch, errors, processing, reset, clearErrors } = useForm({
+        name: p.name,
+        description,
+    });
+
+    useEffect(() => {
+        if (showRename) {
+            nameInput.current?.focus();
+        }
+    }, [showRename]);
+
+    const openRename = () => {
+        clearErrors();
+        setData('name', p.name);
+        setData('description', description);
+        setShowRename(true);
+    };
+
+    const closeRename = () => {
+        if (processing) {
+            return;
+        }
+
+        reset();
+        clearErrors();
+        setShowRename(false);
+        renameTrigger.current?.focus();
+    };
+
+    const submitRename: FormEventHandler<HTMLFormElement> = (event) => {
+        event.preventDefault();
+        patch(route('projects.update', p.id), {
+            preserveScroll: true,
+            onSuccess: () => {
+                setShowRename(false);
+                clearErrors();
+                renameTrigger.current?.focus();
+            },
+            onError: (validationErrors) => {
+                focusFirstProjectField(validationErrors, nameInput, descriptionInput);
+            },
+        });
+    };
+
+    const toggleArchive = () => {
+        router.patch(
+            route('projects.update', p.id),
+            {
+                name: p.name,
+                description,
+                status: p.status === 'archived' ? 'active' : 'archived',
+            },
+            { preserveScroll: true },
+        );
+    };
+
+    const confirmDelete = () => {
+        setDeleting(true);
+        router.delete(route('projects.destroy', p.id), {
+            preserveScroll: true,
+            onSuccess: () => setShowDelete(false),
+            onFinish: () => setDeleting(false),
+        });
+    };
 
     return (
-        <Link
-            href={p.url}
+        <div
             data-testid={`dashboard-project-${p.id}`}
-            className="group relative block overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/60 transition duration-200 hover:border-amber-400/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+            className="group relative overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/60 transition duration-200 hover:border-amber-400/40"
         >
-            {/* top sprocket strip */}
-            <div className="border-b border-zinc-800 bg-zinc-950/40">
-                <SprocketStrip />
-            </div>
+            {canManage && (
+                <div className="absolute right-4 top-10 z-30">
+                    <Dropdown>
+                        <Dropdown.Trigger>
+                            <button
+                                ref={renameTrigger}
+                                type="button"
+                                aria-label={`Manage ${p.name}`}
+                                aria-haspopup="menu"
+                                data-testid={`dashboard-project-${p.id}-actions`}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-700/80 bg-zinc-950/80 text-lg leading-none text-zinc-400 transition hover:border-amber-400/50 hover:text-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                            >
+                                <span aria-hidden="true">⋮</span>
+                            </button>
+                        </Dropdown.Trigger>
+                        <Dropdown.Content width="48" contentClasses="bg-zinc-900 py-1">
+                            <button
+                                type="button"
+                                data-testid={`dashboard-project-${p.id}-rename`}
+                                onClick={openRename}
+                                className="block w-full px-4 py-2 text-start font-mono text-[11px] tracking-[0.12em] text-zinc-300 transition hover:bg-zinc-800 hover:text-zinc-100 focus:bg-zinc-800 focus:outline-none"
+                            >
+                                RENAME
+                            </button>
+                            <button
+                                type="button"
+                                data-testid={`dashboard-project-${p.id}-archive`}
+                                onClick={toggleArchive}
+                                className="block w-full px-4 py-2 text-start font-mono text-[11px] tracking-[0.12em] text-zinc-300 transition hover:bg-zinc-800 hover:text-zinc-100 focus:bg-zinc-800 focus:outline-none"
+                            >
+                                {p.status === 'archived' ? 'UNARCHIVE' : 'ARCHIVE'}
+                            </button>
+                            <button
+                                type="button"
+                                data-testid={`dashboard-project-${p.id}-delete`}
+                                onClick={() => setShowDelete(true)}
+                                className="block w-full px-4 py-2 text-start font-mono text-[11px] tracking-[0.12em] text-rose-300 transition hover:bg-rose-950/50 hover:text-rose-200 focus:bg-rose-950/50 focus:outline-none"
+                            >
+                                DELETE
+                            </button>
+                        </Dropdown.Content>
+                    </Dropdown>
+                </div>
+            )}
 
-            <div className="p-5">
-                <div className="flex items-center gap-3">
-                    <span
-                        className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                            p.pending_proposals > 0 ? 'animate-pulse bg-amber-400' : 'bg-zinc-600'
-                        }`}
-                        aria-hidden="true"
-                    />
-                    <h3 className="min-w-0 truncate text-base font-semibold text-zinc-100">{p.name}</h3>
-                    <span className="ml-auto shrink-0 font-mono text-[10px] tracking-[0.18em] text-zinc-500">
-                        {STATUS_LABEL[p.status] ?? p.status.toUpperCase()}
-                    </span>
+            <Link
+                href={p.url}
+                data-testid={`dashboard-project-${p.id}-link`}
+                className="group block focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 focus-visible:ring-inset"
+            >
+                {/* top sprocket strip */}
+                <div className="border-b border-zinc-800 bg-zinc-950/40">
+                    <SprocketStrip />
                 </div>
 
-                <div className="mt-5 grid grid-cols-3 gap-2 text-center" data-testid={`dashboard-project-${p.id}-stats`}>
-                    <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 py-2.5">
-                        <dd className="font-mono text-lg font-semibold tabular-nums text-zinc-100">{p.photo_count}</dd>
-                        <dt className="mt-0.5 text-[11px] text-zinc-500">photos</dt>
-                    </div>
-                    <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 py-2.5">
-                        <dd
-                            className={`font-mono text-lg font-semibold tabular-nums ${
-                                p.pending_proposals > 0 ? 'text-amber-400' : 'text-zinc-100'
+                <div className="p-5">
+                    <div className="flex items-center gap-3 pr-10">
+                        <span
+                            className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                                p.pending_proposals > 0 ? 'animate-pulse bg-amber-400' : 'bg-zinc-600'
                             }`}
-                        >
-                            {p.pending_proposals}
-                        </dd>
-                        <dt className="mt-0.5 text-[11px] text-zinc-500">awaiting you</dt>
+                            aria-hidden="true"
+                        />
+                        <h3 className="min-w-0 truncate text-base font-semibold text-zinc-100">{p.name}</h3>
+                        <span className="ml-auto shrink-0 font-mono text-[10px] tracking-[0.18em] text-zinc-500">
+                            {STATUS_LABEL[p.status] ?? p.status.toUpperCase()}
+                        </span>
                     </div>
-                    <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 py-2.5">
-                        <dd className="font-mono text-lg font-semibold tabular-nums text-zinc-100">{executed}</dd>
-                        <dt className="mt-0.5 text-[11px] text-zinc-500">executed</dt>
+
+                    <div className="mt-5 grid grid-cols-3 gap-2 text-center" data-testid={`dashboard-project-${p.id}-stats`}>
+                        <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 py-2.5">
+                            <dd className="font-mono text-lg font-semibold tabular-nums text-zinc-100">{p.photo_count}</dd>
+                            <dt className="mt-0.5 text-[11px] text-zinc-500">photos</dt>
+                        </div>
+                        <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 py-2.5">
+                            <dd
+                                className={`font-mono text-lg font-semibold tabular-nums ${
+                                    p.pending_proposals > 0 ? 'text-amber-400' : 'text-zinc-100'
+                                }`}
+                            >
+                                {p.pending_proposals}
+                            </dd>
+                            <dt className="mt-0.5 text-[11px] text-zinc-500">awaiting you</dt>
+                        </div>
+                        <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 py-2.5">
+                            <dd className="font-mono text-lg font-semibold tabular-nums text-zinc-100">{executed}</dd>
+                            <dt className="mt-0.5 text-[11px] text-zinc-500">executed</dt>
+                        </div>
+                    </div>
+
+                    {(approved > 0 || executed > 0) && (
+                        <p className="mt-3 font-mono text-[11px] text-zinc-600">
+                            {executed} executed · {approved} approved awaiting run
+                        </p>
+                    )}
+
+                    <div className="mt-4 flex items-center justify-between">
+                        <span className="text-xs text-zinc-500">
+                            {meta?.last_photo_at ? `Last upload ${relativeTime(meta.last_photo_at)}` : 'No photos yet'}
+                        </span>
+                        <span className="font-mono text-xs text-amber-400/0 transition duration-200 group-hover:text-amber-400/90">
+                            OPEN DARKROOM →
+                        </span>
                     </div>
                 </div>
 
-                {(approved > 0 || executed > 0) && (
-                    <p className="mt-3 font-mono text-[11px] text-zinc-600">
-                        {executed} executed · {approved} approved awaiting run
+                {/* bottom sprocket strip */}
+                <div className="border-t border-zinc-800 bg-zinc-950/40">
+                    <SprocketStrip />
+                </div>
+            </Link>
+
+            {canManage && (
+                <>
+                    <Modal show={showRename} onClose={closeRename} maxWidth="lg">
+                <div className="bg-zinc-900 p-6 text-zinc-100 sm:p-7">
+                    <div className="mb-6">
+                        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-amber-400/90">
+                            PROJECT NOTES
+                        </p>
+                        <h2 id={`rename-project-title-${p.id}`} className="mt-2 text-xl font-semibold text-zinc-100">
+                            Rename project
+                        </h2>
+                        <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                            Keep the project name and working notes current for this darkroom.
+                        </p>
+                    </div>
+
+                    <form
+                        onSubmit={submitRename}
+                        aria-labelledby={`rename-project-title-${p.id}`}
+                        data-testid={`rename-project-form-${p.id}`}
+                        className="space-y-5"
+                    >
+                        <div>
+                            <label htmlFor={`rename-project-name-${p.id}`} className="block text-sm font-medium text-zinc-200">
+                                Project name <span className="text-amber-400" aria-hidden="true">*</span>
+                            </label>
+                            <input
+                                ref={nameInput}
+                                id={`rename-project-name-${p.id}`}
+                                name="name"
+                                type="text"
+                                value={data.name}
+                                onChange={(event) => setData('name', event.target.value)}
+                                required
+                                disabled={processing}
+                                maxLength={255}
+                                autoComplete="off"
+                                aria-invalid={Boolean(errors.name)}
+                                aria-describedby={errors.name ? `rename-project-name-error-${p.id}` : undefined}
+                                className="mt-2 block w-full rounded-md border-zinc-700 bg-zinc-950 text-sm text-zinc-100 shadow-sm focus:border-amber-400 focus:ring-amber-400"
+                            />
+                            {errors.name && (
+                                <p id={`rename-project-name-error-${p.id}`} role="alert" className="mt-2 text-sm text-red-300">
+                                    {errors.name}
+                                </p>
+                            )}
+                        </div>
+
+                        <div>
+                            <label htmlFor={`rename-project-description-${p.id}`} className="block text-sm font-medium text-zinc-200">
+                                Description <span className="text-zinc-500">(optional)</span>
+                            </label>
+                            <textarea
+                                ref={descriptionInput}
+                                id={`rename-project-description-${p.id}`}
+                                name="description"
+                                value={data.description}
+                                onChange={(event) => setData('description', event.target.value)}
+                                disabled={processing}
+                                maxLength={5000}
+                                rows={4}
+                                aria-invalid={Boolean(errors.description)}
+                                aria-describedby={errors.description ? `rename-project-description-error-${p.id}` : undefined}
+                                className="mt-2 block w-full rounded-md border-zinc-700 bg-zinc-950 text-sm text-zinc-100 shadow-sm focus:border-amber-400 focus:ring-amber-400"
+                            />
+                            {errors.description && (
+                                <p id={`rename-project-description-error-${p.id}`} role="alert" className="mt-2 text-sm text-red-300">
+                                    {errors.description}
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="flex flex-wrap justify-end gap-3 border-t border-zinc-800 pt-5">
+                            <button
+                                type="button"
+                                data-testid={`rename-project-cancel-${p.id}`}
+                                onClick={closeRename}
+                                disabled={processing}
+                                className="rounded-md border border-zinc-700 px-4 py-2 text-xs font-semibold tracking-[0.12em] text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                CANCEL
+                            </button>
+                            <button
+                                type="submit"
+                                data-testid={`rename-project-submit-${p.id}`}
+                                disabled={processing}
+                                className="rounded-md border border-amber-400/60 bg-amber-400 px-4 py-2 text-xs font-semibold tracking-[0.12em] text-zinc-950 transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {processing ? 'SAVING…' : 'SAVE PROJECT'}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </Modal>
+
+            <Modal show={showDelete} onClose={() => !deleting && setShowDelete(false)} maxWidth="md">
+                <div className="bg-zinc-900 p-6 text-zinc-100 sm:p-7">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-rose-300">IRREVERSIBLE CUT</p>
+                    <h2 id={`delete-project-title-${p.id}`} className="mt-2 text-xl font-semibold text-zinc-100">
+                        Delete project?
+                    </h2>
+                    <p className="mt-3 text-sm leading-relaxed text-zinc-400">
+                        This permanently removes <span className="text-zinc-200">{p.name}</span>, including its photos and proposals.
                     </p>
-                )}
-
-                <div className="mt-4 flex items-center justify-between">
-                    <span className="text-xs text-zinc-500">
-                        {meta?.last_photo_at ? `Last upload ${relativeTime(meta.last_photo_at)}` : 'No photos yet'}
-                    </span>
-                    <span className="font-mono text-xs text-amber-400/0 transition duration-200 group-hover:text-amber-400/90">
-                        OPEN DARKROOM →
-                    </span>
+                    <p className="mt-3 text-xs leading-relaxed text-rose-300/80">
+                        The project and all of its darkroom history cannot be recovered.
+                    </p>
+                    <div className="mt-6 flex flex-wrap justify-end gap-3 border-t border-zinc-800 pt-5">
+                        <button
+                            type="button"
+                            data-testid={`delete-project-cancel-${p.id}`}
+                            onClick={() => setShowDelete(false)}
+                            disabled={deleting}
+                            className="rounded-md border border-zinc-700 px-4 py-2 text-xs font-semibold tracking-[0.12em] text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            KEEP PROJECT
+                        </button>
+                        <DangerButton
+                            type="button"
+                            data-testid={`delete-project-confirm-${p.id}`}
+                            onClick={confirmDelete}
+                            disabled={deleting}
+                        >
+                            {deleting ? 'DELETING…' : 'DELETE PROJECT'}
+                        </DangerButton>
+                    </div>
                 </div>
-            </div>
-
-            {/* bottom sprocket strip */}
-            <div className="border-t border-zinc-800 bg-zinc-950/40">
-                <SprocketStrip />
-            </div>
-        </Link>
+                    </Modal>
+                </>
+            )}
+        </div>
     );
 }
 
@@ -418,7 +675,12 @@ export default function Dashboard({ projects, can_create_project, project_meta, 
                                 <h2 className="mb-3 text-sm font-semibold text-zinc-200">Projects</h2>
                                 <div className="grid gap-5 md:grid-cols-2">
                                     {projects.map((p) => (
-                                        <FilmProjectCard key={p.id} p={p} meta={project_meta?.[p.id]} />
+                                        <FilmProjectCard
+                                            key={p.id}
+                                            p={p}
+                                            meta={project_meta?.[p.id]}
+                                            canManage={project_meta?.[p.id]?.can_manage === true}
+                                        />
                                     ))}
                                 </div>
                             </div>

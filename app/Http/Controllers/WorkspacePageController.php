@@ -12,6 +12,7 @@ use App\Services\Culling\ContextAwareCullingService;
 use App\Services\Media\MediaStore;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -19,10 +20,17 @@ use Throwable;
 
 class WorkspacePageController extends Controller
 {
-    /** GET / — redirects to the seeded project (the single main workspace). */
+    /** GET / — redirects to the newest project the signed-in user can access. */
     public function root(Request $request): \Symfony\Component\HttpFoundation\RedirectResponse
     {
-        $project = Project::orderBy('id')->first();
+        $user = $request->user();
+        if ($user === null) {
+            return redirect()->route('login');
+        }
+
+        $project = Project::whereHas('members', fn ($q) => $q->where('user_id', $user->id))
+            ->orderByDesc('id')
+            ->first();
 
         return $project
             ? redirect()->route('workspace.show', $project)
@@ -415,5 +423,39 @@ class WorkspacePageController extends Controller
         }
 
         return back()->with('flash', ['success' => 'Photos uploaded.']);
+    }
+
+    /** DELETE /projects/{project}/photos/{photo} — remove one original and its derivatives. */
+    public function destroyPhoto(Project $project, Photo $photo): RedirectResponse
+    {
+        $this->authorize('upload', $project);
+
+        abort_unless($photo->project_id === $project->id, 404);
+
+        $media = app(MediaStore::class);
+
+        DB::transaction(function () use ($media, $photo): void {
+            foreach (PhotoDerivative::query()->where('photo_id', $photo->id)->get() as $derivative) {
+                $this->tryDeleteMedia($media, $derivative->storage_path);
+            }
+
+            $this->tryDeleteMedia($media, $photo->path);
+            $photo->delete();
+        });
+
+        return back()->with('flash', ['success' => 'Photo deleted.']);
+    }
+
+    private function tryDeleteMedia(MediaStore $mediaStore, ?string $path): void
+    {
+        if ($path === null || $path === '') {
+            return;
+        }
+
+        try {
+            $mediaStore->delete($path);
+        } catch (Throwable) {
+            // A missing/unavailable byte store must not prevent database cleanup.
+        }
     }
 }
