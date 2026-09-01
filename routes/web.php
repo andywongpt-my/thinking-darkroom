@@ -8,6 +8,7 @@ use App\Http\Controllers\CullingDecisionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PhotographerReviewController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\QaFindingReviewController;
 use App\Http\Controllers\WebmcpDiagnosticsController;
 use App\Http\Controllers\WorkspacePageController;
@@ -17,6 +18,9 @@ Route::get('/', [WorkspacePageController::class, 'root'])->name('root');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::post('/projects', [ProjectController::class, 'store'])
+        ->middleware('throttle:project-create')
+        ->name('projects.store');
 
     // One main project workspace.
     Route::get('/projects/{project}', [WorkspacePageController::class, 'show'])->name('workspace.show');

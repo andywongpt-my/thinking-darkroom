@@ -95,6 +95,7 @@ class DashboardController extends Controller
 
         return Inertia::render('Dashboard', [
             'projects' => $projectPayloads,
+            'can_create_project' => $user->can('create', Project::class),
             'project_meta' => $projectMeta,
             'tools' => [
                 'total' => count($catalog),

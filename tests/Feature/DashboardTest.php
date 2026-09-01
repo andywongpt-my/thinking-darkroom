@@ -50,6 +50,7 @@ class DashboardTest extends TestCase
             ->assertOk();
 
         $page = $this->inertiaPage($response->getContent());
+        $this->assertTrue($page['props']['can_create_project']);
         $projects = $page['props']['projects'] ?? [];
         $this->assertIsArray($projects);
         $this->assertCount(1, $projects);
@@ -150,6 +151,17 @@ class DashboardTest extends TestCase
         );
 
         $this->assertFalse($page['props']['agent']['online']);
+    }
+
+    public function test_machine_agent_dashboard_does_not_expose_project_creation(): void
+    {
+        $agent = User::factory()->agent()->create();
+
+        $page = $this->inertiaPage(
+            $this->actingAs($agent)->get(route('dashboard'))->assertOk()->getContent()
+        );
+
+        $this->assertFalse($page['props']['can_create_project']);
     }
 
     /**

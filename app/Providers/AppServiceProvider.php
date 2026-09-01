@@ -33,6 +33,9 @@ class AppServiceProvider extends ServiceProvider
     {
         Vite::prefetch(concurrency: 3);
 
+        RateLimiter::for('project-create', fn (Request $request) => Limit::perMinute(6)
+            ->by($request->user()?->getAuthIdentifier() ?? $request->ip()));
+
         // Project analysis can trigger image processing and write durable audit
         // records. Scope each limiter by authenticated actor + project, so one
         // busy project cannot exhaust another project's collaboration budget.

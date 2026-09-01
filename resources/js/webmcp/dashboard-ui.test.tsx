@@ -18,6 +18,8 @@
  * 10. Backward compatibility: page still renders without the new props
  * 11. Empty state renders when the darkroom has no film
  * 12. Status label mapping: active → IN PROGRESS
+ * 13. Create-project trigger and form accessibility contract
+ * 14. Validation focus selects name before description
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createElement, Fragment } from 'react';
@@ -30,6 +32,8 @@ type PageFixture = Record<string, unknown> & {
 };
 
 let pageFixture: PageFixture;
+let formProcessing = false;
+let formErrors: Record<string, string> = {};
 
 vi.mock('@inertiajs/react', () => {
     const Head = ({ children }: { children?: React.ReactNode }) =>
@@ -40,8 +44,28 @@ vi.mock('@inertiajs/react', () => {
         const { href, method, as, children, ...rest } = props;
         return createElement('a', { href: String(href ?? '#'), ...rest }, children as React.ReactNode);
     };
-    return { Head, Link, router: { reload: vi.fn(), visit: vi.fn() }, usePage: () => pageFixture };
+    const useForm = (initialData: Record<string, string>) => ({
+        data: initialData,
+        setData: vi.fn(),
+        post: vi.fn(),
+        errors: formErrors,
+        processing: formProcessing,
+        reset: vi.fn(),
+        clearErrors: vi.fn(),
+    });
+    return {
+        Head,
+        Link,
+        router: { reload: vi.fn(), visit: vi.fn() },
+        useForm,
+        usePage: () => pageFixture,
+    };
 });
+
+vi.mock('@/Components/Modal', () => ({
+    default: ({ children, show }: { children: React.ReactNode; show: boolean }) =>
+        createElement('div', { 'data-testid': 'new-project-dialog', 'data-open': String(show) }, children),
+}));
 
 vi.mock('@/Layouts/AuthenticatedLayout', () => ({
     default: ({ header, children }: { header?: React.ReactNode; children: React.ReactNode }) =>
@@ -53,7 +77,9 @@ vi.mock('@/Layouts/AuthenticatedLayout', () => ({
         ),
 }));
 
-const DashboardPage = (await import('@/Pages/Dashboard')).default as React.FC;
+const DashboardModule = await import('@/Pages/Dashboard');
+const DashboardPage = DashboardModule.default as React.FC;
+const { focusFirstProjectField } = DashboardModule;
 
 /* -------------------------------------------------------------------- fixture */
 
@@ -94,6 +120,8 @@ function render(): string {
 
 beforeEach(() => {
     pageFixture = { props: makeProps() };
+    formProcessing = false;
+    formErrors = {};
 });
 
 /* ---------------------------------------------------------------------- tests */
@@ -169,5 +197,64 @@ describe('Dashboard darkroom view', () => {
 
     it('maps project status to darkroom labels', () => {
         expect(render()).toContain('IN PROGRESS');
+    });
+
+    it('renders ADD NEW PROJECT and its form for a human with or without existing projects', () => {
+        for (const projects of [makeProps().projects, []]) {
+            pageFixture = { props: makeProps({ projects, can_create_project: true }) };
+            const html = render();
+
+            expect(html).toContain('data-testid="dashboard-add-project"');
+            expect(html).toContain('ADD NEW PROJECT');
+            expect(html).toContain('data-testid="new-project-dialog"');
+            expect(html).toContain('<form');
+            expect(html).toContain('aria-labelledby="new-project-title"');
+            expect(html).not.toContain('aria-label="Create new project"');
+            expect(html).toMatch(/data-testid="dashboard-add-project"[^>]*aria-haspopup="dialog"/);
+            expect(html).toMatch(/data-testid="dashboard-add-project"[^>]*aria-expanded="false"/);
+            expect(html).toContain('for="project-name"');
+            expect(html).toContain('id="project-name"');
+            expect(html).toContain('name="name"');
+            expect(html).toContain('required=""');
+            expect(html).toContain('for="project-description"');
+            expect(html).toContain('id="project-description"');
+            expect(html).toContain('name="description"');
+            expect(html).toContain('CANCEL');
+            expect(html).toContain('CREATE PROJECT');
+        }
+    });
+
+    it('disables project inputs while the request is processing', () => {
+        formProcessing = true;
+        pageFixture = { props: makeProps({ can_create_project: true }) };
+        const html = render();
+
+        expect(html).toMatch(/id="project-name"[^>]*disabled=""/);
+        expect(html).toMatch(/id="project-description"[^>]*disabled=""/);
+    });
+
+    it('focuses the first project field represented in validation errors', () => {
+        const nameFocus = vi.fn();
+        const descriptionFocus = vi.fn();
+        const nameInput = { current: { focus: nameFocus } };
+        const descriptionInput = { current: { focus: descriptionFocus } };
+
+        focusFirstProjectField({ name: 'Name is required', description: 'Description is too long' }, nameInput, descriptionInput);
+        expect(nameFocus).toHaveBeenCalledOnce();
+        expect(descriptionFocus).not.toHaveBeenCalled();
+
+        nameFocus.mockClear();
+        descriptionFocus.mockClear();
+        focusFirstProjectField({ description: 'Description is too long' }, nameInput, descriptionInput);
+        expect(nameFocus).not.toHaveBeenCalled();
+        expect(descriptionFocus).toHaveBeenCalledOnce();
+    });
+
+    it('does not expose project creation to a machine agent', () => {
+        pageFixture = { props: makeProps({ can_create_project: false }) };
+        const html = render();
+
+        expect(html).not.toContain('ADD NEW PROJECT');
+        expect(html).not.toContain('data-testid="new-project-dialog"');
     });
 });

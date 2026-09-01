@@ -1,6 +1,8 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, Link } from '@inertiajs/react';
+import Modal from '@/Components/Modal';
+import { Head, Link, useForm } from '@inertiajs/react';
 import type { PageProps } from '@/types';
+import { FormEventHandler, useEffect, useRef, useState } from 'react';
 
 interface DashboardProject {
     id: number;
@@ -31,6 +33,7 @@ interface DashboardAgent {
 
 type DashboardProps = PageProps<{
     projects: DashboardProject[];
+    can_create_project?: boolean;
     project_meta?: Record<string, ProjectMeta>;
     tools?: DashboardTools;
     agent?: DashboardAgent;
@@ -210,8 +213,180 @@ function FilmProjectCard({ p, meta }: { p: DashboardProject; meta?: ProjectMeta 
     );
 }
 
-export default function Dashboard({ projects, project_meta, tools, agent, now }: DashboardProps) {
+type FocusableRef = {
+    readonly current: { focus: () => void } | null;
+};
+
+export function focusFirstProjectField(
+    errors: { name?: unknown; description?: unknown },
+    nameInput: FocusableRef,
+    descriptionInput: FocusableRef,
+): void {
+    if (errors.name !== undefined) {
+        nameInput.current?.focus();
+        return;
+    }
+
+    if (errors.description !== undefined) {
+        descriptionInput.current?.focus();
+    }
+}
+
+function CreateProjectDialog() {
+    const [show, setShow] = useState(false);
+    const nameInput = useRef<HTMLInputElement>(null);
+    const descriptionInput = useRef<HTMLTextAreaElement>(null);
+    const trigger = useRef<HTMLButtonElement>(null);
+    const { data, setData, post, errors, processing, reset, clearErrors } = useForm({
+        name: '',
+        description: '',
+    });
+
+    useEffect(() => {
+        if (show) {
+            nameInput.current?.focus();
+        }
+    }, [show]);
+
+    const open = () => {
+        clearErrors();
+        setShow(true);
+    };
+
+    const close = () => {
+        if (processing) {
+            return;
+        }
+
+        reset();
+        clearErrors();
+        setShow(false);
+        trigger.current?.focus();
+    };
+
+    const submit: FormEventHandler<HTMLFormElement> = (event) => {
+        event.preventDefault();
+        post(route('projects.store'), {
+            preserveScroll: true,
+            onError: (validationErrors) => {
+                focusFirstProjectField(validationErrors, nameInput, descriptionInput);
+            },
+        });
+    };
+
+    return (
+        <>
+            <button
+                ref={trigger}
+                type="button"
+                data-testid="dashboard-add-project"
+                aria-haspopup="dialog"
+                aria-expanded={show}
+                onClick={open}
+                className="inline-flex items-center rounded-md border border-amber-400/60 bg-amber-400 px-3 py-2 text-xs font-semibold tracking-[0.12em] text-zinc-950 transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
+            >
+                ADD NEW PROJECT
+            </button>
+
+            <Modal show={show} onClose={close} maxWidth="lg">
+                <div className="bg-zinc-900 p-6 text-zinc-100 sm:p-7">
+                    <div className="mb-6">
+                        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-amber-400/90">
+                            NEW DARKROOM
+                        </p>
+                        <h2 id="new-project-title" className="mt-2 text-xl font-semibold text-zinc-100">
+                            Create a project
+                        </h2>
+                        <p id="new-project-description" className="mt-2 text-sm leading-relaxed text-zinc-400">
+                            Start a workspace for a new shoot. You can invite an agent after the project is ready.
+                        </p>
+                    </div>
+
+                    <form
+                        onSubmit={submit}
+                        aria-labelledby="new-project-title"
+                        data-testid="new-project-form"
+                        className="space-y-5"
+                    >
+                        <div>
+                            <label htmlFor="project-name" className="block text-sm font-medium text-zinc-200">
+                                Project name <span className="text-amber-400" aria-hidden="true">*</span>
+                            </label>
+                            <input
+                                ref={nameInput}
+                                id="project-name"
+                                name="name"
+                                type="text"
+                                value={data.name}
+                                onChange={(event) => setData('name', event.target.value)}
+                                required
+                                disabled={processing}
+                                maxLength={255}
+                                autoComplete="off"
+                                aria-invalid={Boolean(errors.name)}
+                                aria-describedby={errors.name ? 'project-name-error' : undefined}
+                                className="mt-2 block w-full rounded-md border-zinc-700 bg-zinc-950 text-sm text-zinc-100 shadow-sm focus:border-amber-400 focus:ring-amber-400"
+                            />
+                            {errors.name && (
+                                <p id="project-name-error" role="alert" className="mt-2 text-sm text-red-300">
+                                    {errors.name}
+                                </p>
+                            )}
+                        </div>
+
+                        <div>
+                            <label htmlFor="project-description" className="block text-sm font-medium text-zinc-200">
+                                Description <span className="text-zinc-500">(optional)</span>
+                            </label>
+                            <textarea
+                                ref={descriptionInput}
+                                id="project-description"
+                                name="description"
+                                value={data.description}
+                                onChange={(event) => setData('description', event.target.value)}
+                                disabled={processing}
+                                maxLength={5000}
+                                rows={4}
+                                aria-invalid={Boolean(errors.description)}
+                                aria-describedby={errors.description ? 'project-description-error' : undefined}
+                                className="mt-2 block w-full rounded-md border-zinc-700 bg-zinc-950 text-sm text-zinc-100 shadow-sm focus:border-amber-400 focus:ring-amber-400"
+                            />
+                            {errors.description && (
+                                <p id="project-description-error" role="alert" className="mt-2 text-sm text-red-300">
+                                    {errors.description}
+                                </p>
+                            )}
+                        </div>
+
+                        <div className="flex flex-wrap justify-end gap-3 border-t border-zinc-800 pt-5">
+                            <button
+                                type="button"
+                                data-testid="new-project-cancel"
+                                onClick={close}
+                                disabled={processing}
+                                className="rounded-md border border-zinc-700 px-4 py-2 text-xs font-semibold tracking-[0.12em] text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                CANCEL
+                            </button>
+                            <button
+                                type="submit"
+                                data-testid="new-project-submit"
+                                disabled={processing}
+                                className="rounded-md border border-amber-400/60 bg-amber-400 px-4 py-2 text-xs font-semibold tracking-[0.12em] text-zinc-950 transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                                {processing ? 'CREATING…' : 'CREATE PROJECT'}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </Modal>
+        </>
+    );
+}
+
+export default function Dashboard({ projects, can_create_project, project_meta, tools, agent, now }: DashboardProps) {
     const hasProjects = projects.length > 0;
+    const canCreateProject = can_create_project === true;
 
     return (
         <AuthenticatedLayout
@@ -223,9 +398,12 @@ export default function Dashboard({ projects, project_meta, tools, agent, now }:
                             Your darkroom — the agent develops, you keep the final cut.
                         </p>
                     </div>
-                    <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-600" suppressHydrationWarning>
-                        {now ? `SAFELIGHT ON · ${new Date(now).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : 'SAFELIGHT ON'}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-4">
+                        {canCreateProject && <CreateProjectDialog />}
+                        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-600" suppressHydrationWarning>
+                            {now ? `SAFELIGHT ON · ${new Date(now).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : 'SAFELIGHT ON'}
+                        </p>
+                    </div>
                 </div>
             }
         >

@@ -8,6 +8,12 @@ use App\Models\User;
 
 class ProjectPolicy
 {
+    /** Only human accounts may create projects. */
+    public function create(User $user): bool
+    {
+        return ! $user->isAgent();
+    }
+
     /**
      * Any user who is a member (in project_members) may view a workspace.
      * The owner is always a member (seeded that way).
