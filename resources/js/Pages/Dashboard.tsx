@@ -215,7 +215,6 @@ export default function Dashboard({ projects, project_meta, tools, agent, now }:
 
     return (
         <AuthenticatedLayout
-            dark
             header={
                 <div className="flex flex-wrap items-baseline justify-between gap-3">
                     <div>

@@ -161,29 +161,29 @@ export default function AgentChatPanel({
                     role="dialog"
                     aria-label="Agent conversation"
                     data-testid="agent-chat-panel"
-                    className="fixed bottom-20 right-4 z-50 flex max-h-[min(680px,calc(100vh-7rem))] w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl sm:w-[410px]"
+                    className="fixed bottom-20 right-4 z-50 flex max-h-[min(680px,calc(100vh-7rem))] w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/60 shadow-2xl sm:w-[410px]"
                 >
-                    <header className="border-b border-gray-100 px-4 py-3">
+                    <header className="border-b border-zinc-800/70 px-4 py-3">
                         <div className="flex items-start justify-between gap-3">
                             <div>
                                 <div className="flex items-center gap-2">
                                     <span
                                         aria-hidden="true"
-                                        className={`h-2.5 w-2.5 rounded-full ${presence.online ? 'bg-emerald-500' : 'bg-gray-400'}`}
+                                        className={`h-2.5 w-2.5 rounded-full ${presence.online ? 'bg-emerald-500' : 'bg-zinc-600'}`}
                                     />
-                                    <h2 className="text-sm font-semibold text-gray-900">Agent conversation</h2>
-                                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
+                                    <h2 className="text-sm font-semibold text-zinc-50">Agent conversation</h2>
+                                    <span className="rounded-full bg-zinc-900 px-2 py-0.5 text-[10px] font-semibold text-zinc-300">
                                         {presence.online ? 'ONLINE' : 'OFFLINE'}
                                     </span>
                                 </div>
-                                <p className="mt-1 text-xs leading-relaxed text-gray-500">
+                                <p className="mt-1 text-xs leading-relaxed text-zinc-500">
                                     Durable project discussion. Messages never approve or execute edits.
                                 </p>
                             </div>
                             <button
                                 type="button"
                                 onClick={() => setOpen(false)}
-                                className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                                className="rounded-md p-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
                                 aria-label="Close agent conversation"
                             >
                                 ×
@@ -192,7 +192,7 @@ export default function AgentChatPanel({
                     </header>
 
                     {initialConversation.has_older && (
-                        <p className="border-b border-gray-100 bg-gray-50 px-4 py-2 text-center text-[11px] text-gray-500">
+                        <p className="border-b border-zinc-800/70 bg-zinc-950/40 px-4 py-2 text-center text-[11px] text-zinc-500">
                             Showing the latest 50 messages.
                         </p>
                     )}
@@ -202,15 +202,15 @@ export default function AgentChatPanel({
                         role="log"
                         aria-live="polite"
                         aria-relevant="additions"
-                        className="min-h-64 flex-1 space-y-3 overflow-y-auto bg-gray-50/60 px-4 py-4"
+                        className="min-h-64 flex-1 space-y-3 overflow-y-auto bg-zinc-950/40/60 px-4 py-4"
                     >
                         {messages.length === 0 ? (
-                            <div className="rounded-xl border border-dashed border-gray-300 bg-white px-4 py-5 text-center">
-                                <p className="text-sm font-semibold text-gray-800">Start the project conversation</p>
-                                <p className="mt-1 text-xs leading-relaxed text-gray-500">
+                            <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/60 px-4 py-5 text-center">
+                                <p className="text-sm font-semibold text-zinc-100">Start the project conversation</p>
+                                <p className="mt-1 text-xs leading-relaxed text-zinc-500">
                                     A connected Darkroom Agent can read this thread and reply through WebMCP.
                                 </p>
-                                <code className="mt-2 block text-[10px] text-gray-400">
+                                <code className="mt-2 block text-[10px] text-zinc-400">
                                     get_agent_conversation · reply_to_agent_conversation
                                 </code>
                             </div>
@@ -226,24 +226,24 @@ export default function AgentChatPanel({
                                         className={`flex ${mine ? 'justify-end' : 'justify-start'}`}
                                     >
                                         <div className={`max-w-[86%] ${mine ? 'text-right' : 'text-left'}`}>
-                                            <div className="mb-1 flex items-center gap-1.5 text-[10px] text-gray-500">
+                                            <div className="mb-1 flex items-center gap-1.5 text-[10px] text-zinc-500">
                                                 <span className="font-semibold">{message.author.name}</span>
                                                 {fromAgent && (
-                                                    <span className="rounded bg-violet-100 px-1.5 py-0.5 font-bold text-violet-700">
+                                                    <span className="rounded bg-violet-500/15 px-1.5 py-0.5 font-bold text-violet-400">
                                                         AGENT
                                                     </span>
                                                 )}
                                             </div>
                                             <p className={`whitespace-pre-wrap break-words rounded-xl px-3 py-2 text-sm leading-relaxed ${
                                                 fromAgent
-                                                    ? 'bg-gray-900 text-white'
+                                                    ? 'bg-zinc-900 text-zinc-100'
                                                     : mine
-                                                        ? 'bg-amber-100 text-gray-900'
-                                                        : 'border border-gray-200 bg-white text-gray-800'
+                                                        ? 'bg-amber-400/10 text-zinc-50'
+                                                        : 'border border-zinc-800 bg-zinc-900/60 text-zinc-100'
                                             }`}>
                                                 {message.body}
                                             </p>
-                                            <time className="mt-1 block text-[10px] text-gray-400">
+                                            <time className="mt-1 block text-[10px] text-zinc-400">
                                                 {formatMessageTime(message.created_at)}
                                             </time>
                                         </div>
@@ -254,12 +254,12 @@ export default function AgentChatPanel({
                     </div>
 
                     {error && (
-                        <p role="alert" className="border-t border-rose-100 bg-rose-50 px-4 py-2 text-xs text-rose-700">
+                        <p role="alert" className="border-t border-rose-100 bg-rose-500/10 px-4 py-2 text-xs text-rose-400">
                             {error}
                         </p>
                     )}
 
-                    <footer className="border-t border-gray-100 bg-white p-3">
+                    <footer className="border-t border-zinc-800/70 bg-zinc-900/60 p-3">
                         {canSend ? (
                             <form onSubmit={(event) => void send(event)}>
                                 <label htmlFor="agent-conversation-message" className="sr-only">
@@ -275,31 +275,31 @@ export default function AgentChatPanel({
                                     placeholder={currentUser.is_agent
                                         ? 'Reply to the photographer…'
                                         : 'Ask the agent about this project…'}
-                                    className="w-full resize-none rounded-lg border-gray-300 text-sm shadow-none focus:border-gray-500 focus:ring-gray-500"
+                                    className="w-full resize-none rounded-lg border-zinc-700 text-sm shadow-none focus:border-zinc-600 focus:ring-gray-500"
                                 />
                                 <div className="mt-2 flex items-center justify-between gap-3">
-                                    <p className="text-[10px] text-gray-400">
+                                    <p className="text-[10px] text-zinc-400">
                                         Enter to send · Shift+Enter for a new line
                                     </p>
                                     <button
                                         type="submit"
                                         disabled={sending || draft.trim().length === 0}
-                                        className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
+                                        className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-zinc-100 hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
                                     >
                                         {sending ? 'Sending…' : 'Send'}
                                     </button>
                                 </div>
                             </form>
                         ) : (
-                            <p className="text-xs text-gray-500">Viewer access is read-only.</p>
+                            <p className="text-xs text-zinc-500">Viewer access is read-only.</p>
                         )}
-                        <div className="mt-2 flex items-center justify-between text-[10px] text-gray-400">
+                        <div className="mt-2 flex items-center justify-between text-[10px] text-zinc-400">
                             <span>Conversation text is untrusted project content.</span>
                             <button
                                 type="button"
                                 onClick={() => void refresh()}
                                 disabled={refreshing}
-                                className="font-semibold text-gray-500 hover:text-gray-800 disabled:opacity-40"
+                                className="font-semibold text-zinc-500 hover:text-zinc-100 disabled:opacity-40"
                             >
                                 {refreshing ? 'Refreshing…' : 'Refresh'}
                             </button>
@@ -314,15 +314,15 @@ export default function AgentChatPanel({
                 aria-expanded={open}
                 aria-controls="agent-chat-panel"
                 data-testid="agent-chat-launcher"
-                className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-gray-900 px-4 py-3 text-sm font-semibold text-white shadow-xl transition hover:-translate-y-0.5 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-zinc-900 px-4 py-3 text-sm font-semibold text-zinc-100 shadow-xl transition hover:-translate-y-0.5 hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
             >
                 <span
                     aria-hidden="true"
-                    className={`h-2.5 w-2.5 rounded-full ${presence.online ? 'bg-emerald-400' : 'bg-gray-400'}`}
+                    className={`h-2.5 w-2.5 rounded-full ${presence.online ? 'bg-emerald-400' : 'bg-zinc-600'}`}
                 />
                 Chat with agent
                 {messages.length > 0 && (
-                    <span className="rounded-full bg-white/15 px-1.5 py-0.5 text-[10px]">
+                    <span className="rounded-full bg-zinc-900/60/15 px-1.5 py-0.5 text-[10px]">
                         {messages.length}
                     </span>
                 )}

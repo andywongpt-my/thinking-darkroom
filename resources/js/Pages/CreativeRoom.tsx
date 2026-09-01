@@ -49,10 +49,10 @@ interface PageProps extends Record<string, unknown> {
 /* ------------------------------------------------------------- constants */
 
 const AUTHORITY_COLOR: Record<string, string> = {
-    READ: 'bg-sky-100 text-sky-800',
-    ANALYZE: 'bg-violet-100 text-violet-800',
-    PROPOSE: 'bg-amber-100 text-amber-800',
-    EXECUTE: 'bg-emerald-100 text-emerald-800',
+    READ: 'bg-sky-500/15 text-sky-300',
+    ANALYZE: 'bg-violet-500/15 text-violet-300',
+    PROPOSE: 'bg-amber-400/10 text-amber-300',
+    EXECUTE: 'bg-emerald-500/15 text-emerald-300',
 };
 
 const STATUS_DOT: Record<string, string> = {
@@ -63,12 +63,12 @@ const STATUS_DOT: Record<string, string> = {
 
 /** Authority-state language: a judge must tell AI PROPOSAL from ADOPTED instantly. */
 const STATUS_STYLE: Record<string, { label: string; badge: string; ring: string }> = {
-    proposed: { label: 'AI PROPOSAL', badge: 'bg-amber-100 text-amber-800', ring: 'border-amber-200' },
-    exploring: { label: 'EXPLORING', badge: 'bg-sky-100 text-sky-800', ring: 'border-sky-300' },
-    rejected: { label: 'REJECTED', badge: 'bg-rose-100 text-rose-700', ring: 'border-rose-200' },
-    merged: { label: 'MERGED', badge: 'bg-violet-100 text-violet-800', ring: 'border-violet-200' },
-    superseded: { label: 'SUPERSEDED', badge: 'bg-gray-100 text-gray-500', ring: 'border-gray-200' },
-    adopted: { label: 'ADOPTED BY PHOTOGRAPHER', badge: 'bg-emerald-600 text-white', ring: 'border-emerald-600' },
+    proposed: { label: 'AI PROPOSAL', badge: 'bg-amber-400/10 text-amber-300', ring: 'border-amber-400/30' },
+    exploring: { label: 'EXPLORING', badge: 'bg-sky-500/15 text-sky-300', ring: 'border-sky-500/40' },
+    rejected: { label: 'REJECTED', badge: 'bg-rose-500/15 text-rose-400', ring: 'border-rose-500/30' },
+    merged: { label: 'MERGED', badge: 'bg-violet-500/15 text-violet-300', ring: 'border-violet-500/30' },
+    superseded: { label: 'SUPERSEDED', badge: 'bg-zinc-900 text-zinc-500', ring: 'border-zinc-800' },
+    adopted: { label: 'ADOPTED BY PHOTOGRAPHER', badge: 'bg-emerald-500 text-zinc-950', ring: 'border-emerald-500' },
 };
 
 /** The structured intent dimensions shown on the Creative Canvas. */
@@ -312,12 +312,12 @@ export default function CreativeRoom() {
         <AuthenticatedLayout
             header={
                 <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-semibold leading-tight text-gray-800">
+                    <h2 className="text-xl font-semibold leading-tight text-zinc-100">
                         Creative Room — {project.name}
                     </h2>
                     <a
                         href={route('workspace.show', project.id)}
-                        className="rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50"
+                        className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800/60"
                     >
                         ← Workspace
                     </a>
@@ -328,7 +328,7 @@ export default function CreativeRoom() {
 
             <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
                 {webmcpUnavailable && (
-                    <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                    <div className="mb-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-400">
                         <strong>WebMCP is not available in this browser.</strong> Creative Room still works,
                         but agent tools are not registered on <code>document.modelContext</code>.
                     </div>
@@ -338,7 +338,7 @@ export default function CreativeRoom() {
                         role="status"
                         aria-live="polite"
                         data-testid="creative-room-notify"
-                        className={`mb-4 rounded-lg border px-4 py-3 text-sm ${notify.kind === 'ok' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}
+                        className={`mb-4 rounded-lg border px-4 py-3 text-sm ${notify.kind === 'ok' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-rose-500/30 bg-rose-500/10 text-rose-400'}`}
                     >
                         {notify.text}
                     </div>
@@ -348,13 +348,13 @@ export default function CreativeRoom() {
                     {/* ================= LEFT / MAIN ================= */}
                     <div className="space-y-5">
                         {/* ------- A. Creative Canvas ------- */}
-                        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                        <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-5 shadow-sm">
                             <div className="mb-3 flex items-center justify-between">
-                                <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
+                                <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
                                     Creative Canvas — current project intent
                                 </h3>
                                 {brainstorm && (
-                                    <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-bold text-indigo-700">
+                                    <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-xs font-bold text-indigo-400">
                                         BRAINSTORM #{brainstorm.id} · {brainstorm.photographer ?? 'photographer'}
                                     </span>
                                 )}
@@ -368,17 +368,17 @@ export default function CreativeRoom() {
                                         });
                                         const value = entries[0]?.[1];
                                         return (
-                                            <div key={key} className="rounded-lg border border-gray-100 bg-gray-50 p-2.5">
-                                                <dt className="text-xs font-semibold uppercase tracking-wide text-gray-400">{label}</dt>
-                                                <dd className="mt-0.5 text-xs text-gray-800">{value || '—'}</dd>
+                                            <div key={key} className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 p-2.5">
+                                                <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-400">{label}</dt>
+                                                <dd className="mt-0.5 text-xs text-zinc-100">{value || '—'}</dd>
                                             </div>
                                         );
                                     })}
                                 </div>
                             ) : (
-                                <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center">
-                                    <p className="text-sm font-medium text-gray-600">No adopted creative direction yet.</p>
-                                    <p className="mt-1 text-xs text-gray-400">
+                                <div className="rounded-lg border border-dashed border-zinc-700 bg-zinc-950/40 p-6 text-center">
+                                    <p className="text-sm font-medium text-zinc-300">No adopted creative direction yet.</p>
+                                    <p className="mt-1 text-xs text-zinc-400">
                                         {brainstorm
                                             ? 'Review the AI concepts below, then adopt one as the direction.'
                                             : can_review
@@ -386,7 +386,7 @@ export default function CreativeRoom() {
                                                 : 'The photographer has not opened a brainstorm yet.'}
                                     </p>
                                     {brainstorm && (
-                                        <p className="mx-auto mt-3 max-w-xl rounded-md bg-white p-2 text-left text-xs italic text-gray-500">
+                                        <p className="mx-auto mt-3 max-w-xl rounded-md bg-zinc-900/60 p-2 text-left text-xs italic text-zinc-500">
                                             “{brainstorm.input}”
                                         </p>
                                     )}
@@ -394,11 +394,11 @@ export default function CreativeRoom() {
                             )}
 
                             {can_review && !brainstorm && (
-                                <div className="mt-4 border-t border-gray-100 pt-4">
+                                <div className="mt-4 border-t border-zinc-800/70 pt-4">
                                     {!brainstormOpen ? (
                                         <button
                                             onClick={() => setBrainstormOpen(true)}
-                                            className="rounded-md bg-gray-900 px-4 py-2 text-xs font-semibold text-white hover:bg-gray-700"
+                                            className="rounded-md bg-zinc-900 px-4 py-2 text-xs font-semibold text-zinc-100 hover:bg-zinc-700"
                                         >
                                             + Open Brainstorm
                                         </button>
@@ -410,19 +410,19 @@ export default function CreativeRoom() {
                                                 rows={3}
                                                 maxLength={4000}
                                                 placeholder="Freeform creative thinking — mood, references, what you want this set to feel like…"
-                                                className="w-full rounded-lg border border-gray-300 p-3 text-xs focus:border-gray-500 focus:outline-none"
+                                                className="w-full rounded-lg border border-zinc-700 p-3 text-xs focus:border-zinc-600 focus:outline-none"
                                             />
                                             <div className="flex gap-2">
                                                 <button
                                                     onClick={doOpenBrainstorm}
                                                     disabled={busy !== null}
-                                                    className="rounded-md bg-gray-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-gray-700 disabled:opacity-40"
+                                                    className="rounded-md bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-zinc-100 hover:bg-zinc-700 disabled:opacity-40"
                                                 >
                                                     {busy === 'brainstorm' ? 'Saving…' : 'Save brainstorm'}
                                                 </button>
                                                 <button
                                                     onClick={() => setBrainstormOpen(false)}
-                                                    className="rounded-md border border-gray-300 px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50"
+                                                    className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-500 hover:bg-zinc-800/60"
                                                 >
                                                     Cancel
                                                 </button>
@@ -434,16 +434,16 @@ export default function CreativeRoom() {
                         </section>
 
                         {/* ------- B + C. Concept cards + human actions ------- */}
-                        <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+                        <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-5 shadow-sm">
                             <div className="mb-3 flex items-center justify-between">
-                                <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">
-                                    Concepts {concepts.length > 0 && <span className="text-gray-400">({concepts.length})</span>}
+                                <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
+                                    Concepts {concepts.length > 0 && <span className="text-zinc-400">({concepts.length})</span>}
                                 </h3>
                                 {can_review && concepts.length >= 2 && (
                                     <button
                                         onClick={doMerge}
                                         disabled={busy !== null || mergeSelection.length < 2}
-                                        className="rounded-md bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                                        className="rounded-md bg-violet-500 px-3 py-1.5 text-xs font-semibold text-zinc-100 hover:bg-violet-500 disabled:opacity-40"
                                         title="Merge the selected concept cards into a new concept (lineage preserved)"
                                     >
                                         {busy === 'merge' ? 'Merging…' : `Merge selected (${mergeSelection.length})`}
@@ -455,22 +455,22 @@ export default function CreativeRoom() {
                                 <div
                                     role="alert"
                                     data-testid="concepts-error"
-                                    className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"
+                                    className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-300"
                                 >
                                     <p className="font-medium">Could not load concepts: {conceptsError}</p>
                                     <button
                                         type="button"
                                         onClick={() => void refreshList()}
                                         disabled={busy !== null}
-                                        className="mt-2 rounded border border-rose-300 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-40"
+                                        className="mt-2 rounded border border-rose-500/40 px-2.5 py-1 text-xs font-semibold text-rose-400 hover:bg-rose-500/15 disabled:opacity-40"
                                     >
                                         Retry concepts
                                     </button>
                                 </div>
                             ) : concepts.length === 0 ? (
-                                <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500">
+                                <div className="rounded-lg border border-dashed border-zinc-700 bg-zinc-950/40 p-6 text-center text-sm text-zinc-500">
                                     No concepts yet. The agent proposes them through the{' '}
-                                    <code className="rounded bg-gray-100 px-1">propose_concepts</code> WebMCP tool.
+                                    <code className="rounded bg-zinc-900 px-1">propose_concepts</code> WebMCP tool.
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
@@ -483,10 +483,10 @@ export default function CreativeRoom() {
                                                 key={c.id}
                                                 data-testid={`concept-card-${c.id}`}
                                                 data-status={c.status}
-                                                className={`rounded-xl border-2 ${style.ring} bg-white p-4 ${isAdopted ? 'shadow-md shadow-emerald-100' : ''} ${c.status === 'rejected' ? 'opacity-70' : ''}`}
+                                                className={`rounded-xl border-2 ${style.ring} bg-zinc-900/60 p-4 ${isAdopted ? 'shadow-md shadow-emerald-100' : ''} ${c.status === 'rejected' ? 'opacity-70' : ''}`}
                                             >
                                                 <div className="mb-2 flex items-start justify-between gap-2">
-                                                    <h4 className="text-sm font-bold text-gray-900">{c.title}</h4>
+                                                    <h4 className="text-sm font-bold text-zinc-50">{c.title}</h4>
                                                     <span
                                                         data-testid="authority-state"
                                                         className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-extrabold tracking-wide ${style.badge}`}
@@ -494,66 +494,66 @@ export default function CreativeRoom() {
                                                         {style.label}
                                                     </span>
                                                 </div>
-                                                {c.summary && <p className="mb-2 text-xs text-gray-600">{c.summary}</p>}
+                                                {c.summary && <p className="mb-2 text-xs text-zinc-300">{c.summary}</p>}
 
                                                 {/* structured traits */}
                                                 <dl className="mb-2 grid grid-cols-1 gap-1">
                                                     {dimensionEntries(c.content).map(([k, v]) => (
-                                                        <div key={k} className="rounded bg-gray-50 px-2 py-1">
-                                                            <dt className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">
+                                                        <div key={k} className="rounded bg-zinc-950/40 px-2 py-1">
+                                                            <dt className="text-[9px] font-semibold uppercase tracking-wide text-zinc-400">
                                                                 {k.replace(/_/g, ' ')}
                                                             </dt>
-                                                            <dd className="text-xs text-gray-700">{v}</dd>
+                                                            <dd className="text-xs text-zinc-200">{v}</dd>
                                                         </div>
                                                     ))}
                                                 </dl>
 
                                                 {/* lineage */}
                                                 {(c.parent_concept_id !== null || (c.lineage_basis && c.lineage_basis.length > 0)) && (
-                                                    <p className="mb-2 text-xs text-gray-500">
+                                                    <p className="mb-2 text-xs text-zinc-500">
                                                         <span className="font-semibold">Lineage:</span>{' '}
                                                         {c.parent_concept_id !== null && (
                                                             <>revised from #{c.parent_concept_id}{' · '}</>
                                                         )}
                                                         {c.lineage_basis?.map((b) => (
-                                                            <span key={b.concept_id} className="me-1 rounded bg-violet-50 px-1 text-violet-700">
+                                                            <span key={b.concept_id} className="me-1 rounded bg-violet-500/10 px-1 text-violet-400">
                                                               ← {b.title}
                                                             </span>
                                                         ))}
                                                     </p>
                                                 )}
 
-                                                <p className="text-xs text-gray-400">
+                                                <p className="text-xs text-zinc-400">
                                                     {c.creator_is_agent ? '🤖 agent' : '👤 photographer'} · {fmtTime(c.created_at ?? null)}
                                                 </p>
 
                                                 {/* Human actions — photographer only, never agent, never terminal state */}
                                                 {can_review && !isTerminal && (
-                                                    <div className="mt-3 flex flex-wrap gap-1.5 border-t border-gray-100 pt-2.5">
+                                                    <div className="mt-3 flex flex-wrap gap-1.5 border-t border-zinc-800/70 pt-2.5">
                                                         <button
                                                             onClick={() => doExplore(c)}
                                                             disabled={busy !== null}
-                                                            className="rounded bg-sky-600 px-2 py-1 text-xs font-semibold text-white hover:bg-sky-500 disabled:opacity-40"
+                                                            className="rounded bg-sky-600 px-2 py-1 text-xs font-semibold text-zinc-100 hover:bg-sky-500 disabled:opacity-40"
                                                         >
                                                             Explore
                                                         </button>
                                                         <button
                                                             onClick={() => doReject(c)}
                                                             disabled={busy !== null}
-                                                            className="rounded bg-rose-600 px-2 py-1 text-xs font-semibold text-white hover:bg-rose-500 disabled:opacity-40"
+                                                            className="rounded bg-rose-600 px-2 py-1 text-xs font-semibold text-zinc-100 hover:bg-rose-500 disabled:opacity-40"
                                                         >
                                                             Reject
                                                         </button>
                                                         <button
                                                             onClick={() => toggleMergeSelect(c.id)}
-                                                            className={`rounded px-2 py-1 text-xs font-semibold ${mergeSelection.includes(c.id) ? 'bg-violet-700 text-white' : 'border border-violet-300 text-violet-700 hover:bg-violet-50'}`}
+                                                            className={`rounded px-2 py-1 text-xs font-semibold ${mergeSelection.includes(c.id) ? 'bg-violet-700 text-zinc-100' : 'border border-violet-500/40 text-violet-400 hover:bg-violet-500/10'}`}
                                                         >
                                                             {mergeSelection.includes(c.id) ? '✓ Selected' : 'Select'}
                                                         </button>
                                                         <button
                                                             onClick={() => doAdopt(c)}
                                                             disabled={busy !== null}
-                                                            className="ms-auto rounded bg-emerald-600 px-2.5 py-1 text-xs font-bold text-white hover:bg-emerald-500 disabled:opacity-40"
+                                                            className="ms-auto rounded bg-emerald-500 px-2.5 py-1 text-xs font-bold text-zinc-100 hover:bg-emerald-500 disabled:opacity-40"
                                                             title="Adopt as the project's current Creative Direction"
                                                         >
                                                             Adopt as Creative Direction
@@ -570,35 +570,35 @@ export default function CreativeRoom() {
 
                     {/* ================= RIGHT: Agent Collaboration Panel ================= */}
                     <aside className="space-y-5">
-                        <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                            <h3 className="mb-2 text-sm font-semibold text-gray-800">Agent Collaboration</h3>
-                            <p className="mb-2 text-xs leading-relaxed text-gray-500">
+                        <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 shadow-sm">
+                            <h3 className="mb-2 text-sm font-semibold text-zinc-100">Agent Collaboration</h3>
+                            <p className="mb-2 text-xs leading-relaxed text-zinc-500">
                                 The agent <b>explores · analyzes · proposes · remembers</b>. It can never adopt,
                                 reject or commit a creative direction — those are photographer-only actions.
                             </p>
-                            <div className="rounded-lg bg-gray-50 p-2.5">
-                                <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">WebMCP registry</p>
+                            <div className="rounded-lg bg-zinc-950/40 p-2.5">
+                                <p className="text-[9px] font-semibold uppercase tracking-wide text-zinc-400">WebMCP registry</p>
                                 <div className="mt-1 flex flex-wrap gap-1">
-                                    <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${snapshot?.webmcpAvailable ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                    <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${snapshot?.webmcpAvailable ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-400/10 text-amber-400'}`}>
                                         {snapshot?.webmcpAvailable ? 'document.modelContext live' : 'fallback context'}
                                     </span>
-                                    <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[9px] font-bold text-gray-700">
+                                    <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[9px] font-bold text-zinc-200">
                                         {snapshot?.registered.length ?? 0} tools
                                     </span>
                                 </div>
                                 <ul className="mt-2 space-y-0.5">
                                     {(snapshot?.registered ?? []).map((t) => (
                                         <li key={t.name} className="flex items-center gap-1.5">
-                                            <span className={`rounded-full px-1.5 text-[8px] font-bold ${AUTHORITY_COLOR[t.authority] ?? 'bg-gray-100 text-gray-600'}`}>
+                                            <span className={`rounded-full px-1.5 text-[8px] font-bold ${AUTHORITY_COLOR[t.authority] ?? 'bg-zinc-900 text-zinc-300'}`}>
                                                 {t.authority}
                                             </span>
-                                            <code className="text-xs text-gray-600">{t.name}</code>
+                                            <code className="text-xs text-zinc-300">{t.name}</code>
                                         </li>
                                     ))}
                                 </ul>
                             </div>
-                            <div className="mt-2 rounded-lg bg-gray-50 p-2.5 text-xs text-gray-500">
-                                <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">Current context</p>
+                            <div className="mt-2 rounded-lg bg-zinc-950/40 p-2.5 text-xs text-zinc-500">
+                                <p className="text-[9px] font-semibold uppercase tracking-wide text-zinc-400">Current context</p>
                                 <p className="mt-1">
                                     Concepts: <b>{concepts.length}</b> · Adopted: <b>{adopted ? `#${adopted.id}` : 'none'}</b> ·
                                     Registry: <b>{registry ? 'active' : '—'}</b>
@@ -606,25 +606,25 @@ export default function CreativeRoom() {
                             </div>
                         </section>
 
-                        <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                            <h3 className="mb-2 text-sm font-semibold text-gray-800">WebMCP Proposal Activity</h3>
+                        <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 shadow-sm">
+                            <h3 className="mb-2 text-sm font-semibold text-zinc-100">WebMCP Proposal Activity</h3>
                             <ul className="max-h-96 space-y-1.5 overflow-y-auto pr-1">
                                 {activity.length === 0 ? (
-                                    <li className="text-xs text-gray-400">No agent tool calls yet.</li>
+                                    <li className="text-xs text-zinc-400">No agent tool calls yet.</li>
                                 ) : (
                                     activity.map((a) => (
-                                        <li key={a.id} className="flex items-start gap-2 rounded-md border border-gray-100 p-1.5">
-                                            <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[a.result_status] ?? 'bg-gray-400'}`} />
+                                        <li key={a.id} className="flex items-start gap-2 rounded-md border border-zinc-800/70 p-1.5">
+                                            <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[a.result_status] ?? 'bg-zinc-600'}`} />
                                             <div className="min-w-0">
                                                 <div className="flex flex-wrap items-center gap-1.5">
-                                                    <code className="rounded bg-gray-100 px-1 text-xs font-semibold text-gray-800">{a.tool_name}</code>
-                                                    <span className={`rounded-full px-1.5 text-[8px] font-bold ${AUTHORITY_COLOR[a.authority] ?? 'bg-gray-100 text-gray-600'}`}>
+                                                    <code className="rounded bg-zinc-900 px-1 text-xs font-semibold text-zinc-100">{a.tool_name}</code>
+                                                    <span className={`rounded-full px-1.5 text-[8px] font-bold ${AUTHORITY_COLOR[a.authority] ?? 'bg-zinc-900 text-zinc-300'}`}>
                                                         {a.authority}
                                                     </span>
                                                 </div>
-                                                <div className="mt-0.5 text-[9px] text-gray-400">{fmtTime(a.created_at)} · {a.result_status}</div>
+                                                <div className="mt-0.5 text-[9px] text-zinc-400">{fmtTime(a.created_at)} · {a.result_status}</div>
                                                 {a.output_summary && (
-                                                    <pre className="mt-0.5 max-w-full overflow-x-auto rounded bg-gray-50 p-1 text-[8px] leading-tight text-gray-500">
+                                                    <pre className="mt-0.5 max-w-full overflow-x-auto rounded bg-zinc-950/40 p-1 text-[8px] leading-tight text-zinc-500">
                                                         {JSON.stringify(a.output_summary)}
                                                     </pre>
                                                 )}
@@ -636,12 +636,12 @@ export default function CreativeRoom() {
                         </section>
 
                         {brief && (
-                            <section className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4 shadow-sm">
-                                <h3 className="mb-1 text-sm font-semibold text-emerald-800">Structured Creative Brief</h3>
-                                <p className="text-xs text-emerald-700">
+                            <section className="rounded-xl border border-emerald-500/30 bg-emerald-500/10/60 p-4 shadow-sm">
+                                <h3 className="mb-1 text-sm font-semibold text-emerald-300">Structured Creative Brief</h3>
+                                <p className="text-xs text-emerald-400">
                                     {brief.creative_direction} · adopted {fmtTime(brief.adopted_at)}
                                 </p>
-                                <pre className="mt-2 max-h-56 overflow-auto rounded-lg bg-white p-2 text-[9px] leading-relaxed text-gray-700">
+                                <pre className="mt-2 max-h-56 overflow-auto rounded-lg bg-zinc-900/60 p-2 text-[9px] leading-relaxed text-zinc-200">
                                     {JSON.stringify(brief.payload, null, 2)}
                                 </pre>
                             </section>
@@ -650,8 +650,8 @@ export default function CreativeRoom() {
                 </div>
 
                 {/* Authority legend — the state language, explicit for judges */}
-                <div className="mt-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                    <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Authority state language</h4>
+                <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 shadow-sm">
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Authority state language</h4>
                     <div className="mt-2 flex flex-wrap gap-2">
                         {Object.entries(STATUS_STYLE).map(([k, v]) => (
                             <span key={k} className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold tracking-wide ${v.badge}`}>
@@ -659,7 +659,7 @@ export default function CreativeRoom() {
                             </span>
                         ))}
                     </div>
-                    <p className="mt-2 text-xs text-gray-400">
+                    <p className="mt-2 text-xs text-zinc-400">
                         AI PROPOSAL = created by the agent, awaiting the photographer. ADOPTED BY PHOTOGRAPHER =
                         the photographer's committed creative direction. No agent tool can move a concept into the adopted state.
                     </p>

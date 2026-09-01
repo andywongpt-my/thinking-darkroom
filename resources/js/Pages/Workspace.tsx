@@ -171,10 +171,10 @@ const STATE_LABEL: Record<string, string> = {
 };
 
 const AUTHORITY_COLOR: Record<string, string> = {
-    READ: 'bg-sky-100 text-sky-800',
-    ANALYZE: 'bg-violet-100 text-violet-800',
-    PROPOSE: 'bg-amber-100 text-amber-800',
-    EXECUTE: 'bg-emerald-100 text-emerald-800',
+    READ: 'bg-sky-500/15 text-sky-300',
+    ANALYZE: 'bg-violet-500/15 text-violet-300',
+    PROPOSE: 'bg-amber-400/10 text-amber-300',
+    EXECUTE: 'bg-emerald-500/15 text-emerald-300',
 };
 
 const STATUS_DOT: Record<string, string> = {
@@ -253,7 +253,7 @@ export function CreativeRoomLink({ projectId }: { projectId: number }) {
         <Link
             href={route('creative.show', projectId)}
             data-testid="workspace-creative-room-link"
-            className="rounded-md border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+            className="rounded-md border border-emerald-500/40 px-3 py-1.5 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/10"
         >
             Creative Room →
         </Link>
@@ -315,10 +315,10 @@ export const RECOMMENDATION_META: Record<
     string,
     { label: string; badge: string; rank: number }
 > = {
-    strong_keep: { label: 'STRONG KEEP', badge: 'bg-emerald-600 text-white', rank: 3 },
-    keep: { label: 'KEEP', badge: 'bg-emerald-100 text-emerald-800', rank: 2 },
-    review: { label: 'REVIEW', badge: 'bg-amber-100 text-amber-800', rank: 1 },
-    reject_candidate: { label: 'REJECT CANDIDATE', badge: 'bg-rose-600 text-white', rank: 0 },
+    strong_keep: { label: 'STRONG KEEP', badge: 'bg-emerald-500 text-zinc-950', rank: 3 },
+    keep: { label: 'KEEP', badge: 'bg-emerald-500/15 text-emerald-300', rank: 2 },
+    review: { label: 'REVIEW', badge: 'bg-amber-400/10 text-amber-300', rank: 1 },
+    reject_candidate: { label: 'REJECT CANDIDATE', badge: 'bg-rose-500 text-zinc-950', rank: 0 },
 };
 
 export const recommendationRank = (r: string): number => RECOMMENDATION_META[r]?.rank ?? 1;
@@ -991,7 +991,7 @@ export default function Workspace({
         <AuthenticatedLayout
             header={
                 <div className="flex items-center justify-between gap-4">
-                    <h2 className="text-xl font-semibold leading-tight text-gray-800">{project.name}</h2>
+                    <h2 className="text-xl font-semibold leading-tight text-zinc-100">{project.name}</h2>
                     <CreativeRoomLink projectId={project.id} />
                 </div>
             }
@@ -1004,40 +1004,40 @@ export default function Workspace({
                     aria-live="polite"
                     data-testid="agent-presence-strip"
                     data-status={agentPresence.online ? 'online' : 'offline'}
-                    className={`mb-4 flex items-start gap-3 rounded-lg border px-4 py-3 ${agentPresence.online ? 'border-emerald-200 bg-emerald-50' : 'border-gray-200 bg-gray-50'}`}
+                    className={`mb-4 flex items-start gap-3 rounded-lg border px-4 py-3 ${agentPresence.online ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-zinc-800 bg-zinc-950/40'}`}
                 >
                     <span
                         aria-hidden="true"
                         data-testid="agent-presence-dot"
-                        className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${agentPresence.online ? 'bg-emerald-500' : 'bg-gray-400'}`}
+                        className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${agentPresence.online ? 'bg-emerald-500' : 'bg-zinc-600'}`}
                     />
                     <div>
-                        <p className={`text-sm font-semibold ${agentPresence.online ? 'text-emerald-800' : 'text-gray-700'}`}>
+                        <p className={`text-sm font-semibold ${agentPresence.online ? 'text-emerald-300' : 'text-zinc-200'}`}>
                             {agentPresence.online
                                 ? 'Agent online · active in this workspace'
                                 : 'Agent offline · waiting for an agent'}
                         </p>
                         {agentPresence.online && activeAgentNames && (
-                            <p className="mt-0.5 text-xs text-emerald-700">Active agent: {activeAgentNames}</p>
+                            <p className="mt-0.5 text-xs text-emerald-400">Active agent: {activeAgentNames}</p>
                         )}
                         {!agentPresence.online && lastActiveAt && (
-                            <p className="mt-0.5 text-xs text-gray-500">Last active {fmtTime(lastActiveAt)}</p>
+                            <p className="mt-0.5 text-xs text-zinc-500">Last active {fmtTime(lastActiveAt)}</p>
                         )}
                     </div>
                 </div>
 
                 {/* WebMCP availability banner */}
                 {webmcpUnavailable && (
-                    <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                    <div className="mb-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-400">
                         <strong>WebMCP is not available in this browser.</strong> The app loads normally, but
                         agent tools will not be registered on <code>document.modelContext</code>.
                     </div>
                 )}
                 {flash?.success && (
-                    <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{flash.success}</div>
+                    <div className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-400">{flash.success}</div>
                 )}
                 {notify && (
-                    <div role="status" aria-live="polite" data-testid="workspace-notify" className={`mb-4 rounded-lg border px-4 py-3 text-sm ${notify.kind === 'ok' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>
+                    <div role="status" aria-live="polite" data-testid="workspace-notify" className={`mb-4 rounded-lg border px-4 py-3 text-sm ${notify.kind === 'ok' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-rose-500/30 bg-rose-500/10 text-rose-400'}`}>
                         {notify.text}
                     </div>
                 )}
@@ -1052,15 +1052,15 @@ export default function Workspace({
 
                 <div className="grid grid-cols-1 gap-5 lg:grid-cols-[240px_1fr_320px]">
                     {/* ============ LEFT: photo grid ============ */}
-                    <section className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+                    <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 shadow-sm">
                         <div className="mb-2 flex items-center justify-between">
-                            <h3 className="text-sm font-semibold text-gray-800">Photos</h3>
+                            <h3 className="text-sm font-semibold text-zinc-100">Photos</h3>
                             {permissions.can_upload && (
                                 <>
                                     <button
                                         onClick={() => uploadRef.current?.click()}
                                         disabled={busy !== null}
-                                        className="rounded-md bg-gray-800 px-2 py-1 text-xs font-medium text-white hover:bg-gray-700 disabled:opacity-40"
+                                        className="rounded-md bg-zinc-800 px-2 py-1 text-xs font-medium text-zinc-100 hover:bg-zinc-700 disabled:opacity-40"
                                     >
                                         {busy === 'upload' ? 'Uploading…' : '+ Upload'}
                                     </button>
@@ -1088,7 +1088,7 @@ export default function Workspace({
                                         {p.url ? (
                                             <img src={p.url} alt={p.filename} className="aspect-square w-full object-cover" loading="lazy" />
                                         ) : (
-                                            <div className="flex aspect-square w-full items-center justify-center bg-gray-200 text-xs text-gray-500">no img</div>
+                                            <div className="flex aspect-square w-full items-center justify-center bg-zinc-800 text-xs text-zinc-500">no img</div>
                                         )}
                                     </button>
                                     {recMeta && (
@@ -1107,9 +1107,9 @@ export default function Workspace({
                                         </span>
                                     )}
                                     {p.selection_state === 'culled' && (
-                                        <span className="absolute left-1 top-1 rounded bg-rose-600 px-1 text-xs font-bold text-white">CULL</span>
+                                        <span className="absolute left-1 top-1 rounded bg-rose-600 px-1 text-xs font-bold text-zinc-100">CULL</span>
                                     )}
-                                    <label className="absolute right-1 top-1 cursor-pointer rounded bg-black/50 p-0.5 text-white">
+                                    <label className="absolute right-1 top-1 cursor-pointer rounded bg-black/50 p-0.5 text-zinc-100">
                                         <input
                                             type="checkbox"
                                             checked={cullIds.includes(p.id)}
@@ -1124,29 +1124,29 @@ export default function Workspace({
                     </section>
 
                     {/* ============ CENTER: selected photo / overview ============ */}
-                    <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 shadow-sm">
                         {selected ? (
                             <>
                                 <div className="mb-3 flex items-center justify-between">
-                                    <h3 className="text-sm font-semibold text-gray-800">
+                                    <h3 className="text-sm font-semibold text-zinc-100">
                                         {selected.filename}
-                                        <span className="ms-2 text-xs font-normal text-gray-500">
+                                        <span className="ms-2 text-xs font-normal text-zinc-500">
                                             {selected.width && selected.height ? `${selected.width}×${selected.height}` : ''}
                                         </span>
                                     </h3>
                                     <div className="flex gap-2 text-xs">
-                                        <span className={`rounded-full px-2 py-0.5 font-medium ${selected.selection_state === 'selected' ? 'bg-emerald-100 text-emerald-800' : selected.selection_state === 'culled' ? 'bg-rose-100 text-rose-800' : 'bg-gray-100 text-gray-600'}`}>
+                                        <span className={`rounded-full px-2 py-0.5 font-medium ${selected.selection_state === 'selected' ? 'bg-emerald-500/15 text-emerald-300' : selected.selection_state === 'culled' ? 'bg-rose-500/15 text-rose-300' : 'bg-zinc-900 text-zinc-300'}`}>
                                             {selected.selection_state}
                                         </span>
-                                        <span className="rounded-full bg-indigo-100 px-2 py-0.5 font-medium text-indigo-700">{selected.retouch_state}</span>
+                                        <span className="rounded-full bg-indigo-500/15 px-2 py-0.5 font-medium text-indigo-400">{selected.retouch_state}</span>
                                     </div>
                                 </div>
                                 {selected.url ? (
-                                    <img src={selected.url} alt={selected.filename} className="w-full rounded-lg border border-gray-200" />
+                                    <img src={selected.url} alt={selected.filename} className="w-full rounded-lg border border-zinc-800" />
                                 ) : (
-                                    <div className="flex h-64 items-center justify-center rounded-lg bg-gray-100 text-sm text-gray-500">No preview</div>
+                                    <div className="flex h-64 items-center justify-center rounded-lg bg-zinc-900 text-sm text-zinc-500">No preview</div>
                                 )}
-                                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-600 sm:grid-cols-3">
+                                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-zinc-300 sm:grid-cols-3">
                                     <span>Model: <b>{selected.camera_model ?? '—'}</b></span>
                                     <span>ISO: <b>{selected.iso ?? '—'}</b></span>
                                     <span>Lens: <b>{selected.lens ?? '—'}</b></span>
@@ -1159,14 +1159,14 @@ export default function Workspace({
                                     <div
                                         role="alert"
                                         data-testid="analysis-error"
-                                        className="mt-4 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800"
+                                        className="mt-4 rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300"
                                     >
                                         <p className="font-medium">Photo analysis failed: {analysisError}</p>
                                         <button
                                             type="button"
                                             onClick={() => setAnalysisRefresh((version) => version + 1)}
                                             disabled={busy !== null}
-                                            className="mt-1 rounded border border-rose-300 px-2 py-0.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-40"
+                                            className="mt-1 rounded border border-rose-500/40 px-2 py-0.5 text-xs font-semibold text-rose-400 hover:bg-rose-500/15 disabled:opacity-40"
                                         >
                                             Retry analysis
                                         </button>
@@ -1177,20 +1177,20 @@ export default function Workspace({
                                 {selectedRec && (
                                     <div
                                         data-testid="culling-card"
-                                        className="mt-4 rounded-xl border border-gray-200 bg-gray-50/60 p-4"
+                                        className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/40/60 p-4"
                                     >
                                         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                                            <h4 className="text-sm font-semibold text-gray-800">Context-Aware Culling</h4>
+                                            <h4 className="text-sm font-semibold text-zinc-100">Context-Aware Culling</h4>
                                             <div className="flex items-center gap-2">
                                                 <span
                                                     data-testid="recommendation-badge"
-                                                    className={`rounded-full px-2.5 py-1 text-xs font-bold tracking-wide ${RECOMMENDATION_META[selectedRec.recommendation]?.badge ?? 'bg-gray-100 text-gray-600'}`}
+                                                    className={`rounded-full px-2.5 py-1 text-xs font-bold tracking-wide ${RECOMMENDATION_META[selectedRec.recommendation]?.badge ?? 'bg-zinc-900 text-zinc-300'}`}
                                                 >
                                                     {RECOMMENDATION_META[selectedRec.recommendation]?.label ?? selectedRec.recommendation}
                                                 </span>
                                                 <span
                                                     data-testid="recommendation-confidence"
-                                                    className="text-xs font-medium text-gray-500"
+                                                    className="text-xs font-medium text-zinc-500"
                                                     title="Recommendation confidence — never certainty"
                                                 >
                                                     {confidencePct(selectedRec.confidence)} confidence
@@ -1202,42 +1202,42 @@ export default function Workspace({
                                             {/* TECHNICAL QUALITY */}
                                             <div data-testid="technical-section">
                                                 <div className="mb-1.5 flex items-baseline justify-between">
-                                                    <h5 className="text-xs font-bold uppercase tracking-wide text-gray-500">Technical quality</h5>
+                                                    <h5 className="text-xs font-bold uppercase tracking-wide text-zinc-500">Technical quality</h5>
                                                     {analysis?.observation && (
                                                         <span
                                                             data-testid="technical-provenance"
-                                                            className="text-xs text-gray-400"
+                                                            className="text-xs text-zinc-400"
                                                             title={`Provenance: ${analysis.observation.technical_provenance}`}
                                                         >
                                                             {provenanceLabel(analysis.observation.technical_provenance)}
                                                         </span>
                                                     )}
                                                 </div>
-                                                <dl className="space-y-1 text-xs text-gray-600">
-                                                    <div className="flex justify-between gap-2"><dt>Sharpness</dt><dd className="font-medium text-gray-800">{assessmentText(analysis?.observation?.technical?.sharpness)}</dd></div>
-                                                    <div className="flex justify-between gap-2"><dt>Exposure</dt><dd className="font-medium text-gray-800">{assessmentText(analysis?.observation?.technical?.exposure)}</dd></div>
-                                                    <div className="flex justify-between gap-2"><dt>Motion blur</dt><dd className="font-medium text-gray-800">{assessmentText(analysis?.observation?.technical?.motion_blur)}</dd></div>
-                                                    <div className="flex justify-between gap-2"><dt>Highlight clipping</dt><dd className="font-medium text-gray-800">{assessmentText(analysis?.observation?.technical?.highlight_clipping)}</dd></div>
+                                                <dl className="space-y-1 text-xs text-zinc-300">
+                                                    <div className="flex justify-between gap-2"><dt>Sharpness</dt><dd className="font-medium text-zinc-100">{assessmentText(analysis?.observation?.technical?.sharpness)}</dd></div>
+                                                    <div className="flex justify-between gap-2"><dt>Exposure</dt><dd className="font-medium text-zinc-100">{assessmentText(analysis?.observation?.technical?.exposure)}</dd></div>
+                                                    <div className="flex justify-between gap-2"><dt>Motion blur</dt><dd className="font-medium text-zinc-100">{assessmentText(analysis?.observation?.technical?.motion_blur)}</dd></div>
+                                                    <div className="flex justify-between gap-2"><dt>Highlight clipping</dt><dd className="font-medium text-zinc-100">{assessmentText(analysis?.observation?.technical?.highlight_clipping)}</dd></div>
                                                     <div className="flex justify-between gap-2" data-testid="similarity-group">
                                                         <dt>Similarity group</dt>
-                                                        <dd className="font-medium text-gray-800">
+                                                        <dd className="font-medium text-zinc-100">
                                                             {selectedRec.similarity_group && selectedRec.similarity_group_size > 1
                                                                 ? `burst group · ${selectedRec.similarity_group_size} similar frame(s)`
                                                                 : 'unique frame'}
                                                         </dd>
                                                     </div>
                                                 </dl>
-                                                <p className="mt-2 text-xs leading-relaxed text-gray-600" data-testid="technical-rationale">{selectedRec.technical_rationale}</p>
+                                                <p className="mt-2 text-xs leading-relaxed text-zinc-300" data-testid="technical-rationale">{selectedRec.technical_rationale}</p>
                                             </div>
 
                                             {/* CREATIVE FIT */}
                                             <div data-testid="creative-section">
                                                 <div className="mb-1.5 flex items-baseline justify-between">
-                                                    <h5 className="text-xs font-bold uppercase tracking-wide text-gray-500">Creative fit</h5>
+                                                    <h5 className="text-xs font-bold uppercase tracking-wide text-zinc-500">Creative fit</h5>
                                                     {analysis?.observation && (
                                                         <span
                                                             data-testid="creative-provenance"
-                                                            className="text-xs text-gray-400"
+                                                            className="text-xs text-zinc-400"
                                                             title={`Provenance: ${analysis.observation.creative_provenance} — creative labels come from the documented demo annotation, not from pixel inference`}
                                                         >
                                                             {provenanceLabel(analysis.observation.creative_provenance)}
@@ -1245,25 +1245,25 @@ export default function Workspace({
                                                     )}
                                                 </div>
                                                 {analysis?.observation && analysis.observation.creative_provenance === 'demo_sidecar_annotation' ? (
-                                                    <dl className="space-y-1 text-xs text-gray-600">
-                                                        <div className="flex justify-between gap-2"><dt>Emotional strength</dt><dd className="font-medium text-gray-800">{analysis.observation.creative.emotion_strength.replace(/_/g, ' ')}</dd></div>
-                                                        <div className="flex justify-between gap-2"><dt>Candidness</dt><dd className="font-medium text-gray-800">{analysis.observation.creative.candidness.replace(/_/g, ' ')}</dd></div>
-                                                        <div className="flex justify-between gap-2"><dt>Mood</dt><dd className="font-medium text-gray-800">{analysis.observation.creative.mood.length > 0 ? analysis.observation.creative.mood.join(', ') : '—'}</dd></div>
-                                                        <div className="flex justify-between gap-2"><dt>Storytelling</dt><dd className="font-medium text-gray-800">{analysis.observation.creative.environmental_storytelling.replace(/_/g, ' ')}</dd></div>
+                                                    <dl className="space-y-1 text-xs text-zinc-300">
+                                                        <div className="flex justify-between gap-2"><dt>Emotional strength</dt><dd className="font-medium text-zinc-100">{analysis.observation.creative.emotion_strength.replace(/_/g, ' ')}</dd></div>
+                                                        <div className="flex justify-between gap-2"><dt>Candidness</dt><dd className="font-medium text-zinc-100">{analysis.observation.creative.candidness.replace(/_/g, ' ')}</dd></div>
+                                                        <div className="flex justify-between gap-2"><dt>Mood</dt><dd className="font-medium text-zinc-100">{analysis.observation.creative.mood.length > 0 ? analysis.observation.creative.mood.join(', ') : '—'}</dd></div>
+                                                        <div className="flex justify-between gap-2"><dt>Storytelling</dt><dd className="font-medium text-zinc-100">{analysis.observation.creative.environmental_storytelling.replace(/_/g, ' ')}</dd></div>
                                                     </dl>
                                                 ) : (
-                                                    <p className="text-xs italic text-gray-400">
+                                                    <p className="text-xs italic text-zinc-400">
                                                         Creative context not available for this frame — creative fit cannot be evaluated.
                                                     </p>
                                                 )}
-                                                <p className="mt-2 text-xs leading-relaxed text-gray-600" data-testid="creative-rationale">{selectedRec.creative_rationale}</p>
+                                                <p className="mt-2 text-xs leading-relaxed text-zinc-300" data-testid="creative-rationale">{selectedRec.creative_rationale}</p>
                                             </div>
                                         </div>
 
                                         {/* WHY */}
-                                        <div className="mt-3 rounded-lg border border-indigo-100 bg-indigo-50/70 p-3" data-testid="why-section">
-                                            <h5 className="text-xs font-bold uppercase tracking-wide text-indigo-500">Why</h5>
-                                            <p className="mt-1 text-xs leading-relaxed text-gray-700" data-testid="tradeoff-explanation">
+                                        <div className="mt-3 rounded-lg border border-indigo-500/20 bg-indigo-500/15 p-3" data-testid="why-section">
+                                            <h5 className="text-xs font-bold uppercase tracking-wide text-indigo-400">Why</h5>
+                                            <p className="mt-1 text-xs leading-relaxed text-zinc-200" data-testid="tradeoff-explanation">
                                                 {tradeoffParts(selectedRec.tradeoff).before}{' '}
                                                 {tradeoffParts(selectedRec.tradeoff).brief && (
                                                     <b data-testid="brief-linkage">{tradeoffParts(selectedRec.tradeoff).brief}</b>
@@ -1273,21 +1273,21 @@ export default function Workspace({
 
                                         {/* INFLUENCED BY */}
                                         <div className="mt-2.5 flex flex-wrap items-center gap-1.5" data-testid="influenced-by">
-                                            <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Influenced by</span>
+                                            <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Influenced by</span>
                                             {selectedRec.influenced_by.length === 0 ? (
-                                                <span className="text-xs italic text-gray-400">no brief dimension moved this call</span>
+                                                <span className="text-xs italic text-zinc-400">no brief dimension moved this call</span>
                                             ) : (
                                                 selectedRec.influenced_by.map((dim) => (
-                                                    <code key={dim} className="rounded bg-gray-200/80 px-1.5 py-0.5 text-xs font-semibold text-gray-700">{dim}</code>
+                                                    <code key={dim} className="rounded bg-zinc-800/80 px-1.5 py-0.5 text-xs font-semibold text-zinc-200">{dim}</code>
                                                 ))
                                             )}
                                         </div>
 
                                         {/* PHOTOGRAPHER ACTIONS — HUMAN authority, never a WebMCP tool */}
                                         {canPhotographerAct && (
-                                            <div className="mt-3 border-t border-gray-200 pt-3" data-testid="photographer-actions">
+                                            <div className="mt-3 border-t border-zinc-800 pt-3" data-testid="photographer-actions">
                                                 <div className="flex flex-wrap items-center gap-2">
-                                                    <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Your decision</span>
+                                                    <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Your decision</span>
                                                     {(['keep', 'review', 'reject'] as CullingChoice[]).map((choice) => {
                                                         const active = myDecisions[selected.id]?.decision === choice
                                                             || (selected.selection_state === 'selected' && choice === 'keep' && !myDecisions[selected.id])
@@ -1299,12 +1299,12 @@ export default function Workspace({
                                                                 disabled={busy !== null}
                                                                 className={`rounded-md px-3 py-1.5 text-xs font-semibold transition disabled:opacity-40 ${
                                                                     active
-                                                                        ? 'bg-gray-800 text-white'
+                                                                        ? 'bg-zinc-800 text-zinc-100'
                                                                         : choice === 'keep'
-                                                                            ? 'border border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                                                                            ? 'border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15'
                                                                             : choice === 'reject'
-                                                                                ? 'border border-rose-300 bg-rose-50 text-rose-800 hover:bg-rose-100'
-                                                                                : 'border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100'
+                                                                                ? 'border border-rose-500/40 bg-rose-500/10 text-rose-300 hover:bg-rose-500/15'
+                                                                                : 'border border-amber-400/40 bg-amber-400/10 text-amber-300 hover:bg-amber-400/10'
                                                                 }`}
                                                             >
                                                                 {choice.charAt(0).toUpperCase() + choice.slice(1)}
@@ -1314,15 +1314,15 @@ export default function Workspace({
                                                     <button
                                                         onClick={() => setOverrideOpen((o) => !o)}
                                                         disabled={busy !== null}
-                                                        className="rounded-md border border-indigo-300 bg-white px-3 py-1.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-40"
+                                                        className="rounded-md border border-indigo-500/40 bg-zinc-900/60 px-3 py-1.5 text-xs font-semibold text-indigo-400 hover:bg-indigo-500/10 disabled:opacity-40"
                                                         title="Override the agent's recommendation with your reasoning"
                                                     >
                                                         Override
                                                     </button>
                                                 </div>
                                                 {overrideOpen && (
-                                                    <div className="mt-2 rounded-lg border border-indigo-200 bg-white p-2.5">
-                                                        <label htmlFor="override-note" className="text-xs font-medium text-gray-600">
+                                                    <div className="mt-2 rounded-lg border border-indigo-500/30 bg-zinc-900/60 p-2.5">
+                                                        <label htmlFor="override-note" className="text-xs font-medium text-zinc-300">
                                                             Why does the agent's call miss? (optional, saved with your decision)
                                                         </label>
                                                         <input
@@ -1331,7 +1331,7 @@ export default function Workspace({
                                                             value={overrideNote}
                                                             onChange={(e) => setOverrideNote(e.target.value)}
                                                             placeholder='e.g. "The expression matters more than the softness."'
-                                                            className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1.5 text-xs focus:border-indigo-400 focus:outline-none"
+                                                            className="mt-1 w-full rounded-md border border-zinc-700 px-2 py-1.5 text-xs focus:border-amber-400/60 focus:outline-none"
                                                         />
                                                         <div className="mt-2 flex flex-wrap gap-2">
                                                             {(['keep', 'review', 'reject'] as CullingChoice[]).map((choice) => (
@@ -1343,7 +1343,7 @@ export default function Workspace({
                                                                         setOverrideOpen(false);
                                                                     }}
                                                                     disabled={busy !== null}
-                                                                    className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-40"
+                                                                    className="rounded-md bg-amber-400 px-3 py-1.5 text-xs font-semibold text-zinc-100 hover:bg-amber-400 disabled:opacity-40"
                                                                 >
                                                                     Override → {choice.charAt(0).toUpperCase() + choice.slice(1)}
                                                                 </button>
@@ -1352,7 +1352,7 @@ export default function Workspace({
                                                     </div>
                                                 )}
                                                 {myDecisions[selected.id] && (
-                                                    <p className="mt-2 text-xs text-gray-500" data-testid="decision-persisted">
+                                                    <p className="mt-2 text-xs text-zinc-500" data-testid="decision-persisted">
                                                         Recorded <b>{myDecisions[selected.id].decision.toUpperCase()}</b>
                                                         {myDecisions[selected.id].override ? ' (override)' : ''}
                                                         {myDecisions[selected.id].note ? ` — "${myDecisions[selected.id].note}"` : ''}
@@ -1362,7 +1362,7 @@ export default function Workspace({
                                             </div>
                                         )}
                                         {isAgent && (
-                                            <p className="mt-3 border-t border-gray-200 pt-2 text-xs italic text-gray-400" data-testid="agent-no-final-authority">
+                                            <p className="mt-3 border-t border-zinc-800 pt-2 text-xs italic text-zinc-400" data-testid="agent-no-final-authority">
                                                 Agent view — recommendations only. Culling is finalized exclusively by the photographer.
                                             </p>
                                         )}
@@ -1372,23 +1372,23 @@ export default function Workspace({
                                     <div
                                         role="alert"
                                         data-testid="culling-error"
-                                        className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800"
+                                        className="mt-3 rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300"
                                     >
                                         <p className="font-medium">Culling context failed: {cullingError}</p>
                                         <button
                                             type="button"
                                             onClick={() => void loadCulling()}
                                             disabled={busy !== null || cullingLoading}
-                                            className="mt-1 rounded border border-rose-300 px-2 py-0.5 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-40"
+                                            className="mt-1 rounded border border-rose-500/40 px-2 py-0.5 text-xs font-semibold text-rose-400 hover:bg-rose-500/15 disabled:opacity-40"
                                         >
                                             Retry culling context
                                         </button>
                                     </div>
                                 )}
                                 {!selectedRec && !cullingLoading && !cullingError && (
-                                    <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                                    <div className="mt-3 rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
                                         <p className="font-medium">Analysis has not run for this frame.</p>
-                                        <p className="mt-0.5 text-amber-800">
+                                        <p className="mt-0.5 text-amber-300">
                                             {isAgent
                                                 ? 'Run Analyze Project Photos to create non-final observations before requesting a recommendation.'
                                                 : 'An agent must explicitly analyze project photos before this frame can receive a recommendation.'}
@@ -1399,7 +1399,7 @@ export default function Workspace({
                                                 onClick={runAnalyze}
                                                 disabled={busy !== null}
                                                 data-testid="analysis-required-action"
-                                                className="mt-2 rounded border border-amber-300 bg-white px-2 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-40"
+                                                className="mt-2 rounded border border-amber-400/40 bg-zinc-900/60 px-2 py-1 text-xs font-semibold text-amber-200 hover:bg-amber-400/10 disabled:opacity-40"
                                             >
                                                 {busy === 'analyze' ? 'Analyzing…' : 'Analyze Project Photos'}
                                             </button>
@@ -1408,24 +1408,24 @@ export default function Workspace({
                                 )}
                             </>
                         ) : (
-                            <div className="flex h-64 items-center justify-center rounded-lg bg-gray-50 text-sm text-gray-500">
+                            <div className="flex h-64 items-center justify-center rounded-lg bg-zinc-950/40 text-sm text-zinc-500">
                                 No photo selected.
                             </div>
                         )}
 
                         {/* Project overview */}
-                        <div className="mt-5 border-t border-gray-100 pt-4">
-                            <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Project overview</h4>
-                            <p className="mt-1 text-sm text-gray-600">{project.description ?? 'No description.'}</p>
+                        <div className="mt-5 border-t border-zinc-800/70 pt-4">
+                            <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Project overview</h4>
+                            <p className="mt-1 text-sm text-zinc-300">{project.description ?? 'No description.'}</p>
                             <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                                <div className="rounded-lg bg-gray-50 p-2"><dt className="text-gray-400">Owner</dt><dd className="font-medium text-gray-800">{project.owner ?? '—'}</dd></div>
-                                <div className="rounded-lg bg-gray-50 p-2"><dt className="text-gray-400">Status</dt><dd className="font-medium text-gray-800">{project.status}</dd></div>
-                                <div className="rounded-lg bg-gray-50 p-2"><dt className="text-gray-400">Photos</dt><dd className="font-medium text-gray-800">{photos.length}</dd></div>
-                                <div className="rounded-lg bg-gray-50 p-2"><dt className="text-gray-400">Eligible for execute</dt><dd className="font-medium text-gray-800">{eligibleForExecution ? 'Yes' : 'No'}</dd></div>
+                                <div className="rounded-lg bg-zinc-950/40 p-2"><dt className="text-zinc-400">Owner</dt><dd className="font-medium text-zinc-100">{project.owner ?? '—'}</dd></div>
+                                <div className="rounded-lg bg-zinc-950/40 p-2"><dt className="text-zinc-400">Status</dt><dd className="font-medium text-zinc-100">{project.status}</dd></div>
+                                <div className="rounded-lg bg-zinc-950/40 p-2"><dt className="text-zinc-400">Photos</dt><dd className="font-medium text-zinc-100">{photos.length}</dd></div>
+                                <div className="rounded-lg bg-zinc-950/40 p-2"><dt className="text-zinc-400">Eligible for execute</dt><dd className="font-medium text-zinc-100">{eligibleForExecution ? 'Yes' : 'No'}</dd></div>
                                 {culling && (
-                                    <div className="rounded-lg bg-gray-50 p-2" data-testid="culling-context-summary">
-                                        <dt className="text-gray-400">Context-aware culling</dt>
-                                        <dd className="font-medium text-gray-800">
+                                    <div className="rounded-lg bg-zinc-950/40 p-2" data-testid="culling-context-summary">
+                                        <dt className="text-zinc-400">Context-aware culling</dt>
+                                        <dd className="font-medium text-zinc-100">
                                             {culling.context.photos_observed}/{photos.length} observed
                                             {culling.has_direction ? ' · brief applied' : ' · no adopted brief'}
                                             {culling.context.duplicate_groups.length > 0 ? ` · ${culling.context.duplicate_groups.length} similarity group(s)` : ''}
@@ -1439,32 +1439,32 @@ export default function Workspace({
                     {/* ============ RIGHT: Creative Direction + Retouch + QA + Agent Proposal + Memory ============ */}
                     <section className="space-y-5">
                         {/* Creative Direction */}
-                        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                            <h3 className="mb-2 text-sm font-semibold text-gray-800">Creative Direction</h3>
+                        <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 shadow-sm">
+                            <h3 className="mb-2 text-sm font-semibold text-zinc-100">Creative Direction</h3>
                             {brief ? (
-                                <div className="space-y-2 text-xs text-gray-600">
+                                <div className="space-y-2 text-xs text-zinc-300">
                                     <p><b>Client:</b> {brief.client ?? '—'}</p>
                                     <p><b>Location:</b> {brief.location ?? '—'} · <b>Shoot:</b> {brief.shoot_date ?? '—'}</p>
-                                    <p className="text-gray-700">{brief.creative_direction ?? '—'}</p>
-                                    <p className="text-gray-500 italic">{brief.tonality_notes ?? ''}</p>
-                                    <p className="text-gray-700"><b>Deliverables:</b> {brief.deliverables ?? '—'}</p>
+                                    <p className="text-zinc-200">{brief.creative_direction ?? '—'}</p>
+                                    <p className="text-zinc-500 italic">{brief.tonality_notes ?? ''}</p>
+                                    <p className="text-zinc-200"><b>Deliverables:</b> {brief.deliverables ?? '—'}</p>
                                 </div>
                             ) : (
-                                <p className="text-xs text-gray-500">No brief yet.</p>
+                                <p className="text-xs text-zinc-500">No brief yet.</p>
                             )}
                         </div>
 
                         {/* ============ Sprint 4 — RETOUCH PANEL: ORIGINAL vs APPROVED ============ */}
-                        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm" data-testid="retouch-panel">
+                        <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 shadow-sm" data-testid="retouch-panel">
                             <div className="mb-2 flex items-center justify-between">
-                                <h3 className="text-sm font-semibold text-gray-800">Retouch</h3>
+                                <h3 className="text-sm font-semibold text-zinc-100">Retouch</h3>
                                 {retouchCard && (
                                     <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${
                                         retouchCard.status === 'executed'
-                                            ? 'bg-gray-800 text-white'
+                                            ? 'bg-zinc-800 text-zinc-100'
                                             : retouchCard.status === 'approved'
-                                                ? 'bg-emerald-100 text-emerald-700'
-                                                : 'bg-amber-100 text-amber-700'
+                                                ? 'bg-emerald-500/15 text-emerald-400'
+                                                : 'bg-amber-400/10 text-amber-400'
                                     }`} data-testid="retouch-status">
                                         {retouchCard.status === 'executed' ? 'APPROVED BY PHOTOGRAPHER' : STATE_LABEL[retouchCard.status] ?? retouchCard.status}
                                     </span>
@@ -1476,27 +1476,27 @@ export default function Workspace({
                                     {/* BEFORE / AFTER — real image sources only */}
                                     <div className="grid grid-cols-2 gap-2" data-testid="before-after">
                                         <figure>
-                                            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-gray-400">ORIGINAL</p>
+                                            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-zinc-400">ORIGINAL</p>
                                             {retouchCard.original.url ? (
-                                                <img src={retouchCard.original.url} alt="original" data-testid="original-image" className="w-full rounded-lg border border-gray-200" />
+                                                <img src={retouchCard.original.url} alt="original" data-testid="original-image" className="w-full rounded-lg border border-zinc-800" />
                                             ) : (
-                                                <div className="flex h-28 items-center justify-center rounded-lg bg-gray-100 text-xs text-gray-400">no original</div>
+                                                <div className="flex h-28 items-center justify-center rounded-lg bg-zinc-900 text-xs text-zinc-400">no original</div>
                                             )}
                                         </figure>
                                         <figure>
-                                            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-gray-400">APPROVED / PREVIEW</p>
+                                            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-zinc-400">APPROVED / PREVIEW</p>
                                             {retouchCard.derivative?.url ? (
-                                                <img src={retouchCard.derivative.url} alt="approved derivative" data-testid="derivative-image" className="w-full rounded-lg border-2 border-emerald-300" />
+                                                <img src={retouchCard.derivative.url} alt="approved derivative" data-testid="derivative-image" className="w-full rounded-lg border-2 border-emerald-500/40" />
                                             ) : retouchRenderFailed ? (
                                                 <div
-                                                    className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-4 text-xs text-rose-800"
+                                                    className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-4 text-xs text-rose-300"
                                                     data-testid="retouch-render-error"
                                                     role="alert"
                                                 >
                                                     Retouch render failed — no approved derivative was stored.
                                                 </div>
                                             ) : (
-                                                <div className="flex h-28 items-center justify-center rounded-lg border border-dashed border-gray-300 text-xs text-gray-400" data-testid="derivative-placeholder">
+                                                <div className="flex h-28 items-center justify-center rounded-lg border border-dashed border-zinc-700 text-xs text-zinc-400" data-testid="derivative-placeholder">
                                                     {retouchCard.status === 'approved' ? 'Not rendered yet — execute the approved plan' : 'Not executed yet'}
                                                 </div>
                                             )}
@@ -1506,9 +1506,9 @@ export default function Workspace({
                                     {/* Creative Brief influence */}
                                     {retouchCard.agent_original.influenced_by.length > 0 && (
                                         <div className="mt-2 flex flex-wrap items-center gap-1.5" data-testid="retouch-influenced-by">
-                                            <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Brief influence</span>
+                                            <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Brief influence</span>
                                             {retouchCard.agent_original.influenced_by.map((dim) => (
-                                                <code key={dim} className="rounded bg-gray-200/80 px-1.5 py-0.5 text-xs font-semibold text-gray-700">{dim}</code>
+                                                <code key={dim} className="rounded bg-zinc-800/80 px-1.5 py-0.5 text-xs font-semibold text-zinc-200">{dim}</code>
                                             ))}
                                         </div>
                                     )}
@@ -1516,25 +1516,25 @@ export default function Workspace({
                                     {/* THREE-LAYER VALUE HISTORY — the trust core */}
                                     <dl className="mt-3 space-y-1 text-xs" data-testid="retouch-layers">
                                         <div className="flex items-baseline justify-between gap-2" data-testid="layer-agent-original">
-                                            <dt className="text-gray-500">AI PROPOSAL</dt>
-                                            <dd className="font-semibold text-gray-800">{fmtAdjustments(retouchCard.agent_original.params)}</dd>
+                                            <dt className="text-zinc-500">AI PROPOSAL</dt>
+                                            <dd className="font-semibold text-zinc-100">{fmtAdjustments(retouchCard.agent_original.params)}</dd>
                                         </div>
                                         {retouchCard.photographer_modification?.adjustments && (
                                             <div className="flex items-baseline justify-between gap-2" data-testid="layer-photographer-modified">
-                                                <dt className="text-gray-500">PHOTOGRAPHER MODIFIED{retouchCard.photographer_modification.note ? ' — ' + retouchCard.photographer_modification.note : ''}</dt>
-                                                <dd className="font-semibold text-indigo-700">{fmtAdjustments(retouchCard.photographer_modification.adjustments)}</dd>
+                                                <dt className="text-zinc-500">PHOTOGRAPHER MODIFIED{retouchCard.photographer_modification.note ? ' — ' + retouchCard.photographer_modification.note : ''}</dt>
+                                                <dd className="font-semibold text-indigo-400">{fmtAdjustments(retouchCard.photographer_modification.adjustments)}</dd>
                                             </div>
                                         )}
                                         {retouchCard.executed?.params && (
-                                            <div className="flex items-baseline justify-between gap-2 border-t border-gray-100 pt-1" data-testid="layer-executed">
-                                                <dt className="font-semibold text-gray-800">FINAL APPROVED VALUES</dt>
-                                                <dd className="font-bold text-emerald-700">{fmtAdjustments(retouchCard.executed.params)}</dd>
+                                            <div className="flex items-baseline justify-between gap-2 border-t border-zinc-800/70 pt-1" data-testid="layer-executed">
+                                                <dt className="font-semibold text-zinc-100">FINAL APPROVED VALUES</dt>
+                                                <dd className="font-bold text-emerald-400">{fmtAdjustments(retouchCard.executed.params)}</dd>
                                             </div>
                                         )}
                                     </dl>
 
                                     {/* Human-authority status */}
-                                    <p className="mt-2 rounded-md bg-emerald-50 px-2 py-1.5 text-xs font-semibold text-emerald-800" data-testid="human-authority-status">
+                                    <p className="mt-2 rounded-md bg-emerald-500/10 px-2 py-1.5 text-xs font-semibold text-emerald-300" data-testid="human-authority-status">
                                         {retouchCard.executed
                                             ? 'APPROVED BY PHOTOGRAPHER — only the human-approved values were executed.'
                                             : retouchCard.status === 'approved'
@@ -1545,12 +1545,12 @@ export default function Workspace({
                                     </p>
 
                                     {/* Real before/after evidence: checksums make it verifiable */}
-                                    <div className="mt-2 space-y-0.5 text-xs text-gray-400" data-testid="retouch-evidence">
+                                    <div className="mt-2 space-y-0.5 text-xs text-zinc-400" data-testid="retouch-evidence">
                                         <p>original sha256: <code data-testid="original-sha">{retouchCard.original.sha256 ? `${retouchCard.original.sha256.slice(0, 16)}…` : '—'}</code></p>
                                         {retouchCard.derivative && (
                                             <>
                                                 <p>derivative sha256: <code data-testid="derivative-sha">{retouchCard.derivative.sha256?.slice(0, 16)}…</code> ({retouchCard.derivative.storage_path})</p>
-                                                <p data-testid="checksum-divergence" className={retouchCard.derivative.sha256 && retouchCard.original.sha256 && retouchCard.derivative.sha256 !== retouchCard.original.sha256 ? 'text-emerald-700' : 'text-rose-600'}>
+                                                <p data-testid="checksum-divergence" className={retouchCard.derivative.sha256 && retouchCard.original.sha256 && retouchCard.derivative.sha256 !== retouchCard.original.sha256 ? 'text-emerald-400' : 'text-rose-400'}>
                                                     {retouchCard.derivative.sha256 !== retouchCard.original.sha256
                                                         ? '✓ derivative differs from original — original unchanged (byte-for-byte verified at execute time)'
                                                         : '✗ derivative checksum equals original — inspect!'}
@@ -1560,54 +1560,54 @@ export default function Workspace({
                                     </div>
                                 </div>
                             ) : (
-                                <p className="text-xs text-gray-400">No retouch proposal yet — run the agent's Propose Retouch Plan.</p>
+                                <p className="text-xs text-zinc-400">No retouch proposal yet — run the agent's Propose Retouch Plan.</p>
                             )}
                         </div>
 
                         {/* ============ Sprint 4 — CONSISTENCY QA PANEL ============ */}
-                        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm" data-testid="qa-panel">
+                        <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 shadow-sm" data-testid="qa-panel">
                             <div className="mb-2 flex items-center justify-between">
-                                <h3 className="text-sm font-semibold text-gray-800">Consistency QA</h3>
-                                <span className="text-xs text-gray-400" data-testid="qa-summary">
+                                <h3 className="text-sm font-semibold text-zinc-100">Consistency QA</h3>
+                                <span className="text-xs text-zinc-400" data-testid="qa-summary">
                                     {qaFindings.length === 0
                                         ? 'no findings yet'
                                         : `${qaFindings.filter((f) => f.status === 'open').length} open · ${qaFindings.filter((f) => f.status !== 'open').length} resolved`}
                                 </span>
                             </div>
                             {qaFindings.length === 0 ? (
-                                <p className="text-xs text-gray-400">Run the agent's consistency review to populate findings.</p>
+                                <p className="text-xs text-zinc-400">Run the agent's consistency review to populate findings.</p>
                             ) : (
                                 <ul className="space-y-2">
                                     {qaFindings.map((f) => (
-                                        <li key={f.id} className="rounded-lg border border-gray-200 p-2" data-testid={`qa-finding-${f.id}`}>
+                                        <li key={f.id} className="rounded-lg border border-zinc-800 p-2" data-testid={`qa-finding-${f.id}`}>
                                             <div className="flex items-center justify-between gap-2">
-                                                <span className="text-xs font-bold text-gray-800" data-testid={`qa-category-${f.id}`}>{f.category.replace(/_/g, ' ')}</span>
+                                                <span className="text-xs font-bold text-zinc-100" data-testid={`qa-category-${f.id}`}>{f.category.replace(/_/g, ' ')}</span>
                                                 <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
-                                                    f.severity === 'info' ? 'bg-sky-100 text-sky-700'
-                                                        : f.severity === 'low' ? 'bg-amber-100 text-amber-700'
-                                                            : f.severity === 'medium' || f.severity === 'warning' ? 'bg-amber-100 text-amber-800'
-                                                                : 'bg-rose-100 text-rose-700'
+                                                    f.severity === 'info' ? 'bg-sky-500/15 text-sky-400'
+                                                        : f.severity === 'low' ? 'bg-amber-400/10 text-amber-400'
+                                                            : f.severity === 'medium' || f.severity === 'warning' ? 'bg-amber-400/10 text-amber-300'
+                                                                : 'bg-rose-500/15 text-rose-400'
                                                 }`} data-testid={`qa-severity-${f.id}`}>{f.severity.toUpperCase()}</span>
                                             </div>
-                                            <p className="mt-1 text-xs text-gray-600">{f.message}</p>
+                                            <p className="mt-1 text-xs text-zinc-300">{f.message}</p>
                                             {f.details?.explanation && (
-                                                <p className="mt-1 text-xs leading-relaxed text-gray-500" data-testid={`qa-why-${f.id}`}>
+                                                <p className="mt-1 text-xs leading-relaxed text-zinc-500" data-testid={`qa-why-${f.id}`}>
                                                     <b>WHY:</b> {f.details.explanation}
                                                 </p>
                                             )}
                                             {f.details?.expected && (
-                                                <p className="mt-0.5 text-xs text-gray-500"><b>Expected:</b> {f.details.expected}</p>
+                                                <p className="mt-0.5 text-xs text-zinc-500"><b>Expected:</b> {f.details.expected}</p>
                                             )}
                                             {f.details?.influenced_by && f.details.influenced_by.length > 0 && (
                                                 <div className="mt-1 flex flex-wrap items-center gap-1" data-testid={`qa-influenced-${f.id}`}>
-                                                    <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">influenced_by</span>
+                                                    <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">influenced_by</span>
                                                     {f.details.influenced_by?.map((ref) => (
-                                                        <code key={ref} className="rounded bg-gray-200/80 px-1.5 py-0.5 text-xs font-semibold text-gray-700">{ref}</code>
+                                                        <code key={ref} className="rounded bg-zinc-800/80 px-1.5 py-0.5 text-xs font-semibold text-zinc-200">{ref}</code>
                                                     ))}
                                                 </div>
                                             )}
                                             <div className="mt-1.5 flex items-center gap-2">
-                                                <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${f.status === 'open' ? 'bg-amber-100 text-amber-700' : f.status === 'acknowledged' ? 'bg-sky-100 text-sky-700' : 'bg-gray-200 text-gray-600'}`} data-testid={`qa-status-${f.id}`}>
+                                                <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${f.status === 'open' ? 'bg-amber-400/10 text-amber-400' : f.status === 'acknowledged' ? 'bg-sky-500/15 text-sky-400' : 'bg-zinc-800 text-zinc-300'}`} data-testid={`qa-status-${f.id}`}>
                                                     {f.status}
                                                 </span>
                                                 {canPhotographerAct && f.status === 'open' && (
@@ -1615,20 +1615,20 @@ export default function Workspace({
                                                         <button
                                                             onClick={() => void respondQaFinding(f, 'acknowledge')}
                                                             disabled={busy !== null}
-                                                            className="rounded border border-sky-300 px-2 py-0.5 text-xs font-semibold text-sky-700 hover:bg-sky-50 disabled:opacity-40"
+                                                            className="rounded border border-sky-500/40 px-2 py-0.5 text-xs font-semibold text-sky-400 hover:bg-sky-500/10 disabled:opacity-40"
                                                         >
                                                             Acknowledge
                                                         </button>
                                                         <button
                                                             onClick={() => void respondQaFinding(f, 'dismiss')}
                                                             disabled={busy !== null}
-                                                            className="rounded border border-gray-400 px-2 py-0.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+                                                            className="rounded border border-zinc-600 px-2 py-0.5 text-xs font-semibold text-zinc-300 hover:bg-zinc-800/60 disabled:opacity-40"
                                                         >
                                                             Dismiss
                                                         </button>
                                                     </div>
                                                 )}
-                                                {isAgent && <span className="text-xs italic text-gray-400">agent view — QA actions are photographer authority</span>}
+                                                {isAgent && <span className="text-xs italic text-zinc-400">agent view — QA actions are photographer authority</span>}
                                             </div>
                                         </li>
                                     ))}
@@ -1637,9 +1637,9 @@ export default function Workspace({
                         </div>
 
                         {/* ============ Sprint 4 — CREATIVE MEMORY ============ */}
-                        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm" data-testid="creative-memory-panel">
-                            <h3 className="mb-1 text-sm font-semibold text-gray-800">Creative Memory</h3>
-                            <p className="mb-2 text-xs leading-relaxed text-gray-400">
+                        <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 shadow-sm" data-testid="creative-memory-panel">
+                            <h3 className="mb-1 text-sm font-semibold text-zinc-100">Creative Memory</h3>
+                            <p className="mb-2 text-xs leading-relaxed text-zinc-400">
                                 Photographer decision history — explicit lessons you record. Future proposals read them as
                                 deterministic context; this is not machine-learned personalization.
                             </p>
@@ -1650,13 +1650,13 @@ export default function Workspace({
                                         value={memoryDraft}
                                         onChange={(e) => setMemoryDraft(e.target.value)}
                                         placeholder='e.g. "Less warm." "Preserve grain."'
-                                        className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs"
+                                        className="flex-1 rounded border border-zinc-700 px-2 py-1 text-xs"
                                         aria-label="New creative memory lesson"
                                     />
                                     <button
                                         onClick={() => void storeMemory(memoryDraft)}
                                         disabled={busy !== null}
-                                        className="rounded bg-gray-800 px-2 py-1 text-xs font-semibold text-white hover:bg-gray-700 disabled:opacity-40"
+                                        className="rounded bg-zinc-800 px-2 py-1 text-xs font-semibold text-zinc-100 hover:bg-zinc-700 disabled:opacity-40"
                                     >
                                         {busy === 'memory' ? '…' : 'Save'}
                                     </button>
@@ -1664,12 +1664,12 @@ export default function Workspace({
                             )}
                             <ul className="space-y-1.5" data-testid="memory-list">
                                 {memories.length === 0 ? (
-                                    <li className="text-xs text-gray-400">No lessons yet.</li>
+                                    <li className="text-xs text-zinc-400">No lessons yet.</li>
                                 ) : (
                                     memories.map((m) => (
-                                        <li key={m.id} className="rounded-md border border-gray-100 bg-gray-50/70 p-2 text-xs" data-testid={`memory-${m.id}`}>
-                                            <p className="text-gray-700">“{m.lesson}”</p>
-                                            <p className="mt-0.5 text-xs text-gray-400">
+                                        <li key={m.id} className="rounded-md border border-zinc-800/70 bg-zinc-950/40/70 p-2 text-xs" data-testid={`memory-${m.id}`}>
+                                            <p className="text-zinc-200">“{m.lesson}”</p>
+                                            <p className="mt-0.5 text-xs text-zinc-400">
                                                 {entityName(m.photographer) || 'photographer'} · {m.kind} · {fmtTime(m.created_at)}
                                             </p>
                                         </li>
@@ -1678,13 +1678,13 @@ export default function Workspace({
                             </ul>
                         </div>
                         {/* Agent proposal controls */}
-                        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                            <h3 className="mb-2 text-sm font-semibold text-gray-800">Agent Proposal</h3>
+                        <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 shadow-sm">
+                            <h3 className="mb-2 text-sm font-semibold text-zinc-100">Agent Proposal</h3>
                             <div className="space-y-2">
                                 <button
                                     onClick={runProposeCull}
                                     disabled={busy !== null || !isAgent}
-                                    className="w-full rounded-md bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-500 disabled:opacity-40"
+                                    className="w-full rounded-md bg-amber-600 px-3 py-2 text-xs font-semibold text-zinc-100 hover:bg-amber-400/100 disabled:opacity-40"
                                     title={!isAgent ? 'Log in as the agent to propose.' : 'Create a cull proposal (does not change selections)'}
                                 >
                                     {busy === 'cull' ? '…' : `Propose Cull (${cullIds.length} selected)`}
@@ -1692,7 +1692,7 @@ export default function Workspace({
                                 <button
                                     onClick={runRetouchPlan}
                                     disabled={busy !== null || !isAgent}
-                                    className="w-full rounded-md bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-40"
+                                    className="w-full rounded-md bg-amber-400 px-3 py-2 text-xs font-semibold text-zinc-100 hover:bg-amber-400 disabled:opacity-40"
                                 >
                                     {busy === 'retouch' ? '…' : 'Propose Retouch Plan'}
                                 </button>
@@ -1700,7 +1700,7 @@ export default function Workspace({
                                     <button
                                         onClick={runAnalyze}
                                         disabled={busy !== null}
-                                        className="w-full rounded-md bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
+                                        className="w-full rounded-md bg-violet-500 px-3 py-2 text-xs font-semibold text-zinc-100 hover:bg-violet-500 disabled:opacity-40"
                                         title="Persist non-final photo observations before reading recommendations"
                                     >
                                         {busy === 'analyze' ? 'Analyzing…' : 'Analyze Project Photos'}
@@ -1709,36 +1709,36 @@ export default function Workspace({
                                 <button
                                     onClick={runReview}
                                     disabled={busy !== null || !isAgent}
-                                    className="w-full rounded-md bg-gray-600 px-3 py-2 text-xs font-semibold text-white hover:bg-gray-500 disabled:opacity-40"
+                                    className="w-full rounded-md bg-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-100 hover:bg-zinc-800/600 disabled:opacity-40"
                                 >
                                     {busy === 'review' ? '…' : 'Run Consistency Review'}
                                 </button>
                                 {!isAgent && (
-                                    <p className="text-xs text-gray-400">
+                                    <p className="text-xs text-zinc-400">
                                         {canPhotographerAct ? 'You are signed in as photographer.' : 'Viewer access is read-only.'}
                                     </p>
                                 )}
                             </div>
 
                             {/* Pending proposals — review by photographer */}
-                            <div className="mt-3 border-t border-gray-100 pt-3">
-                                <h4 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Proposals</h4>
+                            <div className="mt-3 border-t border-zinc-800/70 pt-3">
+                                <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Proposals</h4>
                                 {localProposals.length === 0 ? (
-                                    <p className="mt-2 text-xs text-gray-400">No proposals yet.</p>
+                                    <p className="mt-2 text-xs text-zinc-400">No proposals yet.</p>
                                 ) : (
                                     <ul className="mt-2 space-y-2">
                                         {localProposals.map((p) => (
-                                            <li key={p.id} className="rounded-lg border border-gray-200 p-2">
+                                            <li key={p.id} className="rounded-lg border border-zinc-800 p-2">
                                                 <div className="flex items-center justify-between">
-                                                    <span className="text-xs font-semibold text-gray-800">
+                                                    <span className="text-xs font-semibold text-zinc-100">
                                                         #{p.id} {TYPE_LABEL[p.type] ?? p.type}
                                                     </span>
-                                                    <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${p.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : p.status === 'executed' ? 'bg-gray-800 text-white' : p.status === 'rejected' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                    <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${p.status === 'approved' ? 'bg-emerald-500/15 text-emerald-400' : p.status === 'executed' ? 'bg-zinc-800 text-zinc-100' : p.status === 'rejected' ? 'bg-rose-500/15 text-rose-400' : 'bg-amber-400/10 text-amber-400'}`}>
                                                         {STATE_LABEL[p.status] ?? p.status}
                                                     </span>
                                                 </div>
-                                                {p.summary && <p className="mt-1 text-xs text-gray-500">{p.summary}</p>}
-                                                <div className="mt-1 text-xs text-gray-400">
+                                                {p.summary && <p className="mt-1 text-xs text-zinc-500">{p.summary}</p>}
+                                                <div className="mt-1 text-xs text-zinc-400">
                                                     {p.items.length === 0 && p.status === 'draft'
                                                         ? '0 item(s) — awaiting agent generation'
                                                         : `${p.items.length} item(s)`}
@@ -1749,16 +1749,16 @@ export default function Workspace({
                                                 {/* Retouch proposal value layers — makes human authority obvious */}
                                                 {(p.type === 'retouch' || p.type === 'batch_retouch') && p.items[0]?.params && (
                                                     <div className="mt-1.5 space-y-0.5 text-xs" data-testid={`proposal-${p.id}-values`}>
-                                                        <p className="text-gray-600">
+                                                        <p className="text-zinc-300">
                                                             AI proposal: <b data-testid="ai-proposed-values">{fmtAdjustments(agentValuesFor(p))}</b>
                                                         </p>
                                                         {(p.status === 'approved' || p.status === 'executed') && (
-                                                            <p className="text-gray-600">
+                                                            <p className="text-zinc-300">
                                                                 Photographer modified: <b data-testid="photographer-modified-values">{fmtAdjustments(photographerValuesFor(p) ?? agentValuesFor(p))}</b>
                                                             </p>
                                                         )}
                                                         {p.status === 'executed' && (
-                                                            <p className="text-gray-900">
+                                                            <p className="text-zinc-50">
                                                                 Final approved (executed): <b data-testid="final-approved-values">{fmtAdjustments(photographerValuesFor(p) ?? agentValuesFor(p))}</b>
                                                             </p>
                                                         )}
@@ -1772,7 +1772,7 @@ export default function Workspace({
                                                             <button
                                                                 onClick={() => humanApprove(p)}
                                                                 disabled={busy !== null}
-                                                                className="rounded bg-emerald-600 px-2 py-1 text-xs font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
+                                                                className="rounded bg-emerald-500 px-2 py-1 text-xs font-semibold text-zinc-100 hover:bg-emerald-500 disabled:opacity-40"
                                                             >
                                                                 Approve
                                                             </button>
@@ -1780,7 +1780,7 @@ export default function Workspace({
                                                                 <button
                                                                     onClick={() => setModifyOpenFor((cur) => (cur === p.id ? null : p.id))}
                                                                     disabled={busy !== null}
-                                                                    className="rounded border border-indigo-400 px-2 py-1 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-40"
+                                                                    className="rounded border border-amber-400/60 px-2 py-1 text-xs font-semibold text-indigo-400 hover:bg-indigo-500/10 disabled:opacity-40"
                                                                 >
                                                                     Modify
                                                                 </button>
@@ -1788,18 +1788,18 @@ export default function Workspace({
                                                             <button
                                                                 onClick={() => humanReject(p)}
                                                                 disabled={busy !== null}
-                                                                className="rounded bg-rose-600 px-2 py-1 text-xs font-semibold text-white hover:bg-rose-500 disabled:opacity-40"
+                                                                className="rounded bg-rose-600 px-2 py-1 text-xs font-semibold text-zinc-100 hover:bg-rose-500 disabled:opacity-40"
                                                             >
                                                                 Reject
                                                             </button>
                                                         </div>
                                                         {modifyOpenFor === p.id && (
-                                                            <div className="mt-2 rounded-lg border border-indigo-200 bg-white p-2" data-testid="modify-form">
-                                                                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                                                            <div className="mt-2 rounded-lg border border-indigo-500/30 bg-zinc-900/60 p-2" data-testid="modify-form">
+                                                                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
                                                                     Your values (agent proposed {fmtAdjustments(agentValuesFor(p))})
                                                                 </p>
                                                                 <div className="mt-1 flex items-center gap-2">
-                                                                    <label htmlFor={`mod-exposure-${p.id}`} className="text-xs text-gray-600">Exposure</label>
+                                                                    <label htmlFor={`mod-exposure-${p.id}`} className="text-xs text-zinc-300">Exposure</label>
                                                                     <input
                                                                         id={`mod-exposure-${p.id}`}
                                                                         data-testid="modify-exposure"
@@ -1807,9 +1807,9 @@ export default function Workspace({
                                                                         value={modifyValues.exposure}
                                                                         onChange={(e) => setModifyValues((v) => ({ ...v, exposure: e.target.value }))}
                                                                         placeholder={String(agentValuesFor(p).exposure ?? 0)}
-                                                                        className="w-20 rounded border border-gray-300 px-1.5 py-1 text-xs"
+                                                                        className="w-20 rounded border border-zinc-700 px-1.5 py-1 text-xs"
                                                                     />
-                                                                    <label htmlFor={`mod-warmth-${p.id}`} className="text-xs text-gray-600">Warmth</label>
+                                                                    <label htmlFor={`mod-warmth-${p.id}`} className="text-xs text-zinc-300">Warmth</label>
                                                                     <input
                                                                         id={`mod-warmth-${p.id}`}
                                                                         data-testid="modify-warmth"
@@ -1817,12 +1817,12 @@ export default function Workspace({
                                                                         value={modifyValues.warmth}
                                                                         onChange={(e) => setModifyValues((v) => ({ ...v, warmth: e.target.value }))}
                                                                         placeholder={String(agentValuesFor(p).warmth ?? 0)}
-                                                                        className="w-20 rounded border border-gray-300 px-1.5 py-1 text-xs"
+                                                                        className="w-20 rounded border border-zinc-700 px-1.5 py-1 text-xs"
                                                                     />
                                                                     <button
                                                                         onClick={() => void humanModify(p)}
                                                                         disabled={busy !== null}
-                                                                        className="rounded bg-indigo-600 px-2 py-1 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-40"
+                                                                        className="rounded bg-amber-400 px-2 py-1 text-xs font-semibold text-zinc-100 hover:bg-amber-400 disabled:opacity-40"
                                                                     >
                                                                         Save values
                                                                     </button>
@@ -1837,7 +1837,7 @@ export default function Workspace({
                                                     <button
                                                         onClick={() => void runExecute(p)}
                                                         disabled={busy !== null}
-                                                        className="mt-2 w-full rounded bg-gray-800 px-2 py-1 text-xs font-semibold text-white hover:bg-gray-700 disabled:opacity-40"
+                                                        className="mt-2 w-full rounded bg-zinc-800 px-2 py-1 text-xs font-semibold text-zinc-100 hover:bg-zinc-700 disabled:opacity-40"
                                                         title="Runs the dynamically-registered apply_approved_plan tool"
                                                     >
                                                         Execute Plan
@@ -1851,28 +1851,28 @@ export default function Workspace({
                         </div>
 
                         {/* Agent / Tool Activity */}
-                        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                        <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 shadow-sm">
                             <div className="mb-2 flex items-center justify-between">
-                                <h3 className="text-sm font-semibold text-gray-800">Agent Activity</h3>
-                                <button onClick={refreshState} disabled={busy !== null} className="text-xs font-medium text-gray-400 hover:text-gray-600">
+                                <h3 className="text-sm font-semibold text-zinc-100">Agent Activity</h3>
+                                <button onClick={refreshState} disabled={busy !== null} className="text-xs font-medium text-zinc-400 hover:text-zinc-300">
                                     {busy === 'refresh' ? '…' : 'Refresh'}
                                 </button>
                             </div>
                             <ul className="max-h-72 space-y-1.5 overflow-y-auto pr-1 text-xs">
                                 {localActivity.length === 0 ? (
-                                    <li className="text-gray-400">No agent activity yet.</li>
+                                    <li className="text-zinc-400">No agent activity yet.</li>
                                 ) : (
                                     localActivity.map((a) => (
-                                        <li key={a.id} className="flex items-start gap-2 rounded-md border border-gray-100 p-1.5">
-                                            <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[a.result_status] ?? 'bg-gray-400'}`} />
+                                        <li key={a.id} className="flex items-start gap-2 rounded-md border border-zinc-800/70 p-1.5">
+                                            <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[a.result_status] ?? 'bg-zinc-600'}`} />
                                             <div className="min-w-0">
                                                 <div className="flex flex-wrap items-center gap-1.5">
-                                                    <code className="rounded bg-gray-100 px-1 text-xs font-semibold text-gray-800">{a.tool_name}</code>
-                                                    <span className={`rounded-full px-1.5 text-[9px] font-bold ${AUTHORITY_COLOR[a.authority] ?? 'bg-gray-100 text-gray-600'}`}>{a.authority}</span>
+                                                    <code className="rounded bg-zinc-900 px-1 text-xs font-semibold text-zinc-100">{a.tool_name}</code>
+                                                    <span className={`rounded-full px-1.5 text-[9px] font-bold ${AUTHORITY_COLOR[a.authority] ?? 'bg-zinc-900 text-zinc-300'}`}>{a.authority}</span>
                                                 </div>
-                                                <div className="mt-0.5 text-xs text-gray-400">{fmtTime(a.created_at)} · {a.result_status}</div>
+                                                <div className="mt-0.5 text-xs text-zinc-400">{fmtTime(a.created_at)} · {a.result_status}</div>
                                                 {a.output_summary && (
-                                                    <pre className="mt-1 max-w-full overflow-x-auto rounded bg-gray-50 p-1 text-[9px] leading-tight text-gray-500">{JSON.stringify(a.output_summary)}</pre>
+                                                    <pre className="mt-1 max-w-full overflow-x-auto rounded bg-zinc-950/40 p-1 text-[9px] leading-tight text-zinc-500">{JSON.stringify(a.output_summary)}</pre>
                                                 )}
                                             </div>
                                         </li>
@@ -1884,35 +1884,35 @@ export default function Workspace({
                 </div>
 
                 {/* ============ BOTTOM: WebMCP diagnostics panel ============ */}
-                <div className="mt-6 rounded-xl border border-gray-200 bg-white shadow-sm">
+                <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900/60 shadow-sm">
                     <button
                         onClick={() => setDiagOpen((o) => !o)}
                         className="flex w-full items-center justify-between px-4 py-3 text-left"
                     >
-                        <span className="text-sm font-semibold text-gray-800">
+                        <span className="text-sm font-semibold text-zinc-100">
                             WebMCP Diagnostics
                             {snapshot?.webmcpAvailable ? (
-                                <span className="ms-2 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">document.modelContext active</span>
+                                <span className="ms-2 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-bold text-emerald-400">document.modelContext active</span>
                             ) : (
-                                <span className="ms-2 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-700">fallback (no WebMCP API)</span>
+                                <span className="ms-2 rounded-full bg-amber-400/10 px-2 py-0.5 text-xs font-bold text-amber-400">fallback (no WebMCP API)</span>
                             )}
                         </span>
-                        <span className="text-gray-400">{diagOpen ? '▾' : '▸'}</span>
+                        <span className="text-zinc-400">{diagOpen ? '▾' : '▸'}</span>
                     </button>
                     {diagOpen && (
-                        <div className="border-t border-gray-100 px-4 py-3">
+                        <div className="border-t border-zinc-800/70 px-4 py-3">
                             <div className="mb-2 flex flex-wrap gap-2 text-xs">
-                                <span className="rounded bg-gray-100 px-2 py-1 text-gray-600">Project #{project.id}</span>
-                                <span className={`rounded px-2 py-1 font-medium ${eligibleForExecution ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>
+                                <span className="rounded bg-zinc-900 px-2 py-1 text-zinc-300">Project #{project.id}</span>
+                                <span className={`rounded px-2 py-1 font-medium ${eligibleForExecution ? 'bg-emerald-500/15 text-emerald-400' : 'bg-zinc-900 text-zinc-300'}`}>
                                     eligible_for_execution: {eligibleForExecution ? 'true' : 'false'}
                                 </span>
-                                <span className="rounded bg-gray-100 px-2 py-1 text-gray-600">
+                                <span className="rounded bg-zinc-900 px-2 py-1 text-zinc-300">
                                     using_fallback: {String(snapshot?.usingFallback ?? false)}
                                 </span>
                             </div>
                             <table className="w-full text-left text-xs">
                                 <thead>
-                                    <tr className="border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400">
+                                    <tr className="border-b border-zinc-800/70 text-xs uppercase tracking-wide text-zinc-400">
                                         <th className="py-1.5 pr-2">Tool name</th>
                                         <th className="py-1.5 pr-2">Authority</th>
                                         <th className="py-1.5 pr-2">Dynamic</th>
@@ -1922,22 +1922,22 @@ export default function Workspace({
                                 </thead>
                                 <tbody>
                                     {(snapshot?.registered ?? []).map((t) => (
-                                        <tr key={t.name} className="border-b border-gray-50">
-                                            <td className="py-1.5 pr-2 font-mono text-xs text-gray-800">{t.name}</td>
+                                        <tr key={t.name} className="border-b border-zinc-800/70">
+                                            <td className="py-1.5 pr-2 font-mono text-xs text-zinc-100">{t.name}</td>
                                             <td className="py-1.5 pr-2">
                                                 <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${AUTHORITY_COLOR[t.authority] ?? ''}`}>{t.authority}</span>
                                             </td>
-                                            <td className="py-1.5 pr-2 text-gray-500">{t.dynamic ? '●' : '—'}</td>
-                                            <td className="py-1.5 pr-2 text-gray-400">{fmtTime(t.registeredAt)}</td>
-                                            <td className="py-1.5 text-gray-500">{snapshot?.webmcpAvailable ? 'registered' : 'fallback only'}</td>
+                                            <td className="py-1.5 pr-2 text-zinc-500">{t.dynamic ? '●' : '—'}</td>
+                                            <td className="py-1.5 pr-2 text-zinc-400">{fmtTime(t.registeredAt)}</td>
+                                            <td className="py-1.5 text-zinc-500">{snapshot?.webmcpAvailable ? 'registered' : 'fallback only'}</td>
                                         </tr>
                                     ))}
                                     {snapshot && snapshot.registered.length === 0 && (
-                                        <tr><td colSpan={5} className="py-2 text-gray-400">No tools registered (registry not started).</td></tr>
+                                        <tr><td colSpan={5} className="py-2 text-zinc-400">No tools registered (registry not started).</td></tr>
                                     )}
                                 </tbody>
                             </table>
-                            <div className="mt-2 text-xs text-gray-400">
+                            <div className="mt-2 text-xs text-zinc-400">
                                 apply_approved_plan is registered ONLY while an approved, unexecuted proposal exists — approve a proposal above to watch it appear, execute it to watch it disappear.
                             </div>
                         </div>
