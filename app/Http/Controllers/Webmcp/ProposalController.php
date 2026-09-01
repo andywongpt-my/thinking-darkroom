@@ -79,76 +79,76 @@ class ProposalController extends Controller
             ]);
         }
 
-        $items = collect($validated['items'])->map(function ($item) use ($type, $project) {
-            $merged = array_merge([
-                'kind' => $type === Domain::TYPE_CULL ? 'selection' : 'retouch_operation',
-            ], $item);
+        try {
+            $items = collect($validated['items'])->map(function ($item) use ($type, $project) {
+                $merged = array_merge([
+                    'kind' => $type === Domain::TYPE_CULL ? 'selection' : 'retouch_operation',
+                ], $item);
 
-            // Sprint 3 — context-aware enrichment for cull items: attach the
-            // structured recommendation evidence to the item's params so the
-            // photographer sees WHY, and the audit trail records WHAT moved it.
-            if ($type === Domain::TYPE_CULL && isset($item['photo_id'])) {
-                $photo = $project->photos()->where('photos.id', $item['photo_id'])->first();
-                if ($photo !== null) {
-                    $observation = $this->culling->observationFor($photo)
-                        ?? $this->observeSingle($project, $photo);
-                    if ($observation !== null) {
-                        $direction = app(CreativeRoomService::class)
-                            ->structuredIntentFor($project);
-                        $recommendation = $this->culling->recommend(
-                            $observation,
-                            $direction['intent'] ?? null,
-                        );
-                        $merged['params'] = array_merge($merged['params'] ?? [], [
-                            'context_aware' => true,
-                            'recommendation' => $recommendation['recommendation'],
-                            'confidence' => $recommendation['confidence'],
-                            'technical_rationale' => $recommendation['technical_rationale'],
-                            'creative_rationale' => $recommendation['creative_rationale'],
-                            'tradeoff' => $recommendation['tradeoff'],
-                            'influenced_by' => $recommendation['influenced_by'],
-                            'similarity_group' => $observation->similarityGroup,
-                            'observation_provenance' => [
-                                'technical' => $observation->provenance === Domain::OBSERVATION_PROVENANCE_DEMO_GD_UNAVAILABLE
-                                    ? $observation->provenance
-                                    : 'pixel_analysis',
-                                'creative' => 'demo_sidecar_annotation',
-                                'provider' => $observation->provider,
-                            ],
-                        ]);
-                    }
-                }
-            }
-
-            // Sprint 4 — Creative-Brief-aware enrichment for retouch items:
-            // derive the deterministic adjustment proposal from the photo's
-            // observation + adopted brief and attach it as evidence so the
-            // photographer sees WHY each adjustment was suggested. Still
-            // PROPOSE-only: nothing renders until approval + execute.
-            if (in_array($type, [Domain::TYPE_RETOUCH, Domain::TYPE_BATCH_RETOUCH], true) && isset($item['photo_id'])) {
-                $photo = $project->photos()->where('photos.id', $item['photo_id'])->first();
-                if ($photo !== null) {
-                    $observation = $this->culling->observationFor($photo)
-                        ?? $this->observeSingle($project, $photo);
-                    if ($observation !== null) {
-                        $retouchRec = $this->retouch->recommendForPhoto($project, $observation);
-                        if ($retouchRec !== null) {
+                // Sprint 3 — context-aware enrichment for cull items: attach the
+                // structured recommendation evidence to the item's params so the
+                // photographer sees WHY, and the audit trail records WHAT moved it.
+                if ($type === Domain::TYPE_CULL && isset($item['photo_id'])) {
+                    $photo = $project->photos()->where('photos.id', $item['photo_id'])->first();
+                    if ($photo !== null) {
+                        $observation = $this->culling->observationFor($photo)
+                            ?? $this->observeSingle($project, $photo);
+                        if ($observation !== null) {
+                            $direction = app(CreativeRoomService::class)
+                                ->structuredIntentFor($project);
+                            $recommendation = $this->culling->recommend(
+                                $observation,
+                                $direction['intent'] ?? null,
+                            );
                             $merged['params'] = array_merge($merged['params'] ?? [], [
-                                'brief_aware' => $retouchRec['has_brief'],
-                                'derived_adjustments' => $retouchRec['adjustments'],
-                                'adjustments_summary' => $retouchRec['adjustments_summary'],
-                                'retouch_influenced_by' => $retouchRec['influenced_by'],
-                                'retouch_note' => $retouchRec['note'],
+                                'context_aware' => true,
+                                'recommendation' => $recommendation['recommendation'],
+                                'confidence' => $recommendation['confidence'],
+                                'technical_rationale' => $recommendation['technical_rationale'],
+                                'creative_rationale' => $recommendation['creative_rationale'],
+                                'tradeoff' => $recommendation['tradeoff'],
+                                'influenced_by' => $recommendation['influenced_by'],
+                                'similarity_group' => $observation->similarityGroup,
+                                'observation_provenance' => [
+                                    'technical' => $observation->provenance === Domain::OBSERVATION_PROVENANCE_DEMO_GD_UNAVAILABLE
+                                        ? $observation->provenance
+                                        : 'pixel_analysis',
+                                    'creative' => 'demo_sidecar_annotation',
+                                    'provider' => $observation->provider,
+                                ],
                             ]);
                         }
                     }
                 }
-            }
 
-            return $merged;
-        })->all();
+                // Sprint 4 — Creative-Brief-aware enrichment for retouch items:
+                // derive the deterministic adjustment proposal from the photo's
+                // observation + adopted brief and attach it as evidence so the
+                // photographer sees WHY each adjustment was suggested. Still
+                // PROPOSE-only: nothing renders until approval + execute.
+                if (in_array($type, [Domain::TYPE_RETOUCH, Domain::TYPE_BATCH_RETOUCH], true) && isset($item['photo_id'])) {
+                    $photo = $project->photos()->where('photos.id', $item['photo_id'])->first();
+                    if ($photo !== null) {
+                        $observation = $this->culling->observationFor($photo)
+                            ?? $this->observeSingle($project, $photo);
+                        if ($observation !== null) {
+                            $retouchRec = $this->retouch->recommendForPhoto($project, $observation);
+                            if ($retouchRec !== null) {
+                                $merged['params'] = array_merge($merged['params'] ?? [], [
+                                    'brief_aware' => $retouchRec['has_brief'],
+                                    'derived_adjustments' => $retouchRec['adjustments'],
+                                    'adjustments_summary' => $retouchRec['adjustments_summary'],
+                                    'retouch_influenced_by' => $retouchRec['influenced_by'],
+                                    'retouch_note' => $retouchRec['note'],
+                                ]);
+                            }
+                        }
+                    }
+                }
 
-        try {
+                return $merged;
+            })->all();
+
             $proposal = $this->proposals->createProposal(
                 $project,
                 $request->user(),
@@ -157,7 +157,10 @@ class ProposalController extends Controller
                 $validated['summary'] ?? null,
                 ['created_via' => 'webmcp', 'tool' => $type === Domain::TYPE_CULL ? 'propose_cull' : 'propose_retouch_plan'],
             );
+        } catch (ValidationException $e) {
+            throw $e;
         } catch (\Throwable $e) {
+            report($e);
             $this->audit->record(
                 $request,
                 $project,
@@ -165,7 +168,7 @@ class ProposalController extends Controller
                 $type === Domain::TYPE_CULL ? 'propose_cull' : 'propose_retouch_plan',
                 Domain::AUTHORITY_PROPOSE,
                 $validated,
-                ['error' => $e->getMessage()],
+                ['error' => 'proposal_creation_failed'],
                 Domain::RESULT_ERROR,
             );
 
@@ -285,13 +288,13 @@ class ProposalController extends Controller
                 'apply_approved_plan',
                 Domain::AUTHORITY_EXECUTE,
                 ['proposal_id' => $proposal->id],
-                ['error' => $e->getMessage(), 'code' => 'execution_failed', 'exception' => class_basename($e)],
+                ['error' => 'execution_failed', 'code' => 'execution_failed', 'exception' => class_basename($e)],
                 Domain::RESULT_ERROR,
                 (hrtime(true) - $start) / 1e6,
             );
 
             return response()->json([
-                'error' => 'Execution failed unexpectedly: '.$e->getMessage(),
+                'error' => 'Execution failed unexpectedly.',
                 'code' => 'execution_failed',
             ], 422);
         }

@@ -1,6 +1,6 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import AgentChatPanel from '@/Components/AgentChatPanel';
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useWebmcpRegistry } from '@/webmcp/use-webmcp';
 import { webmcpApi } from '@/webmcp/api';
@@ -216,6 +216,48 @@ export function apiErrorReason(error: string | null, status: number): string {
     const message = error?.trim();
     if (message) return message;
     return status > 0 ? `request failed (HTTP ${status})` : 'request failed without a response';
+}
+
+/** Run a UI operation with a busy marker that always gets cleared. */
+export async function withBusyState<T>(
+    setBusy: (value: string | null) => void,
+    value: string,
+    operation: () => Promise<T>,
+): Promise<T> {
+    setBusy(value);
+
+    try {
+        return await operation();
+    } finally {
+        setBusy(null);
+    }
+}
+
+/** Handle a rejected human-reject request without leaving the UI busy. */
+export async function withHumanRejectErrorHandling<T>(
+    setBusy: (value: string | null) => void,
+    operation: () => Promise<T>,
+    setNotify: (notification: { kind: 'ok' | 'err'; text: string }) => void,
+): Promise<T | undefined> {
+    try {
+        return await withBusyState(setBusy, 'reject', operation);
+    } catch {
+        setNotify({ kind: 'err', text: 'Reject failed. Please try again.' });
+        return undefined;
+    }
+}
+
+/** Canonical project navigation into the photographer's Creative Room. */
+export function CreativeRoomLink({ projectId }: { projectId: number }) {
+    return (
+        <Link
+            href={route('creative.show', projectId)}
+            data-testid="workspace-creative-room-link"
+            className="rounded-md border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+        >
+            Creative Room →
+        </Link>
+    );
 }
 
 /**
@@ -745,13 +787,18 @@ export default function Workspace({
     };
 
     const humanReject = async (proposal: WorkspaceProposal) => {
-        setBusy('reject');
-        const resp = await fetch(route('proposals.reject', [project.id, proposal.id]), {
-            method: 'POST',
-            headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content ?? '' },
-        });
-        const j = await resp.json().catch(() => null);
-        setBusy(null);
+        const result = await withHumanRejectErrorHandling(setBusy, async () => {
+            const resp = await fetch(route('proposals.reject', [project.id, proposal.id]), {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content ?? '' },
+            });
+            const j = await resp.json().catch(() => null);
+
+            return { resp, j };
+        }, setNotify);
+        if (!result) return;
+
+        const { resp, j } = result;
         if (resp.ok) {
             setLocalProposals((ps) => ps.map((p) => (p.id === proposal.id ? { ...p, status: 'rejected' } : p)));
             addActivity({ tool_name: 'photographer_reject', authority: 'READ', result_status: 'completed', output_summary: { proposal_id: proposal.id, by: request.user.name } });
@@ -941,7 +988,14 @@ export default function Workspace({
     const webmcpUnavailable = !(snapshot?.webmcpAvailable ?? false) && !(snapshot?.usingFallback ?? false);
 
     return (
-        <AuthenticatedLayout header={<h2 className="text-xl font-semibold leading-tight text-gray-800">{project.name}</h2>}>
+        <AuthenticatedLayout
+            header={
+                <div className="flex items-center justify-between gap-4">
+                    <h2 className="text-xl font-semibold leading-tight text-gray-800">{project.name}</h2>
+                    <CreativeRoomLink projectId={project.id} />
+                </div>
+            }
+        >
             <Head title={project.name} />
 
             <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">

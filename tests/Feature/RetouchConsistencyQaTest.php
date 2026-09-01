@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Domain\Culling\PhotoObservation;
 use App\Domain\Domain;
+use App\Models\AgentToolCall;
 use App\Models\CreativeConcept;
 use App\Models\Photo;
 use App\Models\PhotoDerivative;
@@ -607,10 +608,21 @@ class RetouchConsistencyQaTest extends TestCase
 
         $this->instance(ProposalApplicator::class, $applicator);
 
-        $this->actingAs($agent)
+        $response = $this->actingAs($agent)
             ->postJson(route('api.webmcp.proposals.execute', [$project->id, $proposal->id]))
             ->assertStatus(422)
             ->assertJsonPath('code', 'execution_failed');
+
+        $this->assertStringNotContainsString('Call to private method (simulated)', (string) $response->getContent());
+        $this->assertSame(
+            'execution_failed',
+            AgentToolCall::query()
+                ->where('project_id', $project->id)
+                ->where('tool_name', 'apply_approved_plan')
+                ->latest('id')
+                ->firstOrFail()
+                ->output_summary['error'],
+        );
 
         $this->assertSame(Domain::STATE_APPROVED, $proposal->fresh()->status);
         $this->assertNull($proposal->fresh()->executed_at);

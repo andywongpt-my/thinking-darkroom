@@ -122,6 +122,18 @@ export function bindConceptAutoRefresh(refreshList: () => Promise<unknown> | unk
     });
 }
 
+/**
+ * The brief and activity feed are Inertia-owned state. Keeping them derived
+ * from the current page props means a partial router reload replaces the
+ * Creative Canvas and collaboration feed with the newly persisted values.
+ */
+export function creativeRoomViewState(
+    brief: PageProps['brief'],
+    activity: PageProps['agent_activity'],
+): { brief: PageProps['brief']; activity: PageProps['agent_activity'] } {
+    return { brief, activity };
+}
+
 /* ------------------------------------------------------------ component */
 
 export default function CreativeRoom() {
@@ -148,14 +160,13 @@ export default function CreativeRoom() {
     /* ------------------------------- state -------------------------------- */
     const [concepts, setConcepts] = useState<ConceptPayload[]>(initialConcepts);
     const [adoptedId, setAdoptedId] = useState<number | null>(initialAdoptedId);
-    const [brief, setBrief] = useState(initialBrief);
+    const { brief, activity } = creativeRoomViewState(initialBrief, initialActivity);
     const [brainstormInput, setBrainstormInput] = useState('');
     const [brainstormOpen, setBrainstormOpen] = useState(false);
     const [mergeSelection, setMergeSelection] = useState<number[]>([]);
     const [busy, setBusy] = useState<string | null>(null);
     const [notify, setNotify] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
     const [conceptsError, setConceptsError] = useState<string | null>(null);
-    const [activity, setActivity] = useState(initialActivity);
 
     const adopted = useMemo(
         () => concepts.find((c) => c.id === adoptedId && c.status === 'adopted') ?? null,
@@ -243,7 +254,6 @@ export default function CreativeRoom() {
         if (res.ok && res.data) {
             const refreshed = await refreshList();
             if (!refreshed) return;
-            setBrief((b) => b ?? null);
             setNotify({ kind: 'ok', text: `Creative direction adopted: "${concept.title}". Structured brief persisted.` });
             reloadPage();
         } else {

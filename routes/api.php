@@ -49,14 +49,26 @@ Route::middleware(['auth:sanctum', 'webmcp.agent-or-user'])->group(function () {
     Route::get('projects/{project}/creative/concepts/{concept}', [CreativeRoomController::class, 'concept'])->name('api.webmcp.creative.concepts.show');
 
     // Sprint 2 — Creative Room PROPOSE tools (never adopt / approve).
-    Route::post('projects/{project}/creative/concepts', [CreativeRoomController::class, 'proposeConcepts'])->name('api.webmcp.creative.concepts');
-    Route::post('projects/{project}/creative/concepts/{concept}/revise', [CreativeRoomController::class, 'proposeConceptRevision'])->name('api.webmcp.creative.concepts.revise');
-    Route::post('projects/{project}/creative/merge', [CreativeRoomController::class, 'proposeConceptMerge'])->name('api.webmcp.creative.merge');
-    Route::post('projects/{project}/creative/brief-proposal', [CreativeRoomController::class, 'proposeCreativeBrief'])->name('api.webmcp.creative.brief-proposal');
+    Route::post('projects/{project}/creative/concepts', [CreativeRoomController::class, 'proposeConcepts'])
+        ->middleware('throttle:webmcp-propose')
+        ->name('api.webmcp.creative.concepts');
+    Route::post('projects/{project}/creative/concepts/{concept}/revise', [CreativeRoomController::class, 'proposeConceptRevision'])
+        ->middleware('throttle:webmcp-propose')
+        ->name('api.webmcp.creative.concepts.revise');
+    Route::post('projects/{project}/creative/merge', [CreativeRoomController::class, 'proposeConceptMerge'])
+        ->middleware('throttle:webmcp-propose')
+        ->name('api.webmcp.creative.merge');
+    Route::post('projects/{project}/creative/brief-proposal', [CreativeRoomController::class, 'proposeCreativeBrief'])
+        ->middleware('throttle:webmcp-propose')
+        ->name('api.webmcp.creative.brief-proposal');
 
     // PROPOSE authority (never changes creative state).
-    Route::post('projects/{project}/proposals/cull', [ProposalController::class, 'proposeCull'])->name('api.webmcp.proposals.cull');
-    Route::post('projects/{project}/proposals/retouch-plan', [ProposalController::class, 'proposeRetouchPlan'])->name('api.webmcp.proposals.retouch');
+    Route::post('projects/{project}/proposals/cull', [ProposalController::class, 'proposeCull'])
+        ->middleware('throttle:webmcp-propose')
+        ->name('api.webmcp.proposals.cull');
+    Route::post('projects/{project}/proposals/retouch-plan', [ProposalController::class, 'proposeRetouchPlan'])
+        ->middleware('throttle:webmcp-propose')
+        ->name('api.webmcp.proposals.retouch');
 
     Route::post('projects/{project}/qa/review', [QaController::class, 'review'])
         ->middleware('throttle:webmcp-analysis')

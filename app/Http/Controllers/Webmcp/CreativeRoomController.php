@@ -177,11 +177,12 @@ class CreativeRoomController extends Controller
                 }
             });
         } catch (\Throwable $e) {
+            report($e);
             $this->audit->record(
                 $request, $project, $request->user(),
                 'propose_concepts', Domain::AUTHORITY_PROPOSE,
                 ['concepts' => count($validated['concepts'] ?? [])],
-                ['error' => $e->getMessage()],
+                ['error' => 'concept_proposal_failed'],
                 Domain::RESULT_ERROR,
             );
 
@@ -218,15 +219,33 @@ class CreativeRoomController extends Controller
             'items' => ['sometimes', 'array'],
         ]);
 
-        $child = $this->creative->proposeConceptRevision(
-            $project,
-            $request->user(),
-            $concept,
-            $validated['title'],
-            $validated['summary'] ?? null,
-            $validated['content'],
-            $validated['items'] ?? null,
-        );
+        try {
+            $child = $this->creative->proposeConceptRevision(
+                $project,
+                $request->user(),
+                $concept,
+                $validated['title'],
+                $validated['summary'] ?? null,
+                $validated['content'],
+                $validated['items'] ?? null,
+            );
+        } catch (ValidationException $e) {
+            throw $e;
+        } catch (\Throwable $e) {
+            report($e);
+            $this->audit->record(
+                $request,
+                $project,
+                $request->user(),
+                'propose_concept_revision',
+                Domain::AUTHORITY_PROPOSE,
+                ['source_concept_id' => $concept->id],
+                ['error' => 'concept_revision_failed'],
+                Domain::RESULT_ERROR,
+            );
+
+            return response()->json(['error' => 'Concept revision proposal failed.'], 422);
+        }
 
         $this->audit->record(
             $request, $project, $request->user(),
@@ -269,9 +288,19 @@ class CreativeRoomController extends Controller
         } catch (ValidationException $e) {
             throw $e;
         } catch (\Throwable $e) {
-            throw ValidationException::withMessages([
-                'sources' => $e->getMessage(),
-            ]);
+            report($e);
+            $this->audit->record(
+                $request,
+                $project,
+                $request->user(),
+                'propose_concept_merge',
+                Domain::AUTHORITY_PROPOSE,
+                ['sources' => array_column($validated['sources'], 'concept_id')],
+                ['error' => 'concept_merge_failed'],
+                Domain::RESULT_ERROR,
+            );
+
+            return response()->json(['error' => 'Concept merge proposal failed.'], 422);
         }
 
         $this->audit->record(
@@ -317,8 +346,35 @@ class CreativeRoomController extends Controller
                 $validated['title'],
                 $validated['payload'],
             );
+        } catch (ValidationException $e) {
+            throw $e;
         } catch (\LogicException $e) {
+            $this->audit->record(
+                $request,
+                $project,
+                $request->user(),
+                'propose_creative_brief',
+                Domain::AUTHORITY_PROPOSE,
+                ['source_concept_id' => $source?->id],
+                ['error' => 'photographer_required'],
+                Domain::RESULT_DENIED,
+            );
+
             return response()->json(['error' => $e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            report($e);
+            $this->audit->record(
+                $request,
+                $project,
+                $request->user(),
+                'propose_creative_brief',
+                Domain::AUTHORITY_PROPOSE,
+                ['source_concept_id' => $source?->id],
+                ['error' => 'creative_brief_proposal_failed'],
+                Domain::RESULT_ERROR,
+            );
+
+            return response()->json(['error' => 'Creative brief proposal failed.'], 422);
         }
 
         $this->audit->record(

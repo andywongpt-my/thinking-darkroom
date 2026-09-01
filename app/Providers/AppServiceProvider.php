@@ -40,6 +40,8 @@ class AppServiceProvider extends ServiceProvider
             ->by(self::actorProjectThrottleKey($request, 'analysis')));
         RateLimiter::for('workspace-upload', fn (Request $request) => Limit::perMinute(12)
             ->by(self::actorProjectThrottleKey($request, 'upload')));
+        RateLimiter::for('webmcp-propose', fn (Request $request) => Limit::perMinute(20)
+            ->by(self::actorProjectThrottleKey($request, 'propose')));
         RateLimiter::for('webmcp-presence', fn (Request $request) => Limit::perMinute(30)
             ->by(self::actorProjectThrottleKey($request, 'presence')));
     }

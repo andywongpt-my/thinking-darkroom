@@ -312,6 +312,37 @@ describe('Sprint 2 — Creative Room page (Task 10)', () => {
         expect(html).toContain('natural skin, preserve texture');
     });
 
+    it('M2 uses the latest adopted brief and activity props for the Creative Canvas after reload', async () => {
+        const pageModule = await import('@/Pages/CreativeRoom');
+        const adoptedBrief = {
+            id: 9,
+            creative_direction: 'Adopted shoreline quiet',
+            adopted_at: '2026-09-01T02:30:00.000Z',
+            payload: { mood: ['quiet shoreline'], lighting: ['overcast'] } as Record<string, unknown>,
+        };
+        const latestActivity = [{
+            id: 90,
+            tool_name: 'propose_concepts',
+            authority: 'PROPOSE',
+            result_status: 'completed',
+            output_summary: { concepts: 1 },
+            created_at: '2026-09-01T02:31:00.000Z',
+        }];
+
+        const state = pageModule.creativeRoomViewState(adoptedBrief, latestActivity);
+        expect(state.brief).toBe(adoptedBrief);
+        expect(state.activity).toBe(latestActivity);
+
+        const html = ssrText(mountPage({
+            concepts: [concept({ id: 19, title: 'Shoreline Quiet', status: 'adopted' })],
+            adopted_concept_id: 19,
+            brief: adoptedBrief,
+            agent_activity: latestActivity,
+        }));
+        expect(html).toContain('quiet shoreline');
+        expect(html).toContain('propose_concepts');
+    });
+
     it('8. the persisted Creative Brief renders in the collaboration/context area', () => {
         const html = mountPage({
             concepts: [concept({ id: 12, status: 'adopted' })],
