@@ -1,3 +1,9 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Darkroom theme: native browser controls (scrollbars, form widgets,
+   autofill) must follow the dark canvas. */
+html {
+    color-scheme: dark;
+}
