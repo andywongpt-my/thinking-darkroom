@@ -2,3 +2,6 @@ dist/
 .vercel
 .env
 .env.e2e
+
+# Local destructive repro script; never upload it to Vercel.
+/repro-execute-500.php
