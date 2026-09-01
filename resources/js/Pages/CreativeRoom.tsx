@@ -1,9 +1,10 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useWebmcpRegistry } from '@/webmcp/use-webmcp';
 import { webmcpApi } from '@/webmcp/api';
 import { onConceptMutatingActivity } from '@/webmcp/events';
+import { autoDismissNotification } from '@/webmcp/notifications';
 import type { ConceptPayload } from '@/webmcp/api';
 
 /* ------------------------------------------------------------------ types */
@@ -166,7 +167,10 @@ export default function CreativeRoom() {
     const [mergeSelection, setMergeSelection] = useState<number[]>([]);
     const [busy, setBusy] = useState<string | null>(null);
     const [notify, setNotify] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+    const notifyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [conceptsError, setConceptsError] = useState<string | null>(null);
+
+    useEffect(() => autoDismissNotification(notify, busy, setNotify, notifyTimer), [notify, busy]);
 
     const adopted = useMemo(
         () => concepts.find((c) => c.id === adoptedId && c.status === 'adopted') ?? null,
@@ -315,12 +319,12 @@ export default function CreativeRoom() {
                     <h2 className="text-xl font-semibold leading-tight text-zinc-100">
                         Creative Room — {project.name}
                     </h2>
-                    <a
+                    <Link
                         href={route('workspace.show', project.id)}
                         className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-300 hover:bg-zinc-800/60"
                     >
                         ← Workspace
-                    </a>
+                    </Link>
                 </div>
             }
         >
@@ -338,9 +342,17 @@ export default function CreativeRoom() {
                         role="status"
                         aria-live="polite"
                         data-testid="creative-room-notify"
-                        className={`mb-4 rounded-lg border px-4 py-3 text-sm ${notify.kind === 'ok' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-rose-500/30 bg-rose-500/10 text-rose-400'}`}
+                        className={`mb-4 flex items-start justify-between gap-3 rounded-lg border px-4 py-3 text-sm ${notify.kind === 'ok' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-rose-500/30 bg-rose-500/10 text-rose-400'}`}
                     >
-                        {notify.text}
+                        <span>{notify.text}</span>
+                        <button
+                            type="button"
+                            aria-label="Dismiss notification"
+                            onClick={() => setNotify(null)}
+                            className="shrink-0 rounded px-1 text-lg leading-none text-current/70 transition hover:text-current focus:outline-none focus-visible:ring-2 focus-visible:ring-current"
+                        >
+                            ×
+                        </button>
                     </div>
                 )}
 
@@ -502,7 +514,7 @@ export default function CreativeRoom() {
                                                 key={c.id}
                                                 data-testid={`concept-card-${c.id}`}
                                                 data-status={c.status}
-                                                className={`rounded-xl border-2 ${style.ring} bg-zinc-900/60 p-4 ${isAdopted ? 'shadow-md shadow-emerald-100' : ''} ${c.status === 'rejected' ? 'opacity-70' : ''}`}
+                                                className={`rounded-xl border-2 ${style.ring} bg-zinc-900/60 p-4 ${isAdopted ? 'shadow-md shadow-emerald-500/40' : ''} ${c.status === 'rejected' ? 'opacity-70' : ''}`}
                                             >
                                                 <div className="mb-2 flex items-start justify-between gap-2">
                                                     <h4 className="text-sm font-bold text-zinc-50">{c.title}</h4>
@@ -572,7 +584,7 @@ export default function CreativeRoom() {
                                                         <button
                                                             onClick={() => doAdopt(c)}
                                                             disabled={busy !== null}
-                                                            className="ms-auto rounded bg-emerald-500 px-2.5 py-1 text-xs font-bold text-zinc-100 hover:bg-emerald-500 disabled:opacity-40"
+                                                            className="ms-auto rounded bg-emerald-500 px-2.5 py-1 text-xs font-bold text-zinc-100 hover:bg-emerald-400 disabled:opacity-40"
                                                             title="Adopt as the project's current Creative Direction"
                                                         >
                                                             Adopt as Creative Direction
@@ -655,7 +667,7 @@ export default function CreativeRoom() {
                         </section>
 
                         {brief && (
-                            <section className="rounded-xl border border-emerald-500/30 bg-emerald-500/10/60 p-4 shadow-sm">
+                            <section className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 shadow-sm">
                                 <h3 className="mb-1 text-sm font-semibold text-emerald-300">Structured Creative Brief</h3>
                                 <p className="text-xs text-emerald-400">
                                     {brief.creative_direction} · adopted {fmtTime(brief.adopted_at)}

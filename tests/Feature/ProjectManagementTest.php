@@ -159,8 +159,10 @@ class ProjectManagementTest extends TestCase
         Storage::fake('public');
 
         $owner = User::factory()->create();
+        $photographer = User::factory()->create();
         $project = Project::factory()->create(['owner_id' => $owner->id]);
         $project->members()->attach($owner->id, ['role' => Domain::ROLE_OWNER]);
+        $project->members()->attach($photographer->id, ['role' => Domain::ROLE_PHOTOGRAPHER]);
         $media = app(MediaStore::class);
         $original = $media->writeBytes('project-'.$project->id, 'original bytes', 'original.jpg', 'image/jpeg');
         $photo = Photo::factory()->create([
@@ -184,7 +186,7 @@ class ProjectManagementTest extends TestCase
 
         $response = $this
             ->from(route('workspace.show', $project))
-            ->actingAs($owner)
+            ->actingAs($photographer)
             ->delete(route('workspace.photos.destroy', [$project, $photo]));
 
         $response

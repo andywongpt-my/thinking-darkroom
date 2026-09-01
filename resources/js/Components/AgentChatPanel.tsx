@@ -202,7 +202,7 @@ export default function AgentChatPanel({
                         role="log"
                         aria-live="polite"
                         aria-relevant="additions"
-                        className="min-h-64 flex-1 space-y-3 overflow-y-auto bg-zinc-950/40/60 px-4 py-4"
+                        className="min-h-64 flex-1 space-y-3 overflow-y-auto bg-zinc-950/60 px-4 py-4"
                     >
                         {messages.length === 0 ? (
                             <div className="rounded-xl border border-dashed border-zinc-700 bg-zinc-900/60 px-4 py-5 text-center">
@@ -322,7 +322,7 @@ export default function AgentChatPanel({
                 />
                 Chat with agent
                 {messages.length > 0 && (
-                    <span className="rounded-full bg-zinc-900/60/15 px-1.5 py-0.5 text-[10px]">
+                    <span className="rounded-full bg-zinc-900/15 px-1.5 py-0.5 text-[10px]">
                         {messages.length}
                     </span>
                 )}

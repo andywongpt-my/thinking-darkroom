@@ -434,16 +434,38 @@ class WorkspacePageController extends Controller
 
         $media = app(MediaStore::class);
 
-        DB::transaction(function () use ($media, $photo): void {
+        // Collect storage paths inside the transaction, delete the bytes AFTER
+        // it commits: byte stores cannot roll back, so deleting inside the
+        // transaction would orphan the row if the record delete ever failed
+        // (AGY 2026-09-02 audit Finding 1).
+        $paths = DB::transaction(function () use ($photo): array {
+            $paths = [];
+
             foreach (PhotoDerivative::query()->where('photo_id', $photo->id)->get() as $derivative) {
-                $this->tryDeleteMedia($media, $derivative->storage_path);
+                if ($this->deletablePath($derivative->storage_path)) {
+                    $paths[] = $derivative->storage_path;
+                }
             }
 
-            $this->tryDeleteMedia($media, $photo->path);
+            if ($this->deletablePath($photo->path)) {
+                $paths[] = $photo->path;
+            }
+
             $photo->delete();
+
+            return $paths;
         });
 
+        foreach ($paths as $path) {
+            $this->tryDeleteMedia($media, $path);
+        }
+
         return back()->with('flash', ['success' => 'Photo deleted.']);
+    }
+
+    private function deletablePath(?string $path): bool
+    {
+        return $path !== null && $path !== '';
     }
 
     private function tryDeleteMedia(MediaStore $mediaStore, ?string $path): void

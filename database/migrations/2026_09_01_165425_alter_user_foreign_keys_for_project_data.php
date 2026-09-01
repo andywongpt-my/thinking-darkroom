@@ -86,6 +86,9 @@ return new class extends Migration
 
     private function restoreRequiredUserForeignKey(string $tableName, string $columnName): void
     {
+        // NOTE (AGY 2026-09-02 audit Finding 2): rolling back fails with MySQL
+        // error 1138 if any rows hold NULL user IDs from nullOnDelete() while
+        // this migration was active. Backfill or purge those rows first.
         Schema::table($tableName, function (Blueprint $table) use ($columnName) {
             $table->dropForeign([$columnName]);
         });

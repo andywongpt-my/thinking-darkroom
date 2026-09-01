@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createElement, Fragment } from 'react';
 import { renderToString } from 'react-dom/server';
+import { autoDismissNotification } from '@/webmcp/notifications';
 
 vi.mock('@inertiajs/react', () => ({
     Head: ({ children }: { children?: React.ReactNode }) => createElement(Fragment, null, children),
@@ -79,5 +80,123 @@ describe('Workspace audit regressions', () => {
         expect(html).toContain('data-testid="workspace-creative-room-link"');
         expect(html).toContain('href="/projects/42/creative"');
         expect(html).toContain('Creative Room');
+    });
+
+    it('C2 renders the photographer decision ledger with a note and timestamp', () => {
+        const html = renderToString(
+            createElement(WorkspacePage.DecisionLedger, {
+                decisions: [{
+                    id: 12,
+                    proposal_id: 4,
+                    photographer: 'Maya',
+                    decision: 'keep',
+                    note: 'The expression carries the frame.',
+                    decided_at: '2026-09-02T03:04:05.000Z',
+                }],
+            }),
+        );
+
+        expect(html).toContain('data-testid="decision-history-panel"');
+        expect(html).toContain('KEEP');
+        expect(html).toContain('The expression carries the frame.');
+        expect(html).toContain('Maya');
+        expect(html).toContain('2026');
+    });
+
+    it('C3 renders the selected photo lens from the eager inspection map over server EXIF', () => {
+        const html = renderToString(
+            createElement(WorkspacePage.PhotoExifGrid, {
+                photo: {
+                    id: 1,
+                    filename: 'frame-001.jpg',
+                    url: null,
+                    mime: 'image/jpeg',
+                    width: 1000,
+                    height: 667,
+                    size_bytes: 1,
+                    selection_state: 'unreviewed',
+                    retouch_state: 'none',
+                    camera_model: null,
+                    iso: null,
+                    original_name: null,
+                    lens: null,
+                    aperture: null,
+                    shutter_speed: null,
+                    focal_length: null,
+                    dimensions: null,
+                },
+                inspected: {
+                    lens: '50mm f/1.8',
+                    dimensions: '1000×667',
+                },
+            }),
+        );
+
+        expect(html).toContain('data-testid="photo-exif-grid"');
+        expect(html).toContain('Lens:');
+        expect(html).toContain('50mm f/1.8');
+        expect(html).toContain('1000×667');
+    });
+
+    it('A6 keeps execute blocked until the confirmation callback runs', () => {
+        const target = { id: 42 };
+        const runExecute = vi.fn();
+        let confirm!: () => void;
+        const html = renderToString(
+            createElement(WorkspacePage.WorkspaceConfirmDialog, {
+                show: true,
+                title: 'Execute plan?',
+                description: 'This applies 2 operations to 2 photos.',
+                processing: false,
+                confirmTestId: 'workspace-confirm-execute',
+                onClose: vi.fn(),
+                onConfirm: () => {
+                    WorkspacePage.runAfterConfirmation(target, true, runExecute);
+                },
+            }),
+        );
+        confirm = () => WorkspacePage.runAfterConfirmation(target, true, runExecute);
+
+        expect(html).toContain('workspace-confirm-execute');
+        expect(html).toContain('2 photos');
+        expect(WorkspacePage.runAfterConfirmation(target, false, runExecute)).toBe(false);
+        expect(runExecute).not.toHaveBeenCalled();
+
+        confirm();
+        expect(runExecute).toHaveBeenCalledWith(target);
+    });
+
+    it('A20 auto-dismisses a notification after five seconds but not while busy', () => {
+        vi.useFakeTimers();
+        try {
+            const notifications = vi.fn();
+            const timerRef: { current: ReturnType<typeof setTimeout> | null } = { current: null };
+            const cleanup = autoDismissNotification(
+                { kind: 'ok', text: 'Saved.' },
+                null,
+                notifications,
+                timerRef,
+            );
+
+            vi.advanceTimersByTime(4999);
+            expect(notifications).not.toHaveBeenCalled();
+            vi.advanceTimersByTime(1);
+            expect(notifications).toHaveBeenCalledWith(null);
+            cleanup();
+
+            const busyNotifications = vi.fn();
+            const busyTimerRef: { current: ReturnType<typeof setTimeout> | null } = { current: null };
+            const busyCleanup = autoDismissNotification(
+                { kind: 'ok', text: 'Still processing.' },
+                'execute',
+                busyNotifications,
+                busyTimerRef,
+            );
+            vi.advanceTimersByTime(5000);
+            expect(busyNotifications).not.toHaveBeenCalled();
+            busyCleanup();
+        } finally {
+            vi.useRealTimers();
+        }
     });
 });

@@ -6,6 +6,7 @@ import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useWebmcpRegistry } from '@/webmcp/use-webmcp';
 import { webmcpApi } from '@/webmcp/api';
+import { autoDismissNotification } from '@/webmcp/notifications';
 import type {
     AgentConversation,
     AgentPresence,
@@ -186,6 +187,12 @@ const STATUS_DOT: Record<string, string> = {
     error: 'bg-rose-500',
 };
 
+const DECISION_BADGE: Record<string, string> = {
+    keep: 'bg-emerald-500/15 text-emerald-300',
+    review: 'bg-amber-400/10 text-amber-300',
+    reject: 'bg-rose-500/15 text-rose-300',
+};
+
 function fmtTime(iso: string | null): string {
     if (!iso) return '—';
     return new Date(iso).toLocaleString();
@@ -247,6 +254,17 @@ export async function withHumanRejectErrorHandling<T>(
         setNotify({ kind: 'err', text: 'Reject failed. Please try again.' });
         return undefined;
     }
+}
+
+/** Run a destructive workspace action only from an explicit confirmation. */
+export function runAfterConfirmation<T>(
+    target: T | null,
+    confirmed: boolean,
+    action: (target: T) => void,
+): boolean {
+    if (!confirmed || target === null) return false;
+    action(target);
+    return true;
 }
 
 /** Canonical project navigation into the photographer's Creative Room. */
@@ -313,6 +331,137 @@ export function PhotoDeleteDialog({
     );
 }
 
+export function WorkspaceConfirmDialog({
+    show,
+    title,
+    description,
+    processing,
+    confirmTestId,
+    onClose,
+    onConfirm,
+    eyebrow = 'IRREVERSIBLE CUT',
+    cancelLabel = 'KEEP',
+    confirmLabel = 'PROCEED',
+}: {
+    show: boolean;
+    title: string;
+    description: string;
+    processing: boolean;
+    confirmTestId: string;
+    onClose: () => void;
+    onConfirm: () => void;
+    eyebrow?: string;
+    cancelLabel?: string;
+    confirmLabel?: string;
+}) {
+    return (
+        <Modal show={show} onClose={onClose} maxWidth="md">
+            <div className="bg-zinc-900 p-6 text-zinc-100 sm:p-7">
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-rose-300">{eyebrow}</p>
+                <h2 className="mt-2 text-xl font-semibold text-zinc-100">{title}</h2>
+                <p className="mt-3 text-sm leading-relaxed text-zinc-400">{description}</p>
+                <div className="mt-6 flex flex-wrap justify-end gap-3 border-t border-zinc-800 pt-5">
+                    <button
+                        type="button"
+                        data-testid={`${confirmTestId}-cancel`}
+                        onClick={onClose}
+                        disabled={processing}
+                        className="rounded-md border border-zinc-700 px-4 py-2 text-xs font-semibold tracking-[0.12em] text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        {cancelLabel}
+                    </button>
+                    <DangerButton
+                        type="button"
+                        data-testid={confirmTestId}
+                        aria-label={confirmLabel}
+                        onClick={onConfirm}
+                        disabled={processing}
+                    >
+                        {processing ? 'PROCESSING…' : confirmLabel}
+                    </DangerButton>
+                </div>
+            </div>
+        </Modal>
+    );
+}
+
+/** Render the latest photographer decisions in the workspace side rail. */
+export function DecisionLedger({ decisions }: { decisions: WorkspaceDecision[] }) {
+    return (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 shadow-sm" data-testid="decision-history-panel">
+            <div className="mb-2 flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-zinc-100">Decision ledger</h3>
+                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-zinc-500">
+                    {decisions.length} recorded
+                </span>
+            </div>
+            {decisions.length === 0 ? (
+                <p className="text-xs text-zinc-500">No photographer decisions recorded yet.</p>
+            ) : (
+                <ul className="space-y-2">
+                    {decisions.map((entry) => {
+                        const key = entry.decision.toLowerCase();
+                        return (
+                            <li key={entry.id} className="rounded-lg border border-zinc-800/70 p-2" data-testid={`decision-${entry.id}`}>
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex min-w-0 items-center gap-2">
+                                        <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold tracking-wide ${DECISION_BADGE[key] ?? 'bg-zinc-800 text-zinc-200'}`}>
+                                            {entry.decision.toUpperCase()}
+                                        </span>
+                                        <span className="truncate text-xs text-zinc-300">{entry.photographer ?? 'photographer'}</span>
+                                    </div>
+                                    <time className="shrink-0 text-[10px] text-zinc-500" dateTime={entry.decided_at}>
+                                        {fmtTime(entry.decided_at)}
+                                    </time>
+                                </div>
+                                {entry.note && (
+                                    <p className="mt-1.5 text-xs leading-relaxed text-zinc-400">“{entry.note}”</p>
+                                )}
+                            </li>
+                        );
+                    })}
+                </ul>
+            )}
+        </div>
+    );
+}
+
+export function mergeInspectedPhoto(
+    photo: WorkspacePhoto,
+    inspected?: Partial<WorkspacePhoto>,
+): WorkspacePhoto {
+    return { ...photo, ...(inspected ?? {}) };
+}
+
+function photoDimensions(photo: WorkspacePhoto): string {
+    if (photo.dimensions) return photo.dimensions;
+    if (photo.width !== null && photo.height !== null) return `${photo.width}×${photo.height}`;
+    return '—';
+}
+
+/** Render EXIF fields from the server summary plus eager photo inspection. */
+export function PhotoExifGrid({
+    photo,
+    inspected,
+}: {
+    photo: WorkspacePhoto;
+    inspected?: Partial<WorkspacePhoto>;
+}) {
+    const details = mergeInspectedPhoto(photo, inspected);
+
+    return (
+        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-zinc-300" data-testid="photo-exif-grid">
+            <span>Model: <b>{details.camera_model ?? '—'}</b></span>
+            <span>ISO: <b>{details.iso ?? '—'}</b></span>
+            <span>Lens: <b>{details.lens ?? '—'}</b></span>
+            <span>Aperture: <b>{details.aperture ?? '—'}</b></span>
+            <span>Shutter: <b>{details.shutter_speed ?? '—'}</b></span>
+            <span>Focal: <b>{details.focal_length ?? '—'}</b></span>
+            <span>Dimensions: <b>{photoDimensions(details)}</b></span>
+        </div>
+    );
+}
+
 /**
  * The per-photo READ endpoint documents 409 as the normal pre-analysis state:
  * observations do not exist until the agent explicitly runs ANALYZE.
@@ -359,6 +508,10 @@ function numericAdjustments(params: Record<string, unknown> | null | undefined):
         }
     }
     return out;
+}
+
+function proposalPhotoCount(proposal: WorkspaceProposal): number {
+    return new Set(proposal.items.map((item) => item.photo_id)).size;
 }
 
 /* ---------------- Sprint 3 — context-aware culling constants ---------------- */
@@ -454,6 +607,9 @@ export default function Workspace({
     const [selectedId, setSelectedId] = useState<number | null>(photos[0]?.id ?? null);
     const [deletePhotoId, setDeletePhotoId] = useState<number | null>(null);
     const [deletingPhoto, setDeletingPhoto] = useState(false);
+    const [rejectTargetId, setRejectTargetId] = useState<number | null>(null);
+    const [executeTargetId, setExecuteTargetId] = useState<number | null>(null);
+    const [dismissQaTargetId, setDismissQaTargetId] = useState<number | null>(null);
     const [localProposals, setLocalProposals] = useState<WorkspaceProposal[]>(proposals);
     const [localActivity, setLocalActivity] = useState<ActivityEntry[]>(activity);
     const [references, setReferences] = useState<unknown[]>([]);
@@ -464,13 +620,14 @@ export default function Workspace({
     /* ---------------- Sprint 4 — retouch / QA / creative memory state ---------------- */
 
     // Retouch truth card (server-rendered three-layer history).
-    const [retouchCard] = useState<RetouchCard | null>(pageRetouchCard ?? null);
+    const retouchCard = pageRetouchCard ?? null;
     const retouchRenderFailed = Boolean(retouchCard?.executed && !retouchCard.derivative);
     const [notify, setNotify] = useState<{ kind: 'ok' | 'err'; text: string } | null>(
         retouchRenderFailed
             ? { kind: 'err', text: 'Retouch render failed: no approved derivative was stored.' }
             : null,
     );
+    const notifyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const uploadRef = useRef<HTMLInputElement>(null);
     // Persisted QA findings, locally updated after photographer QA actions.
     const [qaFindings, setQaFindings] = useState<QaFindingRow[]>(pageQaFindings ?? []);
@@ -478,6 +635,24 @@ export default function Workspace({
     const [memories, setMemories] = useState<CreativeMemoryRow[]>(pageCreativeMemories ?? []);
     // Which retouch proposal's modify form is open.
     const [modifyOpenFor, setModifyOpenFor] = useState<number | null>(null);
+
+    useEffect(() => {
+        setLocalProposals(proposals);
+    }, [proposals]);
+
+    useEffect(() => {
+        setLocalActivity(activity);
+    }, [activity]);
+
+    useEffect(() => {
+        setQaFindings(pageQaFindings ?? []);
+    }, [pageQaFindings]);
+
+    useEffect(() => {
+        setMemories(pageCreativeMemories ?? []);
+    }, [pageCreativeMemories]);
+
+    useEffect(() => autoDismissNotification(notify, busy, setNotify, notifyTimer), [notify, busy]);
 
     /** Agent's original numeric adjustments for a retouch proposal. */
     const agentValuesFor = (p: WorkspaceProposal): Record<string, number> =>
@@ -507,6 +682,9 @@ export default function Workspace({
 
     const selected = photos.find((p) => p.id === selectedId) ?? null;
     const deleteTarget = photos.find((p) => p.id === deletePhotoId) ?? null;
+    const rejectTarget = localProposals.find((p) => p.id === rejectTargetId) ?? null;
+    const executeTarget = localProposals.find((p) => p.id === executeTargetId) ?? null;
+    const dismissQaTarget = qaFindings.find((f) => f.id === dismissQaTargetId) ?? null;
 
     const closeDeletePhoto = () => {
         if (!deletingPhoto) {
@@ -703,7 +881,7 @@ export default function Workspace({
             // merge any fresh inspection fields (keep selection_state in sync)
             setSelectedId((cur) => (ph.data!.photos.some((p) => p.id === cur) ? cur : ph.data!.photos[0]?.id ?? null));
             setNotify({ kind: 'ok', text: `Workspace refreshed — ${ctx.data!.counts.total} photos.` });
-            window.location.reload();
+            router.reload({ only: ['photos', 'proposals', 'retouchCard', 'activity', 'decisions', 'qaFindings', 'creativeMemories'] });
         } finally {
             setBusy(null);
         }
@@ -885,6 +1063,7 @@ export default function Workspace({
             setLocalProposals((ps) => ps.map((p) => (p.id === proposal.id ? { ...p, status: 'rejected' } : p)));
             addActivity({ tool_name: 'photographer_reject', authority: 'READ', result_status: 'completed', output_summary: { proposal_id: proposal.id, by: request.user.name } });
             setNotify({ kind: 'ok', text: `Proposal #${proposal.id} rejected.` });
+            setRejectTargetId(null);
         } else {
             setNotify({ kind: 'err', text: `Reject failed: ${j?.error ?? resp.statusText}` });
         }
@@ -895,6 +1074,7 @@ export default function Workspace({
         // whichever proposal happens to be first-eligible in state.
         if (!target || target.status !== 'approved' || target.executed_at) {
             setNotify({ kind: 'err', text: 'That proposal is no longer eligible for execution.' });
+            setExecuteTargetId(null);
             return;
         }
         setBusy('execute');
@@ -912,9 +1092,12 @@ export default function Workspace({
             } else {
                 setNotify({ kind: 'ok', text: `Proposal #${target.id} executed — apply_approved_plan removed.` });
             }
+            setExecuteTargetId(null);
             // refresh photo state from server
             webmcpApi.listProjectPhotos(project.id).then((r) => {
-                if (r.ok && r.data) window.location.reload();
+                if (r.ok && r.data) {
+                    router.reload({ only: ['photos', 'proposals', 'retouchCard', 'activity', 'decisions', 'qaFindings', 'creativeMemories'] });
+                }
             });
         } else {
             addActivity({ tool_name: 'apply_approved_plan', authority: 'EXECUTE', result_status: 'error', output_summary: { error: res.error, proposal_id: target.id } });
@@ -984,11 +1167,33 @@ export default function Workspace({
                 setQaFindings((fs) => fs.map((f) => (f.id === finding.id ? { ...f, status: j.finding.status } : f)));
                 addActivity({ tool_name: `photographer_qa_${action}`, authority: 'HUMAN', result_status: 'completed', output_summary: { finding_id: finding.id, status: j.finding.status } });
                 setNotify({ kind: 'ok', text: `Finding #${finding.id} ${action}d.` });
+                if (action === 'dismiss') setDismissQaTargetId(null);
             } else {
                 setNotify({ kind: 'err', text: `QA action failed: ${j?.error ?? resp.statusText}` });
             }
         } finally {
             setBusy(null);
+        }
+    };
+
+    const confirmReject = () => {
+        const target = localProposals.find((proposal) => proposal.id === rejectTargetId) ?? null;
+        if (!runAfterConfirmation(target, true, (proposal) => { void humanReject(proposal); })) {
+            setRejectTargetId(null);
+        }
+    };
+
+    const confirmExecute = () => {
+        const target = localProposals.find((proposal) => proposal.id === executeTargetId) ?? null;
+        if (!runAfterConfirmation(target, true, (proposal) => { void runExecute(proposal); })) {
+            setExecuteTargetId(null);
+        }
+    };
+
+    const confirmQaDismiss = () => {
+        const target = qaFindings.find((finding) => finding.id === dismissQaTargetId) ?? null;
+        if (!runAfterConfirmation(target, true, (finding) => { void respondQaFinding(finding, 'dismiss'); })) {
+            setDismissQaTargetId(null);
         }
     };
 
@@ -1051,7 +1256,7 @@ export default function Workspace({
             // 2026-08-29 audit P1-1).
             onSuccess: () => {
                 setBusy(null);
-                window.location.reload();
+                router.reload({ only: ['photos', 'proposals', 'retouchCard', 'activity', 'decisions', 'qaFindings', 'creativeMemories'] });
             },
             onError: (errors) => {
                 setBusy(null);
@@ -1073,7 +1278,16 @@ export default function Workspace({
         <AuthenticatedLayout
             header={
                 <div className="flex items-center justify-between gap-4">
-                    <h2 className="text-xl font-semibold leading-tight text-zinc-100">{project.name}</h2>
+                    <div className="flex min-w-0 items-center gap-3">
+                        <Link
+                            href={route('dashboard')}
+                            data-testid="workspace-all-projects-link"
+                            className="shrink-0 text-xs font-semibold text-zinc-400 transition hover:text-amber-300"
+                        >
+                            ← All projects
+                        </Link>
+                        <h2 className="truncate text-xl font-semibold leading-tight text-zinc-100">{project.name}</h2>
+                    </div>
                     <CreativeRoomLink projectId={project.id} />
                 </div>
             }
@@ -1119,8 +1333,16 @@ export default function Workspace({
                     <div className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-400">{flash.success}</div>
                 )}
                 {notify && (
-                    <div role="status" aria-live="polite" data-testid="workspace-notify" className={`mb-4 rounded-lg border px-4 py-3 text-sm ${notify.kind === 'ok' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-rose-500/30 bg-rose-500/10 text-rose-400'}`}>
-                        {notify.text}
+                    <div role="status" aria-live="polite" data-testid="workspace-notify" className={`mb-4 flex items-start justify-between gap-3 rounded-lg border px-4 py-3 text-sm ${notify.kind === 'ok' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-rose-500/30 bg-rose-500/10 text-rose-400'}`}>
+                        <span>{notify.text}</span>
+                        <button
+                            type="button"
+                            aria-label="Dismiss notification"
+                            onClick={() => setNotify(null)}
+                            className="shrink-0 rounded px-1 text-lg leading-none text-current/70 transition hover:text-current focus:outline-none focus-visible:ring-2 focus-visible:ring-current"
+                        >
+                            ×
+                        </button>
                     </div>
                 )}
 
@@ -1130,6 +1352,56 @@ export default function Workspace({
                     canSend={permissions.can_chat ?? false}
                     initialConversation={conversation}
                     presence={agentPresence}
+                />
+
+                <WorkspaceConfirmDialog
+                    show={rejectTarget !== null}
+                    title="Reject proposal?"
+                    description={rejectTarget ? `Reject proposal #${rejectTarget.id}? The proposal remains in the decision history and will not be executed.` : ''}
+                    processing={busy === 'reject'}
+                    confirmTestId="workspace-confirm-reject"
+                    eyebrow="PROPOSAL GATE"
+                    cancelLabel="KEEP PROPOSAL"
+                    onClose={() => {
+                        if (busy !== 'reject') setRejectTargetId(null);
+                    }}
+                    onConfirm={confirmReject}
+                />
+
+                <PhotoDeleteDialog
+                    show={deletePhotoId !== null}
+                    photoName={deleteTarget?.filename ?? 'this photo'}
+                    processing={deletingPhoto}
+                    onClose={closeDeletePhoto}
+                    onConfirm={confirmDeletePhoto}
+                />
+
+                <WorkspaceConfirmDialog
+                    show={executeTarget !== null}
+                    title="Execute approved plan?"
+                    description={executeTarget ? `Apply ${executeTarget.items.length} operation(s) to ${proposalPhotoCount(executeTarget)} photo(s) in the darkroom? This cannot be undone.` : ''}
+                    processing={busy === 'execute'}
+                    confirmTestId="workspace-confirm-execute"
+                    eyebrow="IRREVERSIBLE CUT"
+                    cancelLabel="KEEP PLAN"
+                    onClose={() => {
+                        if (busy !== 'execute') setExecuteTargetId(null);
+                    }}
+                    onConfirm={confirmExecute}
+                />
+
+                <WorkspaceConfirmDialog
+                    show={dismissQaTarget !== null}
+                    title="Dismiss QA finding?"
+                    description={dismissQaTarget ? `Dismiss finding #${dismissQaTarget.id}? Its history remains recorded while it leaves the open queue.` : ''}
+                    processing={dismissQaTarget !== null && busy === `qa-${dismissQaTarget.id}`}
+                    confirmTestId="workspace-confirm-dismiss-qa"
+                    eyebrow="QA REVIEW GATE"
+                    cancelLabel="KEEP FINDING"
+                    onClose={() => {
+                        if (!dismissQaTarget || busy !== `qa-${dismissQaTarget.id}`) setDismissQaTargetId(null);
+                    }}
+                    onConfirm={confirmQaDismiss}
                 />
 
                 <div className="grid grid-cols-1 gap-5 lg:grid-cols-[240px_1fr_320px]">
@@ -1242,22 +1514,7 @@ export default function Workspace({
                                 ) : (
                                     <div className="flex h-64 items-center justify-center rounded-lg bg-zinc-900 text-sm text-zinc-500">No preview</div>
                                 )}
-                                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-zinc-300 sm:grid-cols-3">
-                                    <span>Model: <b>{selected.camera_model ?? '—'}</b></span>
-                                    <span>ISO: <b>{selected.iso ?? '—'}</b></span>
-                                    <span>Lens: <b>{selected.lens ?? '—'}</b></span>
-                                    <span>Aperture: <b>{selected.aperture ?? '—'}</b></span>
-                                    <span>Shutter: <b>{selected.shutter_speed ?? '—'}</b></span>
-                                    <span>Focal: <b>{selected.focal_length ?? '—'}</b></span>
-                                </div>
-
-                                <PhotoDeleteDialog
-                                    show={deletePhotoId !== null}
-                                    photoName={deleteTarget?.filename ?? 'this photo'}
-                                    processing={deletingPhoto}
-                                    onClose={closeDeletePhoto}
-                                    onConfirm={confirmDeletePhoto}
-                                />
+                                <PhotoExifGrid photo={selected} inspected={eager.get(selected.id)} />
 
                                 {analysisError && (
                                     <div
@@ -1281,7 +1538,7 @@ export default function Workspace({
                                 {selectedRec && (
                                     <div
                                         data-testid="culling-card"
-                                        className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/40/60 p-4"
+                                        className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4"
                                     >
                                         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                                             <h4 className="text-sm font-semibold text-zinc-100">Context-Aware Culling</h4>
@@ -1558,6 +1815,8 @@ export default function Workspace({
                             )}
                         </div>
 
+                        <DecisionLedger decisions={decisions} />
+
                         {/* ============ Sprint 4 — RETOUCH PANEL: ORIGINAL vs APPROVED ============ */}
                         <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 shadow-sm" data-testid="retouch-panel">
                             <div className="mb-2 flex items-center justify-between">
@@ -1724,7 +1983,7 @@ export default function Workspace({
                                                             Acknowledge
                                                         </button>
                                                         <button
-                                                            onClick={() => void respondQaFinding(f, 'dismiss')}
+                                                            onClick={() => setDismissQaTargetId(f.id)}
                                                             disabled={busy !== null}
                                                             className="rounded border border-zinc-600 px-2 py-0.5 text-xs font-semibold text-zinc-300 hover:bg-zinc-800/60 disabled:opacity-40"
                                                         >
@@ -1771,7 +2030,7 @@ export default function Workspace({
                                     <li className="text-xs text-zinc-400">No lessons yet.</li>
                                 ) : (
                                     memories.map((m) => (
-                                        <li key={m.id} className="rounded-md border border-zinc-800/70 bg-zinc-950/40/70 p-2 text-xs" data-testid={`memory-${m.id}`}>
+                                        <li key={m.id} className="rounded-md border border-zinc-800/70 bg-zinc-950/70 p-2 text-xs" data-testid={`memory-${m.id}`}>
                                             <p className="text-zinc-200">“{m.lesson}”</p>
                                             <p className="mt-0.5 text-xs text-zinc-400">
                                                 {entityName(m.photographer) || 'photographer'} · {m.kind} · {fmtTime(m.created_at)}
@@ -1788,7 +2047,7 @@ export default function Workspace({
                                 <button
                                     onClick={runProposeCull}
                                     disabled={busy !== null || !isAgent}
-                                    className="w-full rounded-md bg-amber-600 px-3 py-2 text-xs font-semibold text-zinc-100 hover:bg-amber-400/100 disabled:opacity-40"
+                                    className="w-full rounded-md bg-amber-600 px-3 py-2 text-xs font-semibold text-zinc-100 hover:bg-amber-300 disabled:opacity-40"
                                     title={!isAgent ? 'Log in as the agent to propose.' : 'Create a cull proposal (does not change selections)'}
                                 >
                                     {busy === 'cull' ? '…' : `Propose Cull (${cullIds.length} selected)`}
@@ -1813,7 +2072,7 @@ export default function Workspace({
                                 <button
                                     onClick={runReview}
                                     disabled={busy !== null || !isAgent}
-                                    className="w-full rounded-md bg-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-100 hover:bg-zinc-800/600 disabled:opacity-40"
+                                    className="w-full rounded-md bg-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-100 hover:bg-zinc-800 disabled:opacity-40"
                                 >
                                     {busy === 'review' ? '…' : 'Run Consistency Review'}
                                 </button>
@@ -1876,7 +2135,7 @@ export default function Workspace({
                                                             <button
                                                                 onClick={() => humanApprove(p)}
                                                                 disabled={busy !== null}
-                                                                className="rounded bg-emerald-500 px-2 py-1 text-xs font-semibold text-zinc-100 hover:bg-emerald-500 disabled:opacity-40"
+                                                                className="rounded bg-emerald-500 px-2 py-1 text-xs font-semibold text-zinc-100 hover:bg-emerald-400 disabled:opacity-40"
                                                             >
                                                                 Approve
                                                             </button>
@@ -1890,7 +2149,7 @@ export default function Workspace({
                                                                 </button>
                                                             )}
                                                             <button
-                                                                onClick={() => humanReject(p)}
+                                                                onClick={() => setRejectTargetId(p.id)}
                                                                 disabled={busy !== null}
                                                                 className="rounded bg-rose-600 px-2 py-1 text-xs font-semibold text-zinc-100 hover:bg-rose-500 disabled:opacity-40"
                                                             >
@@ -1939,7 +2198,7 @@ export default function Workspace({
                                                 {/* Server policy remains the authority for execution. */}
                                                 {permissions.can_execute && p.status === 'approved' && !p.executed_at && (
                                                     <button
-                                                        onClick={() => void runExecute(p)}
+                                                        onClick={() => setExecuteTargetId(p.id)}
                                                         disabled={busy !== null}
                                                         className="mt-2 w-full rounded bg-zinc-800 px-2 py-1 text-xs font-semibold text-zinc-100 hover:bg-zinc-700 disabled:opacity-40"
                                                         title="Runs the dynamically-registered apply_approved_plan tool"
