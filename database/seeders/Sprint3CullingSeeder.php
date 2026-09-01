@@ -8,6 +8,7 @@ use App\Models\Photo;
 use App\Models\PhotoObservationRecord;
 use App\Models\Project;
 use App\Models\User;
+use App\Services\CreativeRoomService;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Storage;
 
@@ -160,7 +161,7 @@ class Sprint3CullingSeeder extends Seeder
         );
 
         if ($concept->status !== Domain::CONCEPT_STATUS_ADOPTED) {
-            app(\App\Services\CreativeRoomService::class)
+            app(CreativeRoomService::class)
                 ->adoptConcept($project, $photographer, $concept, 'Seeded demo direction');
         }
     }

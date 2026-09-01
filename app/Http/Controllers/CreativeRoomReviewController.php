@@ -9,6 +9,7 @@ use App\Services\CreativeRoomService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 /**
  * HUMAN-ONLY Creative Room review flows.
@@ -33,7 +34,7 @@ class CreativeRoomReviewController extends Controller
 
         try {
             $session = $this->creative->openBrainstorm($project, $request->user(), $validated['input']);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             throw $e;
         }
 

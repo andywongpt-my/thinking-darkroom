@@ -9,6 +9,7 @@ use App\Models\CreativeConcept;
 use App\Models\Project;
 use App\Models\User;
 use App\Services\CreativeRoomService;
+use App\Support\WebmcpToolCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -35,7 +36,7 @@ class CreativeRoomTest extends TestCase
     }
 
     /* ------------------------------------------------------------------ */
-    /*  Fixtures                                                           */
+    /*  Fixtures */
     /* ------------------------------------------------------------------ */
 
     /**
@@ -88,7 +89,7 @@ class CreativeRoomTest extends TestCase
     }
 
     /* ------------------------------------------------------------------ */
-    /*  1–3. Propose / propose ≠ adopt / photographer adopts               */
+    /*  1–3. Propose / propose ≠ adopt / photographer adopts */
     /* ------------------------------------------------------------------ */
 
     public function test_agent_can_propose_concepts(): void
@@ -140,7 +141,7 @@ class CreativeRoomTest extends TestCase
     }
 
     /* ------------------------------------------------------------------ */
-    /*  4–7. Authority: account-level agent, project-role agent, viewer    */
+    /*  4–7. Authority: account-level agent, project-role agent, viewer */
     /* ------------------------------------------------------------------ */
 
     public function test_account_level_agent_cannot_adopt(): void
@@ -203,7 +204,7 @@ class CreativeRoomTest extends TestCase
     }
 
     /* ------------------------------------------------------------------ */
-    /*  8–9. Single-adopted-direction invariant + rejected protection      */
+    /*  8–9. Single-adopted-direction invariant + rejected protection */
     /* ------------------------------------------------------------------ */
 
     public function test_second_adoption_supersedes_the_prior_direction(): void
@@ -251,7 +252,7 @@ class CreativeRoomTest extends TestCase
     }
 
     /* ------------------------------------------------------------------ */
-    /*  10–11. Lineage: explore preserves parent, merge preserves both     */
+    /*  10–11. Lineage: explore preserves parent, merge preserves both */
     /* ------------------------------------------------------------------ */
 
     public function test_explore_preserves_parent_lineage(): void
@@ -299,7 +300,7 @@ class CreativeRoomTest extends TestCase
     }
 
     /* ------------------------------------------------------------------ */
-    /*  12 + 16. Project isolation / unauthorized cross-project access     */
+    /*  12 + 16. Project isolation / unauthorized cross-project access */
     /* ------------------------------------------------------------------ */
 
     public function test_project_isolation_concept_operations(): void
@@ -327,7 +328,7 @@ class CreativeRoomTest extends TestCase
     }
 
     /* ------------------------------------------------------------------ */
-    /*  13 + 18. Creative brief persists + structuredIntent contract       */
+    /*  13 + 18. Creative brief persists + structuredIntent contract */
     /* ------------------------------------------------------------------ */
 
     public function test_creative_brief_persists_on_adoption(): void
@@ -375,7 +376,7 @@ class CreativeRoomTest extends TestCase
     }
 
     /* ------------------------------------------------------------------ */
-    /*  14 + 15. WebMCP retrieves direction + proposals are audited        */
+    /*  14 + 15. WebMCP retrieves direction + proposals are audited */
     /* ------------------------------------------------------------------ */
 
     public function test_webmcp_get_creative_direction_returns_adopted_brief(): void
@@ -423,12 +424,12 @@ class CreativeRoomTest extends TestCase
     }
 
     /* ------------------------------------------------------------------ */
-    /*  17. No forbidden final-authority tool in the catalogue             */
+    /*  17. No forbidden final-authority tool in the catalogue */
     /* ------------------------------------------------------------------ */
 
     public function test_no_forbidden_final_authority_tool_exists_in_catalogue(): void
     {
-        $names = array_keys(\App\Support\WebmcpToolCatalog::all());
+        $names = array_keys(WebmcpToolCatalog::all());
 
         foreach (Domain::FORBIDDEN_CREATIVE_DIRECTION_TOOLS as $banned) {
             $this->assertNotContains($banned, $names, "forbidden tool [{$banned}] must never exist");
@@ -444,7 +445,7 @@ class CreativeRoomTest extends TestCase
         }
 
         // Sprint 2 inventory: exactly 4 READ + 4 PROPOSE creative tools.
-        $catalog = \App\Support\WebmcpToolCatalog::all();
+        $catalog = WebmcpToolCatalog::all();
         $sprint2 = array_intersect_key($catalog, array_flip([
             'get_brainstorm_context', 'get_creative_direction', 'list_concepts', 'get_concept',
             'propose_concepts', 'propose_concept_revision', 'propose_concept_merge', 'propose_creative_brief',
@@ -454,7 +455,7 @@ class CreativeRoomTest extends TestCase
     }
 
     /* ------------------------------------------------------------------ */
-    /*  Extra: WebMCP tool actions cannot adopt (defense in depth)         */
+    /*  Extra: WebMCP tool actions cannot adopt (defense in depth) */
     /* ------------------------------------------------------------------ */
 
     public function test_webmcp_concept_endpoints_never_change_adoption_state(): void

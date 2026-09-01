@@ -2,6 +2,7 @@
 
 namespace App\Domain\Retouch;
 
+use App\Domain\Domain;
 use RuntimeException;
 
 /**
@@ -26,8 +27,8 @@ final class InvalidAdjustmentException extends RuntimeException
             'Retouch adjustment [%s] value %s is outside the normalized range %.1f..%.1f.',
             $key,
             $value,
-            \App\Domain\Domain::ADJUSTMENT_MIN,
-            \App\Domain\Domain::ADJUSTMENT_MAX,
+            Domain::ADJUSTMENT_MIN,
+            Domain::ADJUSTMENT_MAX,
         ));
     }
 

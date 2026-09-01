@@ -34,7 +34,7 @@ use Illuminate\Validation\ValidationException;
 class CreativeRoomService
 {
     /* ------------------------------------------------------------------ */
-    /*  PROPOSE (agent or photographer may create concepts)                */
+    /*  PROPOSE (agent or photographer may create concepts) */
     /* ------------------------------------------------------------------ */
 
     /**
@@ -225,7 +225,7 @@ class CreativeRoomService
     }
 
     /* ------------------------------------------------------------------ */
-    /*  PROPOSE — creative-brief proposal (pre-adoption, agent-authored)    */
+    /*  PROPOSE — creative-brief proposal (pre-adoption, agent-authored) */
     /* ------------------------------------------------------------------ */
 
     /**
@@ -252,7 +252,7 @@ class CreativeRoomService
     }
 
     /* ------------------------------------------------------------------ */
-    /*  HUMAN-ONLY  (photographer authority)                               */
+    /*  HUMAN-ONLY  (photographer authority) */
     /* ------------------------------------------------------------------ */
 
     /**
@@ -334,7 +334,7 @@ class CreativeRoomService
                 $project,
                 $photographer,
                 'adopt_concept',
-                "Adopted creative direction: {$concept->title}" . ($note ? " — {$note}" : ''),
+                "Adopted creative direction: {$concept->title}".($note ? " — {$note}" : ''),
             );
 
             return $concept->fresh();
@@ -342,7 +342,7 @@ class CreativeRoomService
     }
 
     /* ------------------------------------------------------------------ */
-    /*  Sprint 3 cross-sprint contract                                     */
+    /*  Sprint 3 cross-sprint contract */
     /* ------------------------------------------------------------------ */
 
     /**
@@ -377,7 +377,7 @@ class CreativeRoomService
     }
 
     /* ------------------------------------------------------------------ */
-    /*  Internal helpers                                                    */
+    /*  Internal helpers */
     /* ------------------------------------------------------------------ */
 
     /**
@@ -436,7 +436,6 @@ class CreativeRoomService
      * This is deterministic — it maps concept dimensions onto briefing
      * dimensions. No machine-learning claims.
      *
-     * @param  CreativeConcept  $concept
      * @return array<string, mixed>
      */
     private function deriveBrief(CreativeConcept $concept): array

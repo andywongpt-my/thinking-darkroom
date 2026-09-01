@@ -2,6 +2,7 @@
 
 namespace App\Services\Retouch;
 
+use App\Domain\Retouch\InvalidAdjustmentException;
 use App\Domain\Retouch\RetouchAdjustmentSet;
 use App\Models\Photo;
 
@@ -24,7 +25,7 @@ interface RetouchRenderer
      *
      * @return array{jpeg: string, provenance: string}
      *
-     * @throws \App\Domain\Retouch\InvalidAdjustmentException when the set is invalid
+     * @throws InvalidAdjustmentException when the set is invalid
      * @throws \RuntimeException when rendering is impossible (no pixels, corrupt input)
      */
     public function render(Photo $photo, RetouchAdjustmentSet $adjustments): array;

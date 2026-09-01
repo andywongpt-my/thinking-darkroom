@@ -45,7 +45,7 @@ if (file_exists($db)) {
 touch($db);
 
 $status = $kernel->call('migrate', ['--force' => true]);
-echo "migrate: ".($status === 0 ? 'OK' : "FAILED ({$status})")."\n";
+echo 'migrate: '.($status === 0 ? 'OK' : "FAILED ({$status})")."\n";
 if ($status !== 0) {
     exit((int) $status);
 }

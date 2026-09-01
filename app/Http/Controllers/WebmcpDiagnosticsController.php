@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Project;
-use App\Services\ToolCallAuditService;
 use App\Support\WebmcpToolCatalog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;

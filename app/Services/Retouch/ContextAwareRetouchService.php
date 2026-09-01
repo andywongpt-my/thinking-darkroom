@@ -3,7 +3,6 @@
 namespace App\Services\Retouch;
 
 use App\Domain\Culling\PhotoObservation;
-use App\Domain\Domain;
 use App\Models\Project;
 use App\Services\CreativeRoomService;
 use App\Services\Culling\ContextAwareCullingService;

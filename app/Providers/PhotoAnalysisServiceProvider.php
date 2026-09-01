@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Services\Culling\DemoPhotoAnalysisProvider;
 use App\Services\Culling\PhotoAnalysisProvider;
+use App\Support\GdAvailability;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -19,7 +20,7 @@ class PhotoAnalysisServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(PhotoAnalysisProvider::class, function ($app) {
-            return new DemoPhotoAnalysisProvider($app->make(\App\Support\GdAvailability::class));
+            return new DemoPhotoAnalysisProvider($app->make(GdAvailability::class));
         });
     }
 }

@@ -2,8 +2,6 @@
 
 namespace App\Domain\Culling;
 
-use App\Domain\Domain;
-
 /**
  * Application-level representation of ONE photo's structured observations.
  *

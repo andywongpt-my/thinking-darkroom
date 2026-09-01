@@ -25,9 +25,7 @@ final class GdAvailability
         'imagedestroy',
     ];
 
-    public function __construct(private readonly ?bool $availabilityOverride = null)
-    {
-    }
+    public function __construct(private readonly ?bool $availabilityOverride = null) {}
 
     public function isAvailable(): bool
     {

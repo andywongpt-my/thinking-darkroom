@@ -7,7 +7,6 @@ use App\Models\Photo;
 use App\Models\PhotographerDecision;
 use App\Models\Project;
 use App\Models\Proposal;
-use App\Models\ProposalItem;
 use App\Models\QaFinding;
 use App\Models\User;
 use App\Services\ProposalApplicator;

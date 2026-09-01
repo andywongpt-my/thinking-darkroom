@@ -2,11 +2,10 @@
 
 namespace Database\Factories;
 
-use App\Domain\Domain;
 use App\Models\CreativeBrief;
+use App\Models\Photo;
 use App\Models\Project;
-use App\Models\Proposal;
-use App\Models\QaFinding;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -22,7 +21,7 @@ class ProjectFactory extends Factory
             'name' => fake()->catchPhrase().' Shoot',
             'description' => fake()->optional()->sentence(),
             'status' => 'active',
-            'owner_id' => \App\Models\User::factory(),
+            'owner_id' => User::factory(),
         ];
     }
 
@@ -47,7 +46,7 @@ class ProjectFactory extends Factory
     public function withPhotos(int $count = 12): static
     {
         return $this->afterCreating(function (Project $project) use ($count) {
-            \App\Models\Photo::factory()->count($count)->create([
+            Photo::factory()->count($count)->create([
                 'project_id' => $project->id,
             ]);
         });
