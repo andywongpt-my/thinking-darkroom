@@ -5,3 +5,7 @@ dist/
 
 # Local destructive repro script; never upload it to Vercel.
 /repro-execute-500.php
+
+# Local agent/audit artifacts; never upload them to Vercel.
+/.hermes-audits/
+/skills-lock.json
