@@ -229,7 +229,7 @@ export default function AgentChatPanel({
                                             <div className="mb-1 flex items-center gap-1.5 text-xs text-zinc-500">
                                                 <span className="font-semibold">{message.author.name}</span>
                                                 {fromAgent && (
-                                                    <span className="rounded bg-violet-500/15 px-1.5 py-0.5 font-bold text-violet-400">
+                                                    <span className="rounded bg-violet-500/15 px-1.5 py-0.5 font-bold text-violet-700">
                                                         AGENT
                                                     </span>
                                                 )}
@@ -254,7 +254,7 @@ export default function AgentChatPanel({
                     </div>
 
                     {error && (
-                        <p role="alert" className="td-fade-in border-t border-rose-500/30 bg-rose-500/10 px-4 py-2 text-xs text-rose-400">
+                        <p role="alert" className="td-fade-in border-t border-rose-500/30 bg-rose-500/10 px-4 py-2 text-xs text-rose-600">
                             {error}
                         </p>
                     )}
@@ -284,7 +284,7 @@ export default function AgentChatPanel({
                                     <button
                                         type="submit"
                                         disabled={sending || draft.trim().length === 0}
-                                        className="rounded-lg bg-amber-400 px-3 py-1.5 text-xs font-semibold text-zinc-950 hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
+                                        className="rounded-lg bg-amber-400 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
                                     >
                                         {sending ? 'Sending…' : 'Send'}
                                     </button>

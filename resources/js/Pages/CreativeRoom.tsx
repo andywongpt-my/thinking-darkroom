@@ -53,7 +53,7 @@ const AUTHORITY_COLOR: Record<string, string> = {
     READ: 'bg-sky-500/15 text-sky-500',
     ANALYZE: 'bg-violet-500/15 text-violet-500',
     PROPOSE: 'bg-amber-400/10 text-amber-300',
-    EXECUTE: 'bg-emerald-500/15 text-emerald-300',
+    EXECUTE: 'bg-emerald-500/15 text-emerald-600',
 };
 
 const STATUS_DOT: Record<string, string> = {
@@ -66,10 +66,10 @@ const STATUS_DOT: Record<string, string> = {
 const STATUS_STYLE: Record<string, { label: string; badge: string; ring: string }> = {
     proposed: { label: 'AI PROPOSAL', badge: 'bg-amber-400/10 text-amber-500', ring: 'border-amber-400/30' },
     exploring: { label: 'EXPLORING', badge: 'bg-sky-500/15 text-sky-500', ring: 'border-sky-500/40' },
-    rejected: { label: 'REJECTED', badge: 'bg-rose-500/15 text-rose-400', ring: 'border-rose-500/30' },
+    rejected: { label: 'REJECTED', badge: 'bg-rose-500/15 text-rose-600', ring: 'border-rose-500/30' },
     merged: { label: 'MERGED', badge: 'bg-violet-500/15 text-violet-500', ring: 'border-violet-500/30' },
     superseded: { label: 'SUPERSEDED', badge: 'bg-zinc-900 text-zinc-500', ring: 'border-zinc-800' },
-    adopted: { label: 'ADOPTED BY PHOTOGRAPHER', badge: 'bg-emerald-500 text-zinc-950', ring: 'border-emerald-500' },
+    adopted: { label: 'ADOPTED BY PHOTOGRAPHER', badge: 'bg-emerald-500 text-white', ring: 'border-emerald-500' },
 };
 
 /** The structured intent dimensions shown on the Creative Canvas. */
@@ -332,7 +332,7 @@ export default function CreativeRoom() {
 
             <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
                 {webmcpUnavailable && (
-                    <div className="mb-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-400">
+                    <div className="mb-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-600">
                         <strong>WebMCP is not available in this browser.</strong> Creative Room still works,
                         but agent tools are not registered on <code>document.modelContext</code>.
                     </div>
@@ -342,7 +342,7 @@ export default function CreativeRoom() {
                         role="status"
                         aria-live="polite"
                         data-testid="creative-room-notify"
-                        className={`td-slide-down mb-4 flex items-start justify-between gap-3 rounded-lg border px-4 py-3 text-sm ${notify.kind === 'ok' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-rose-500/30 bg-rose-500/10 text-rose-400'}`}
+                        className={`td-slide-down mb-4 flex items-start justify-between gap-3 rounded-lg border px-4 py-3 text-sm ${notify.kind === 'ok' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-600' : 'border-rose-500/30 bg-rose-500/10 text-rose-600'}`}
                     >
                         <span>{notify.text}</span>
                         <button
@@ -474,7 +474,7 @@ export default function CreativeRoom() {
                                     <button
                                         onClick={doMerge}
                                         disabled={busy !== null || mergeSelection.length < 2}
-                                        className="rounded-md bg-violet-500 px-3 py-1.5 text-xs font-semibold text-zinc-100 hover:bg-violet-500 disabled:opacity-40"
+                                        className="rounded-md bg-violet-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40"
                                         title="Merge the selected concept cards into a new concept (lineage preserved)"
                                     >
                                         {busy === 'merge' ? 'Merging…' : `Merge selected (${mergeSelection.length})`}
@@ -486,14 +486,14 @@ export default function CreativeRoom() {
                                 <div
                                     role="alert"
                                     data-testid="concepts-error"
-                                    className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-300"
+                                    className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-600"
                                 >
                                     <p className="font-medium">Could not load concepts: {conceptsError}</p>
                                     <button
                                         type="button"
                                         onClick={() => void refreshList()}
                                         disabled={busy !== null}
-                                        className="mt-2 rounded border border-rose-500/40 px-2.5 py-1 text-xs font-semibold text-rose-400 hover:bg-rose-500/15 disabled:opacity-40"
+                                        className="mt-2 rounded border border-rose-500/40 px-2.5 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-500/15 disabled:opacity-40"
                                     >
                                         Retry concepts
                                     </button>
@@ -547,7 +547,7 @@ export default function CreativeRoom() {
                                                             <>revised from #{c.parent_concept_id}{' · '}</>
                                                         )}
                                                         {c.lineage_basis?.map((b) => (
-                                                            <span key={b.concept_id} className="me-1 rounded bg-violet-500/10 px-1 text-violet-400">
+                                                            <span key={b.concept_id} className="me-1 rounded bg-violet-500/10 px-1 text-violet-700">
                                                               ← {b.title}
                                                             </span>
                                                         ))}
@@ -577,7 +577,7 @@ export default function CreativeRoom() {
                                                         </button>
                                                         <button
                                                             onClick={() => toggleMergeSelect(c.id)}
-                                                            className={`rounded px-2 py-1 text-xs font-semibold ${mergeSelection.includes(c.id) ? 'bg-violet-700 text-zinc-100' : 'border border-violet-500/40 text-violet-400 hover:bg-violet-500/10'}`}
+                                                            className={`rounded px-2 py-1 text-xs font-semibold ${mergeSelection.includes(c.id) ? 'bg-violet-700 text-white' : 'border border-violet-500/40 text-violet-700 hover:bg-violet-500/10'}`}
                                                         >
                                                             {mergeSelection.includes(c.id) ? '✓ Selected' : 'Select'}
                                                         </button>
@@ -668,7 +668,7 @@ export default function CreativeRoom() {
 
                         {brief && (
                             <section className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 shadow-sm">
-                                <h3 className="mb-1 text-sm font-semibold text-emerald-300">Structured Creative Brief</h3>
+                                <h3 className="mb-1 text-sm font-semibold text-emerald-600">Structured Creative Brief</h3>
                                 <p className="text-xs text-emerald-400">
                                     {brief.creative_direction} · adopted {fmtTime(brief.adopted_at)}
                                 </p>

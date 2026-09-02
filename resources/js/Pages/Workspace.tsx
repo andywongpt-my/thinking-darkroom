@@ -176,8 +176,8 @@ const STATE_LABEL: Record<string, string> = {
 const AUTHORITY_COLOR: Record<string, string> = {
     READ: 'bg-sky-500/15 text-sky-500',
     ANALYZE: 'bg-violet-500/15 text-violet-500',
-    PROPOSE: 'bg-amber-400/10 text-amber-300',
-    EXECUTE: 'bg-emerald-500/15 text-emerald-300',
+    PROPOSE: 'bg-amber-400/10 text-amber-500',
+    EXECUTE: 'bg-emerald-500/15 text-emerald-600',
 };
 
 const STATUS_DOT: Record<string, string> = {
@@ -188,9 +188,9 @@ const STATUS_DOT: Record<string, string> = {
 };
 
 const DECISION_BADGE: Record<string, string> = {
-    keep: 'bg-emerald-500/15 text-emerald-300',
-    review: 'bg-amber-400/10 text-amber-300',
-    reject: 'bg-rose-500/15 text-rose-300',
+    keep: 'bg-emerald-500/15 text-emerald-600',
+    review: 'bg-amber-400/10 text-amber-500',
+    reject: 'bg-rose-500/15 text-rose-600',
 };
 
 function fmtTime(iso: string | null): string {
@@ -296,14 +296,14 @@ export function PhotoDeleteDialog({
     return (
         <Modal show={show} onClose={onClose} maxWidth="md">
             <div className="bg-zinc-900 p-6 text-zinc-100 sm:p-7">
-                <p className="font-mono text-xs uppercase tracking-[0.2em] text-rose-300">IRREVERSIBLE CUT</p>
+                <p className="font-mono text-xs uppercase tracking-[0.2em] text-rose-600">IRREVERSIBLE CUT</p>
                 <h2 id="delete-photo-title" className="mt-2 text-xl font-semibold text-zinc-100">
                     Delete photo?
                 </h2>
                 <p className="mt-3 text-sm leading-relaxed text-zinc-400">
                     Remove <span className="text-zinc-200">{photoName}</span> and its stored derivatives from the darkroom?
                 </p>
-                <p className="mt-3 text-xs leading-relaxed text-rose-300/80">
+                <p className="mt-3 text-xs leading-relaxed text-rose-600/80">
                     The original and any retouch derivatives are permanently deleted. This cannot be undone.
                 </p>
                 <div className="mt-6 flex flex-wrap justify-end gap-3 border-t border-zinc-800 pt-5">
@@ -357,7 +357,7 @@ export function WorkspaceConfirmDialog({
     return (
         <Modal show={show} onClose={onClose} maxWidth="md">
             <div className="bg-zinc-900 p-6 text-zinc-100 sm:p-7">
-                <p className="font-mono text-xs uppercase tracking-[0.2em] text-rose-300">{eyebrow}</p>
+                <p className="font-mono text-xs uppercase tracking-[0.2em] text-rose-600">{eyebrow}</p>
                 <h2 className="mt-2 text-xl font-semibold text-zinc-100">{title}</h2>
                 <p className="mt-3 text-sm leading-relaxed text-zinc-400">{description}</p>
                 <div className="mt-6 flex flex-wrap justify-end gap-3 border-t border-zinc-800 pt-5">
@@ -521,10 +521,10 @@ export const RECOMMENDATION_META: Record<
     string,
     { label: string; badge: string; rank: number }
 > = {
-    strong_keep: { label: 'STRONG KEEP', badge: 'bg-emerald-500 text-zinc-950', rank: 3 },
-    keep: { label: 'KEEP', badge: 'bg-emerald-500/15 text-emerald-300', rank: 2 },
-    review: { label: 'REVIEW', badge: 'bg-amber-400/10 text-amber-300', rank: 1 },
-    reject_candidate: { label: 'REJECT CANDIDATE', badge: 'bg-rose-500 text-zinc-950', rank: 0 },
+    strong_keep: { label: 'STRONG KEEP', badge: 'bg-emerald-500 text-white', rank: 3 },
+    keep: { label: 'KEEP', badge: 'bg-emerald-500/15 text-emerald-600', rank: 2 },
+    review: { label: 'REVIEW', badge: 'bg-amber-400/10 text-amber-500', rank: 1 },
+    reject_candidate: { label: 'REJECT CANDIDATE', badge: 'bg-rose-500 text-white', rank: 0 },
 };
 
 export const recommendationRank = (r: string): number => RECOMMENDATION_META[r]?.rank ?? 1;
@@ -1308,13 +1308,13 @@ export default function Workspace({
                         className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${agentPresence.online ? 'td-live-dot bg-emerald-500' : 'bg-zinc-600'}`}
                     />
                     <div>
-                        <p className={`text-sm font-semibold ${agentPresence.online ? 'text-emerald-300' : 'text-zinc-200'}`}>
+                        <p className={`text-sm font-semibold ${agentPresence.online ? 'text-emerald-600' : 'text-zinc-200'}`}>
                             {agentPresence.online
                                 ? 'Agent online · active in this workspace'
                                 : 'Agent offline · waiting for an agent'}
                         </p>
                         {agentPresence.online && activeAgentNames && (
-                            <p className="mt-0.5 text-xs text-emerald-400">Active agent: {activeAgentNames}</p>
+                            <p className="mt-0.5 text-xs text-emerald-600">Active agent: {activeAgentNames}</p>
                         )}
                         {!agentPresence.online && lastActiveAt && (
                             <p className="mt-0.5 text-xs text-zinc-500">Last active {fmtTime(lastActiveAt)}</p>
@@ -1324,16 +1324,16 @@ export default function Workspace({
 
                 {/* WebMCP availability banner */}
                 {webmcpUnavailable && (
-                    <div className="mb-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-400">
+                    <div className="mb-4 rounded-lg border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-600">
                         <strong>WebMCP is not available in this browser.</strong> The app loads normally, but
                         agent tools will not be registered on <code>document.modelContext</code>.
                     </div>
                 )}
                 {flash?.success && (
-                    <div className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-400">{flash.success}</div>
+                    <div className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-600">{flash.success}</div>
                 )}
                 {notify && (
-                    <div role="status" aria-live="polite" data-testid="workspace-notify" className={`td-slide-down mb-4 flex items-start justify-between gap-3 rounded-lg border px-4 py-3 text-sm ${notify.kind === 'ok' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-rose-500/30 bg-rose-500/10 text-rose-400'}`}>
+                    <div role="status" aria-live="polite" data-testid="workspace-notify" className={`td-slide-down mb-4 flex items-start justify-between gap-3 rounded-lg border px-4 py-3 text-sm ${notify.kind === 'ok' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-rose-500/30 bg-rose-500/10 text-rose-600'}`}>
                         <span className="flex items-start gap-2.5">
                             <span aria-hidden="true" className={`mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full ${notify.kind === 'ok' ? 'bg-emerald-400' : 'bg-rose-400'}`} />
                             {notify.text}
@@ -1445,7 +1445,7 @@ export default function Workspace({
                                         {p.url ? (
                                             <img src={p.url} alt={p.filename} className="aspect-square w-full object-cover" loading="lazy" />
                                         ) : (
-                                            <div className="flex aspect-square w-full items-center justify-center bg-zinc-800 text-xs text-zinc-500">no img</div>
+                                            <div className="flex aspect-square w-full items-center justify-center bg-zinc-800 text-xs text-zinc-300">no img</div>
                                         )}
                                     </button>
                                     {recMeta && (
@@ -1493,7 +1493,7 @@ export default function Workspace({
                                     </h3>
                                     <div className="flex shrink-0 items-center gap-2 text-xs">
                                         <div className="flex gap-2">
-                                            <span className={`rounded-full px-2 py-0.5 font-medium ${selected.selection_state === 'selected' ? 'bg-emerald-500/15 text-emerald-300' : selected.selection_state === 'culled' ? 'bg-rose-500/15 text-rose-300' : 'bg-zinc-900 text-zinc-300'}`}>
+                                            <span className={`rounded-full px-2 py-0.5 font-medium ${selected.selection_state === 'selected' ? 'bg-emerald-500/15 text-emerald-600' : selected.selection_state === 'culled' ? 'bg-rose-500/15 text-rose-600' : 'bg-zinc-900 text-zinc-300'}`}>
                                                 {selected.selection_state}
                                             </span>
                                             <span className="rounded-full bg-indigo-500/15 px-2 py-0.5 font-medium text-indigo-400">{selected.retouch_state}</span>
@@ -1505,7 +1505,7 @@ export default function Workspace({
                                                 data-testid="workspace-delete-photo"
                                                 onClick={() => setDeletePhotoId(selected.id)}
                                                 disabled={busy !== null || deletingPhoto}
-                                                className="td-press rounded-md border border-rose-500/50 bg-rose-500/10 px-2.5 py-1.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:cursor-not-allowed disabled:opacity-40"
+                                                className="td-press rounded-md border border-rose-500/50 bg-rose-500/10 px-2.5 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:cursor-not-allowed disabled:opacity-40"
                                             >
                                                 Delete
                                             </button>
@@ -1523,14 +1523,14 @@ export default function Workspace({
                                     <div
                                         role="alert"
                                         data-testid="analysis-error"
-                                        className="mt-4 rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300"
+                                        className="mt-4 rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-600"
                                     >
                                         <p className="font-medium">Photo analysis failed: {analysisError}</p>
                                         <button
                                             type="button"
                                             onClick={() => setAnalysisRefresh((version) => version + 1)}
                                             disabled={busy !== null}
-                                            className="mt-1 rounded border border-rose-500/40 px-2 py-0.5 text-xs font-semibold text-rose-400 hover:bg-rose-500/15 disabled:opacity-40"
+                                            className="mt-1 rounded border border-rose-500/40 px-2 py-0.5 text-xs font-semibold text-rose-600 hover:bg-rose-500/15 disabled:opacity-40"
                                         >
                                             Retry analysis
                                         </button>
@@ -1665,10 +1665,10 @@ export default function Workspace({
                                                                     active
                                                                         ? 'bg-zinc-800 text-zinc-100'
                                                                         : choice === 'keep'
-                                                                            ? 'border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15'
+                                                                            ? 'border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/15'
                                                                             : choice === 'reject'
-                                                                                ? 'border border-rose-500/40 bg-rose-500/10 text-rose-300 hover:bg-rose-500/15'
-                                                                                : 'border border-amber-400/40 bg-amber-400/10 text-amber-300 hover:bg-amber-400/10'
+                                                                                ? 'border border-rose-500/40 bg-rose-500/10 text-rose-600 hover:bg-rose-500/15'
+                                                                                : 'border border-amber-400/40 bg-amber-400/10 text-amber-500 hover:bg-amber-400/10'
                                                                 }`}
                                                             >
                                                                 {choice.charAt(0).toUpperCase() + choice.slice(1)}
@@ -1707,7 +1707,7 @@ export default function Workspace({
                                                                         setOverrideOpen(false);
                                                                     }}
                                                                     disabled={busy !== null}
-                                                                    className="rounded-md bg-amber-400 px-3 py-1.5 text-xs font-semibold text-zinc-100 hover:bg-amber-400 disabled:opacity-40"
+                                                                    className="rounded-md bg-amber-400 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 disabled:opacity-40"
                                                                 >
                                                                     Override → {choice.charAt(0).toUpperCase() + choice.slice(1)}
                                                                 </button>
@@ -1736,21 +1736,21 @@ export default function Workspace({
                                     <div
                                         role="alert"
                                         data-testid="culling-error"
-                                        className="mt-3 rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300"
+                                        className="mt-3 rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-600"
                                     >
                                         <p className="font-medium">Culling context failed: {cullingError}</p>
                                         <button
                                             type="button"
                                             onClick={() => void loadCulling()}
                                             disabled={busy !== null || cullingLoading}
-                                            className="mt-1 rounded border border-rose-500/40 px-2 py-0.5 text-xs font-semibold text-rose-400 hover:bg-rose-500/15 disabled:opacity-40"
+                                            className="mt-1 rounded border border-rose-500/40 px-2 py-0.5 text-xs font-semibold text-rose-600 hover:bg-rose-500/15 disabled:opacity-40"
                                         >
                                             Retry culling context
                                         </button>
                                     </div>
                                 )}
                                 {!selectedRec && !cullingLoading && !cullingError && (
-                                    <div className="mt-3 rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
+                                    <div className="mt-3 rounded-md border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-xs text-amber-500">
                                         <p className="font-medium">Analysis has not run for this frame.</p>
                                         <p className="mt-0.5 text-amber-300">
                                             {isAgent
@@ -1763,7 +1763,7 @@ export default function Workspace({
                                                 onClick={runAnalyze}
                                                 disabled={busy !== null}
                                                 data-testid="analysis-required-action"
-                                                className="mt-2 rounded border border-amber-400/40 bg-zinc-900/60 px-2 py-1 text-xs font-semibold text-amber-200 hover:bg-amber-400/10 disabled:opacity-40"
+                                                className="mt-2 rounded border border-amber-400/40 bg-zinc-900/60 px-2 py-1 text-xs font-semibold text-amber-500 hover:bg-amber-400/10 disabled:opacity-40"
                                             >
                                                 {busy === 'analyze' ? 'Analyzing…' : 'Analyze Project Photos'}
                                             </button>
@@ -1829,8 +1829,8 @@ export default function Workspace({
                                         retouchCard.status === 'executed'
                                             ? 'bg-zinc-800 text-zinc-100'
                                             : retouchCard.status === 'approved'
-                                                ? 'bg-emerald-500/15 text-emerald-400'
-                                                : 'bg-amber-400/10 text-amber-400'
+                                                ? 'bg-emerald-500/15 text-emerald-600'
+                                                : 'bg-amber-400/10 text-amber-500'
                                     }`} data-testid="retouch-status">
                                         {retouchCard.status === 'executed' ? 'APPROVED BY PHOTOGRAPHER' : STATE_LABEL[retouchCard.status] ?? retouchCard.status}
                                     </span>
@@ -1855,7 +1855,7 @@ export default function Workspace({
                                                 <img src={retouchCard.derivative.url} alt="approved derivative" data-testid="derivative-image" className="w-full rounded-lg border-2 border-emerald-500/40" />
                                             ) : retouchRenderFailed ? (
                                                 <div
-                                                    className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-4 text-xs text-rose-300"
+                                                    className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-4 text-xs text-rose-600"
                                                     data-testid="retouch-render-error"
                                                     role="alert"
                                                 >
@@ -1900,7 +1900,7 @@ export default function Workspace({
                                     </dl>
 
                                     {/* Human-authority status */}
-                                    <p className="mt-2 rounded-md bg-emerald-500/10 px-2 py-1.5 text-xs font-semibold text-emerald-300" data-testid="human-authority-status">
+                                    <p className="mt-2 rounded-md bg-emerald-500/10 px-2 py-1.5 text-xs font-semibold text-emerald-600" data-testid="human-authority-status">
                                         {retouchCard.executed
                                             ? 'APPROVED BY PHOTOGRAPHER: only the human-approved values were executed.'
                                             : retouchCard.status === 'approved'
@@ -1949,8 +1949,8 @@ export default function Workspace({
                                             <div className="flex items-center justify-between gap-2">
                                                 <span className="text-xs font-bold text-zinc-100" data-testid={`qa-category-${f.id}`}>{f.category.replace(/_/g, ' ')}</span>
                                                 <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold ${
-                                                    f.severity === 'info' ? 'bg-sky-500/15 text-sky-500'
-                                                        : f.severity === 'low' ? 'bg-amber-400/10 text-amber-400'
+                                                    f.severity === 'info' ? 'bg-sky-500/15 text-sky-600'
+                                                        : f.severity === 'low' ? 'bg-amber-400/10 text-amber-500'
                                                             : f.severity === 'medium' || f.severity === 'warning' ? 'bg-amber-400/10 text-amber-300'
                                                                 : 'bg-rose-500/15 text-rose-400'
                                                 }`} data-testid={`qa-severity-${f.id}`}>{f.severity.toUpperCase()}</span>
@@ -1973,7 +1973,7 @@ export default function Workspace({
                                                 </div>
                                             )}
                                             <div className="mt-1.5 flex items-center gap-2">
-                                                <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${f.status === 'open' ? 'bg-amber-400/10 text-amber-400' : f.status === 'acknowledged' ? 'bg-sky-500/15 text-sky-500' : 'bg-zinc-800 text-zinc-300'}`} data-testid={`qa-status-${f.id}`}>
+                                                <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${f.status === 'open' ? 'bg-amber-400/10 text-amber-500' : f.status === 'acknowledged' ? 'bg-sky-500/15 text-sky-500' : 'bg-zinc-800 text-zinc-300'}`} data-testid={`qa-status-${f.id}`}>
                                                     {f.status}
                                                 </span>
                                                 {canPhotographerAct && f.status === 'open' && (
@@ -2058,7 +2058,7 @@ export default function Workspace({
                                 <button
                                     onClick={runRetouchPlan}
                                     disabled={busy !== null || !isAgent}
-                                    className="td-press flex w-full items-center justify-center gap-2 rounded-md bg-amber-400 px-3 py-2 text-xs font-semibold text-zinc-100 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
+                                    className="td-press flex w-full items-center justify-center gap-2 rounded-md bg-amber-400 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
                                 >
                                     {busy === 'retouch' ? (<><span className="td-spinner" aria-hidden="true" /> Proposing…</>) : 'Propose Retouch Plan'}
                                 </button>
@@ -2066,7 +2066,7 @@ export default function Workspace({
                                     <button
                                         onClick={runAnalyze}
                                         disabled={busy !== null}
-                                        className="td-press flex w-full items-center justify-center gap-2 rounded-md bg-violet-500 px-3 py-2 text-xs font-semibold text-zinc-100 transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-40"
+                                        className="td-press flex w-full items-center justify-center gap-2 rounded-md bg-violet-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-40"
                                         title="Persist non-final photo observations before reading recommendations"
                                     >
                                         {busy === 'analyze' ? (<><span className="td-spinner" aria-hidden="true" /> Analyzing…</>) : 'Analyze Project Photos'}
@@ -2099,7 +2099,7 @@ export default function Workspace({
                                                     <span className="text-xs font-semibold text-zinc-100">
                                                         #{p.id} {TYPE_LABEL[p.type] ?? p.type}
                                                     </span>
-                                                    <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${p.status === 'approved' ? 'bg-emerald-500/15 text-emerald-400' : p.status === 'executed' ? 'bg-zinc-800 text-zinc-100' : p.status === 'rejected' ? 'bg-rose-500/15 text-rose-400' : 'bg-amber-400/10 text-amber-400'}`}>
+                                                    <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${p.status === 'approved' ? 'bg-emerald-500/15 text-emerald-600' : p.status === 'executed' ? 'bg-zinc-800 text-zinc-300' : p.status === 'rejected' ? 'bg-rose-500/15 text-rose-600' : 'bg-amber-400/10 text-amber-500'}`}>
                                                         {STATE_LABEL[p.status] ?? p.status}
                                                     </span>
                                                 </div>
@@ -2154,7 +2154,7 @@ export default function Workspace({
                                                             <button
                                                                 onClick={() => setRejectTargetId(p.id)}
                                                                 disabled={busy !== null}
-                                                                className="rounded bg-rose-600 px-2 py-1 text-xs font-semibold text-zinc-100 hover:bg-rose-500 disabled:opacity-40"
+                                                                className="rounded bg-rose-600 px-2 py-1 text-xs font-semibold text-white hover:bg-rose-500 disabled:opacity-40"
                                                             >
                                                                 Reject
                                                             </button>
@@ -2188,7 +2188,7 @@ export default function Workspace({
                                                                     <button
                                                                         onClick={() => void humanModify(p)}
                                                                         disabled={busy !== null}
-                                                                        className="rounded bg-amber-400 px-2 py-1 text-xs font-semibold text-zinc-100 hover:bg-amber-400 disabled:opacity-40"
+                                                                        className="rounded bg-amber-400 px-2 py-1 text-xs font-semibold text-white hover:bg-amber-400 disabled:opacity-40"
                                                                     >
                                                                         Save values
                                                                     </button>
@@ -2258,9 +2258,9 @@ export default function Workspace({
                         <span className="text-sm font-semibold text-zinc-100">
                             WebMCP Diagnostics
                             {snapshot?.webmcpAvailable ? (
-                                <span className="ms-2 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-bold text-emerald-400">document.modelContext active</span>
+                                <span className="ms-2 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-bold text-emerald-600">document.modelContext active</span>
                             ) : (
-                                <span className="ms-2 rounded-full bg-amber-400/10 px-2 py-0.5 text-xs font-bold text-amber-400">fallback (no WebMCP API)</span>
+                                <span className="ms-2 rounded-full bg-amber-400/10 px-2 py-0.5 text-xs font-bold text-amber-500">fallback (no WebMCP API)</span>
                             )}
                         </span>
                         <svg
@@ -2276,7 +2276,7 @@ export default function Workspace({
                         <div className="border-t border-zinc-800/70 px-4 py-3">
                             <div className="mb-2 flex flex-wrap gap-2 text-xs">
                                 <span className="rounded bg-zinc-900 px-2 py-1 text-zinc-300">Project #{project.id}</span>
-                                <span className={`rounded px-2 py-1 font-medium ${eligibleForExecution ? 'bg-emerald-500/15 text-emerald-400' : 'bg-zinc-900 text-zinc-300'}`}>
+                                <span className={`rounded px-2 py-1 font-medium ${eligibleForExecution ? 'bg-emerald-500/15 text-emerald-600' : 'bg-zinc-900 text-zinc-300'}`}>
                                     eligible_for_execution: {eligibleForExecution ? 'true' : 'false'}
                                 </span>
                                 <span className="rounded bg-zinc-900 px-2 py-1 text-zinc-300">

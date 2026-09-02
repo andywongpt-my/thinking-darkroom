@@ -422,7 +422,7 @@ function FilmProjectCard({ p, meta, canManage }: { p: DashboardProject; meta?: P
                                 type="submit"
                                 data-testid={`rename-project-submit-${p.id}`}
                                 disabled={processing}
-                                className="td-press inline-flex items-center gap-2 rounded-lg border border-amber-400/60 bg-amber-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="td-press inline-flex items-center gap-2 rounded-lg border border-amber-400/60 bg-amber-400 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {processing ? (<><span className="td-spinner" aria-hidden="true" /> Saving…</>) : 'Save project'}
                             </button>
@@ -433,14 +433,14 @@ function FilmProjectCard({ p, meta, canManage }: { p: DashboardProject; meta?: P
 
             <Modal show={showDelete} onClose={() => !deleting && setShowDelete(false)} maxWidth="md">
                 <div className="bg-zinc-900 p-6 text-zinc-100 sm:p-7">
-                    <p className="font-mono text-xs uppercase tracking-[0.2em] text-rose-300">IRREVERSIBLE CUT</p>
+                    <p className="font-mono text-xs uppercase tracking-[0.2em] text-rose-600">IRREVERSIBLE CUT</p>
                     <h2 id={`delete-project-title-${p.id}`} className="mt-2 text-xl font-semibold text-zinc-100">
                         Delete project?
                     </h2>
                     <p className="mt-3 text-sm leading-relaxed text-zinc-400">
                         This permanently removes <span className="text-zinc-200">{p.name}</span>, including its photos and proposals.
                     </p>
-                    <p className="mt-3 text-xs leading-relaxed text-rose-300/80">
+                    <p className="mt-3 text-xs leading-relaxed text-rose-600/80">
                         The project and all of its darkroom history cannot be recovered.
                     </p>
                     <div className="mt-6 flex flex-wrap justify-end gap-3 border-t border-zinc-800 pt-5">
@@ -540,7 +540,7 @@ function CreateProjectDialog() {
                 aria-haspopup="dialog"
                 aria-expanded={show}
                 onClick={open}
-                className="td-press inline-flex items-center gap-1.5 rounded-lg border border-amber-400/60 bg-amber-400 px-3 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
+                className="td-press inline-flex items-center gap-1.5 rounded-lg border border-amber-400/60 bg-amber-400 px-3 py-2 text-sm font-semibold text-white transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
             >
                 <span aria-hidden="true" className="text-base leading-none">+</span>
                 New project
@@ -630,7 +630,7 @@ function CreateProjectDialog() {
                                 type="submit"
                                 data-testid="new-project-submit"
                                 disabled={processing}
-                                className="td-press inline-flex items-center gap-2 rounded-lg border border-amber-400/60 bg-amber-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="td-press inline-flex items-center gap-2 rounded-lg border border-amber-400/60 bg-amber-400 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                                 {processing ? (<><span className="td-spinner" aria-hidden="true" /> Creating…</>) : 'Create project'}
                             </button>
