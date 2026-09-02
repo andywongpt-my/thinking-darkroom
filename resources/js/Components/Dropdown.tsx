@@ -93,7 +93,7 @@ const Content = ({
                 >
                     <div
                         className={
-                            `rounded-md ring-1 ring-zinc-700 ` +
+                            `rounded-md ring-1 ring-zinc-600 ` +
                             contentClasses
                         }
                     >

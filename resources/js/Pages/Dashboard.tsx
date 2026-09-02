@@ -99,7 +99,7 @@ function ToolLadder({ tools }: { tools: DashboardTools }) {
             </div>
             <ol className="divide-y divide-zinc-800/70">
                 {rungs.map((r) => (
-                    <li key={r.label} className="flex items-center gap-4 px-5 py-3 transition-colors duration-200 hover:bg-zinc-950/50">
+                    <li key={r.label} className="flex items-center gap-4 px-5 py-3 transition-colors duration-200 hover:bg-zinc-800/60">
                         <span className="w-20 font-mono text-sm font-medium text-zinc-200">{r.label}</span>
                         <span className="font-mono text-sm tabular-nums text-zinc-300">{String(r.count).padStart(2, '0')}</span>
                         <span className={`text-xs ${r.tone}`}>{r.note}</span>
@@ -234,7 +234,7 @@ function FilmProjectCard({ p, meta, canManage }: { p: DashboardProject; meta?: P
                                 aria-label={`Manage ${p.name}`}
                                 aria-haspopup="menu"
                                 data-testid={`dashboard-project-${p.id}-actions`}
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-700/80 bg-zinc-950/80 text-lg leading-none text-zinc-400 transition hover:border-amber-400/50 hover:text-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-zinc-700/80 bg-zinc-900/60 text-lg leading-none text-zinc-400 transition hover:border-amber-400/50 hover:text-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
                             >
                                 <span aria-hidden="true">⋮</span>
                             </button>
