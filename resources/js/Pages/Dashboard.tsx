@@ -222,7 +222,7 @@ function FilmProjectCard({ p, meta, canManage }: { p: DashboardProject; meta?: P
     return (
         <div
             data-testid={`dashboard-project-${p.id}`}
-            className="td-fade-up group relative overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/60 transition duration-200 hover:border-amber-400/40 hover:shadow-lg hover:shadow-black/40"
+            className="td-fade-up group relative overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/60 transition duration-200 hover:border-amber-400/40 hover:shadow-lg hover:shadow-lg hover:shadow-zinc-950/10"
         >
             {canManage && (
                 <div className="absolute right-4 top-10 z-30">
