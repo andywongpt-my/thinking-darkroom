@@ -700,7 +700,7 @@ export default function Dashboard({ projects, can_create_project, project_meta, 
                             <h2 className="text-lg font-semibold text-zinc-100">No film in the darkroom yet</h2>
                             <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-zinc-400">
                                 Projects appear here as film strips. Create one from a photographer account,
-                                then invite an agent to propose — never to decide.
+                                then invite an agent to propose: never to decide.
                             </p>
                         </div>
                     )}

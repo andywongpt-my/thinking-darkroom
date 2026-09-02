@@ -275,7 +275,7 @@ export default function AgentChatPanel({
                                     placeholder={currentUser.is_agent
                                         ? 'Reply to the photographer…'
                                         : 'Ask the agent about this project…'}
-                                    className="td-press w-full resize-none rounded-lg border-zinc-700 text-sm text-zinc-100 shadow-none transition focus:border-amber-400/60 focus:ring-amber-400/60"
+                                    className="w-full resize-none rounded-lg border-zinc-700 text-sm text-zinc-100 shadow-none transition focus:border-amber-400/60 focus:ring-amber-400/60"
                                 />
                                 <div className="mt-2 flex items-center justify-between gap-3">
                                     <p className="text-xs text-zinc-400">

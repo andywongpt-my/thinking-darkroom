@@ -86,7 +86,7 @@ const CANVAS_KEYS: { key: string; label: string }[] = [
 ];
 
 function fmtTime(iso: string | null): string {
-    if (!iso) return '—';
+    if (!iso) return 'not recorded';
     return new Date(iso).toLocaleString();
 }
 

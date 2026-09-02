@@ -1236,7 +1236,7 @@ export default function Workspace({
         const MAX_COUNT = 10;
         const oversized = Array.from(files).filter((f) => f.size > MAX_PER_FILE);
         if (oversized.length > 0) {
-            setNotify({ kind: 'err', text: `Upload failed: ${oversized[0].name} is ${(oversized[0].size / 1024 / 1024).toFixed(1)}MB — each file must be under 4.3MB on this deployment.` });
+            setNotify({ kind: 'err', text: `Upload failed: ${oversized[0].name} is ${(oversized[0].size / 1024 / 1024).toFixed(1)}MB. Each file must be under 4.3MB on this deployment.` });
             return;
         }
         if (files.length > MAX_COUNT) {
@@ -1555,7 +1555,7 @@ export default function Workspace({
                                                 <span
                                                     data-testid="recommendation-confidence"
                                                     className="text-xs font-medium text-zinc-500"
-                                                    title="Recommendation confidence — never certainty"
+                                                    title="Recommendation confidence: never certainty"
                                                 >
                                                     {confidencePct(selectedRec.confidence)} confidence
                                                 </span>
@@ -1602,7 +1602,7 @@ export default function Workspace({
                                                         <span
                                                             data-testid="creative-provenance"
                                                             className="text-xs text-zinc-400"
-                                                            title={`Provenance: ${analysis.observation.creative_provenance} — creative labels come from the documented demo annotation, not from pixel inference`}
+                                                            title={`Provenance: ${analysis.observation.creative_provenance} . Creative labels come from the documented demo annotation, not from pixel inference`}
                                                         >
                                                             {provenanceLabel(analysis.observation.creative_provenance)}
                                                         </span>
@@ -1617,7 +1617,7 @@ export default function Workspace({
                                                     </dl>
                                                 ) : (
                                                     <p className="text-xs italic text-zinc-400">
-                                                        Creative context not available for this frame — creative fit cannot be evaluated.
+                                                        Creative context not available for this frame: creative fit cannot be evaluated.
                                                     </p>
                                                 )}
                                                 <p className="mt-2 text-xs leading-relaxed text-zinc-300" data-testid="creative-rationale">{selectedRec.creative_rationale}</p>
@@ -1719,7 +1719,7 @@ export default function Workspace({
                                                     <p className="mt-2 text-xs text-zinc-500" data-testid="decision-persisted">
                                                         Recorded <b>{myDecisions[selected.id].decision.toUpperCase()}</b>
                                                         {myDecisions[selected.id].override ? ' (override)' : ''}
-                                                        {myDecisions[selected.id].note ? ` — "${myDecisions[selected.id].note}"` : ''}
+                                                        {myDecisions[selected.id].note ? `: "${myDecisions[selected.id].note}"` : ''}
                                                         {' '}· persisted to photographer_decisions.
                                                     </p>
                                                 )}
@@ -1727,7 +1727,7 @@ export default function Workspace({
                                         )}
                                         {isAgent && (
                                             <p className="mt-3 border-t border-zinc-800 pt-2 text-xs italic text-zinc-400" data-testid="agent-no-final-authority">
-                                                Agent view — recommendations only. Culling is finalized exclusively by the photographer.
+                                                Agent view: recommendations only. Culling is finalized exclusively by the photographer.
                                             </p>
                                         )}
                                     </div>
@@ -1859,11 +1859,11 @@ export default function Workspace({
                                                     data-testid="retouch-render-error"
                                                     role="alert"
                                                 >
-                                                    Retouch render failed — no approved derivative was stored.
+                                                    Retouch render failed: no approved derivative was stored.
                                                 </div>
                                             ) : (
                                                 <div className="flex h-28 items-center justify-center rounded-lg border border-dashed border-zinc-700 text-xs text-zinc-400" data-testid="derivative-placeholder">
-                                                    {retouchCard.status === 'approved' ? 'Not rendered yet — execute the approved plan' : 'Not executed yet'}
+                                                    {retouchCard.status === 'approved' ? 'Not rendered yet: execute the approved plan' : 'Not executed yet'}
                                                 </div>
                                             )}
                                         </figure>
@@ -1887,7 +1887,7 @@ export default function Workspace({
                                         </div>
                                         {retouchCard.photographer_modification?.adjustments && (
                                             <div className="flex items-baseline justify-between gap-2" data-testid="layer-photographer-modified">
-                                                <dt className="text-zinc-500">PHOTOGRAPHER MODIFIED{retouchCard.photographer_modification.note ? ' — ' + retouchCard.photographer_modification.note : ''}</dt>
+                                                <dt className="text-zinc-500">PHOTOGRAPHER MODIFIED{retouchCard.photographer_modification.note ? ': ' + retouchCard.photographer_modification.note : ''}</dt>
                                                 <dd className="font-semibold text-indigo-400">{fmtAdjustments(retouchCard.photographer_modification.adjustments)}</dd>
                                             </div>
                                         )}
@@ -1902,12 +1902,12 @@ export default function Workspace({
                                     {/* Human-authority status */}
                                     <p className="mt-2 rounded-md bg-emerald-500/10 px-2 py-1.5 text-xs font-semibold text-emerald-300" data-testid="human-authority-status">
                                         {retouchCard.executed
-                                            ? 'APPROVED BY PHOTOGRAPHER — only the human-approved values were executed.'
+                                            ? 'APPROVED BY PHOTOGRAPHER: only the human-approved values were executed.'
                                             : retouchCard.status === 'approved'
-                                                ? 'APPROVED — awaiting execution via apply_approved_plan.'
+                                                ? 'APPROVED: awaiting execution via apply_approved_plan.'
                                                 : retouchCard.status === 'modified'
-                                                    ? 'MODIFIED BY PHOTOGRAPHER — superseding proposal pending review.'
-                                                    : 'PENDING PHOTOGRAPHER REVIEW — nothing executes without photographer approval.'}
+                                                    ? 'MODIFIED BY PHOTOGRAPHER: superseding proposal pending review.'
+                                                    : 'PENDING PHOTOGRAPHER REVIEW: nothing executes without photographer approval.'}
                                     </p>
 
                                     {/* Real before/after evidence: checksums make it verifiable */}
@@ -1918,15 +1918,15 @@ export default function Workspace({
                                                 <p>derivative sha256: <code data-testid="derivative-sha">{retouchCard.derivative.sha256?.slice(0, 16)}…</code> ({retouchCard.derivative.storage_path})</p>
                                                 <p data-testid="checksum-divergence" className={retouchCard.derivative.sha256 && retouchCard.original.sha256 && retouchCard.derivative.sha256 !== retouchCard.original.sha256 ? 'text-emerald-400' : 'text-rose-400'}>
                                                     {retouchCard.derivative.sha256 !== retouchCard.original.sha256
-                                                        ? '✓ derivative differs from original — original unchanged (byte-for-byte verified at execute time)'
-                                                        : '✗ derivative checksum equals original — inspect!'}
+                                                        ? '✓ derivative differs from original: original unchanged (byte-for-byte verified at execute time)'
+                                                        : '✗ derivative checksum equals original: inspect!'}
                                                 </p>
                                             </>
                                         )}
                                     </div>
                                 </div>
                             ) : (
-                                <p className="text-xs text-zinc-400">No retouch proposal yet — run the agent's Propose Retouch Plan.</p>
+                                <p className="text-xs text-zinc-400">No retouch proposal yet: run the agent's Propose Retouch Plan.</p>
                             )}
                         </div>
 
@@ -1994,7 +1994,7 @@ export default function Workspace({
                                                         </button>
                                                     </div>
                                                 )}
-                                                {isAgent && <span className="text-xs italic text-zinc-400">agent view — QA actions are photographer authority</span>}
+                                                {isAgent && <span className="text-xs italic text-zinc-400">agent view: QA actions are photographer authority</span>}
                                             </div>
                                         </li>
                                     ))}
@@ -2006,7 +2006,7 @@ export default function Workspace({
                         <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 shadow-sm" data-testid="creative-memory-panel">
                             <h3 className="mb-1 text-sm font-semibold text-zinc-100">Creative Memory</h3>
                             <p className="mb-2 text-xs leading-relaxed text-zinc-400">
-                                Photographer decision history — explicit lessons you record. Future proposals read them as
+                                Photographer decision history: explicit lessons you record. Future proposals read them as
                                 deterministic context; this is not machine-learned personalization.
                             </p>
                             {canPhotographerAct && (
@@ -2106,7 +2106,7 @@ export default function Workspace({
                                                 {p.summary && <p className="mt-1 text-xs text-zinc-500">{p.summary}</p>}
                                                 <div className="mt-1 text-xs text-zinc-400">
                                                     {p.items.length === 0 && p.status === 'draft'
-                                                        ? '0 item(s) — awaiting agent generation'
+                                                        ? '0 item(s): awaiting agent generation'
                                                         : `${p.items.length} item(s)`}
                                                     {' · '}
                                                     {p.created_by ?? 'agent'} · {fmtTime(p.created_at)}
@@ -2311,7 +2311,7 @@ export default function Workspace({
                                 </tbody>
                             </table>
                             <div className="mt-2 text-xs text-zinc-400">
-                                apply_approved_plan is registered ONLY while an approved, unexecuted proposal exists — approve a proposal above to watch it appear, execute it to watch it disappear.
+                                apply_approved_plan is registered ONLY while an approved, unexecuted proposal exists. Approve a proposal above to watch it appear, execute it to watch it disappear.
                             </div>
                         </div>
                     )}
