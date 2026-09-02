@@ -31,6 +31,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        if ($this->app->environment('production')) {
+            // A leaked public/hot marker would otherwise make @vite emit localhost URLs.
+            Vite::useHotFile(storage_path('framework/vite.hot'));
+        }
+
         Vite::prefetch(concurrency: 3);
 
         RateLimiter::for('project-create', fn (Request $request) => Limit::perMinute(6)

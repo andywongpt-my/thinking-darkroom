@@ -9,3 +9,6 @@ dist/
 # Local agent/audit artifacts; never upload them to Vercel.
 /.hermes-audits/
 /skills-lock.json
+
+# A Vite dev-server marker would make production HTML point at localhost.
+/public/hot

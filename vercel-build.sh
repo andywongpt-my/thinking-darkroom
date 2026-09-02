@@ -6,7 +6,8 @@ cd "$(dirname "$0")"
 
 export VITE_APP_NAME="Thinking Darkroom"
 
-rm -f bootstrap/cache/packages.php bootstrap/cache/services.php bootstrap/cache/config.php
+# Never bundle a local Vite hot file: it would make production HTML reference localhost.
+rm -f public/hot bootstrap/cache/packages.php bootstrap/cache/services.php bootstrap/cache/config.php
 
 # Regenerate resources/js/ziggy-route.js. With vendor present (after composer
 # install) it re-extracts the UMD factory and stamps it. On Vercel the
