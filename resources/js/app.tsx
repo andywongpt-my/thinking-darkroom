@@ -11,7 +11,7 @@ import { mountGuestRegistry } from './webmcp/guest-registry';
 // skip-route-function). `@routes` supplies the route payload as window.Ziggy.
 window.route = route;
 
-const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+const appName = import.meta.env.VITE_APP_NAME || 'Thinking Darkroom';
 
 type PageWithAuth = {
     props: {

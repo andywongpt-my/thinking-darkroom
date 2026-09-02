@@ -21,8 +21,19 @@ export default function Authenticated({
                     <div className="flex h-16 justify-between">
                         <div className="flex">
                             <div className="flex shrink-0 items-center">
-                                <Link href="/">
-                                    <ApplicationLogo className="block h-9 w-auto fill-current text-zinc-100" />
+                                <Link
+                                    href="/"
+                                    aria-label="Thinking Darkroom home"
+                                    data-testid="primary-brand-lockup"
+                                    className="group flex items-center rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
+                                >
+                                    <ApplicationLogo decorative className="block h-9 w-9 text-zinc-100 transition duration-200 group-hover:text-amber-300" />
+                                    <span
+                                        data-testid="thinking-darkroom-wordmark"
+                                        className="ms-2 hidden text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-100 sm:block"
+                                    >
+                                        Thinking <span className="text-amber-400">Darkroom</span>
+                                    </span>
                                 </Link>
                             </div>
 

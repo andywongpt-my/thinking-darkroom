@@ -23,5 +23,5 @@ npm ci --no-audit --no-fund
 npm run build
 mkdir -p vercel-out/build
 cp -r public/build/. vercel-out/build/
-cp public/favicon.ico public/robots.txt vercel-out/
+cp public/favicon.ico public/favicon.svg public/robots.txt vercel-out/
 echo "vercel-out ready"
