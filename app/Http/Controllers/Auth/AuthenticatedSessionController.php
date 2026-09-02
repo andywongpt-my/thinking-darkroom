@@ -33,7 +33,11 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('dashboard', absolute: false));
+        // Product spec (Andy): after login ALWAYS land on /dashboard, even if
+        // there is a saved `url.intended` (e.g. the user arrived via a deep
+        // /projects/{id} link). Drop intended() so the landing page is
+        // deterministic.
+        return redirect()->to(route('dashboard', absolute: false));
     }
 
     /**
