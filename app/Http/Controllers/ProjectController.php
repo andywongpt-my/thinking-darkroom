@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\Media\MediaStore;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 use Throwable;
 
 class ProjectController extends Controller
@@ -41,6 +42,7 @@ class ProjectController extends Controller
 
     public function update(UpdateProjectRequest $request, Project $project): RedirectResponse
     {
+        $this->authorize('update', $project);
         $project->update($request->validated());
 
         return redirect()->route('dashboard')->with('flash', [
@@ -52,32 +54,29 @@ class ProjectController extends Controller
     {
         $this->authorize('destroy', $project);
 
-        // Collect storage paths inside the transaction, delete the bytes AFTER
-        // it commits: byte stores cannot roll back, so deleting inside the
-        // transaction would orphan rows if the record deletes ever failed
-        // (AGY 2026-09-02 audit Finding 1).
-        $paths = DB::transaction(function () use ($project): array {
-            $paths = [];
+        $paths = $this->mediaPathsForProject($project);
 
-            foreach ($project->photos()->get() as $photo) {
-                foreach (PhotoDerivative::query()->where('photo_id', $photo->id)->get() as $derivative) {
-                    if ($this->deletablePath($derivative->storage_path)) {
-                        $paths[] = $derivative->storage_path;
-                    }
-                }
+        try {
+            $this->deleteMediaOrFail($mediaStore, $paths);
+        } catch (Throwable $e) {
+            report($e);
 
-                if ($this->deletablePath($photo->path)) {
-                    $paths[] = $photo->path;
-                }
+            return back()->withErrors([
+                'media' => 'Unable to delete project media. The project was not deleted.',
+            ]);
+        }
+
+        try {
+            $deleted = DB::transaction(fn (): bool => $project->delete() === true);
+            if (! $deleted) {
+                throw new RuntimeException('Project deletion was vetoed or did not remove a database row.');
             }
+        } catch (Throwable $e) {
+            report($e);
 
-            $project->delete();
-
-            return $paths;
-        });
-
-        foreach ($paths as $path) {
-            $this->tryDeleteMedia($mediaStore, $path);
+            return back()->withErrors([
+                'project' => 'Project records could not be deleted after media cleanup. Media may have been removed; please retry or contact support.',
+            ]);
         }
 
         return redirect()->route('dashboard')->with('flash', [
@@ -85,21 +84,38 @@ class ProjectController extends Controller
         ]);
     }
 
-    private function deletablePath(?string $path): bool
+    /**
+     * @return list<string>
+     */
+    private function mediaPathsForProject(Project $project): array
     {
-        return $path !== null && $path !== '';
+        return collect([
+            ...$project->photos()->pluck('path')->all(),
+            ...PhotoDerivative::query()
+                ->where('project_id', $project->id)
+                ->pluck('storage_path')
+                ->all(),
+        ])
+            ->filter(fn ($path): bool => $this->deletablePath($path))
+            ->unique()
+            ->values()
+            ->all();
     }
 
-    private function tryDeleteMedia(MediaStore $mediaStore, ?string $path): void
+    private function deletablePath(mixed $path): bool
     {
-        if ($path === null || $path === '') {
-            return;
-        }
+        return is_string($path) && $path !== '';
+    }
 
-        try {
-            $mediaStore->delete($path);
-        } catch (Throwable) {
-            // A missing/unavailable byte store must not prevent database cleanup.
+    /**
+     * @param  list<string>  $paths
+     */
+    private function deleteMediaOrFail(MediaStore $mediaStore, array $paths): void
+    {
+        foreach ($paths as $path) {
+            if (! $mediaStore->delete($path) && $mediaStore->exists($path)) {
+                throw new RuntimeException('Media deletion returned an unsuccessful result.');
+            }
         }
     }
 }

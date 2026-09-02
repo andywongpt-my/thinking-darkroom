@@ -470,13 +470,37 @@ export function isPhotoAnalysisRequired(status: number): boolean {
     return status === 409;
 }
 
-/** "+0.25 exposure · +0.08 warmth" style formatting for adjustment sets. */
 export function fmtAdjustments(params: Record<string, number> | null | undefined): string {
     if (!params || Object.keys(params).length === 0) return '—';
     return Object.entries(params)
-        .map(([k, v]) => `${(v ?? 0) >= 0 ? '+' : ''}${v} ${k}`)
+        .map(([key, value]) => `${formatAdjustmentValue(value)} ${key}`)
         .join(' · ');
 }
+
+/** B2: a truth card is shown only while its own photo is selected. */
+export function retouchCardForSelectedPhoto(card: RetouchCard | null | undefined, photoId: number | null | undefined): RetouchCard | null {
+    if (!card || card.photo?.id === null || card.photo?.id === undefined) return null;
+    return card.photo.id === photoId ? card : null;
+}
+
+/** A11: mirror of Domain::RETOUCH_ADJUSTMENTS for the photographer modify form. */
+export const RETOUCH_ADJUSTMENT_KEYS = [
+    'exposure',
+    'contrast',
+    'saturation',
+    'warmth',
+    'highlight_recovery',
+    'shadow_lift',
+] as const;
+
+export const RETOUCH_ADJUSTMENT_LABELS: Record<(typeof RETOUCH_ADJUSTMENT_KEYS)[number], string> = {
+    exposure: 'Exposure',
+    contrast: 'Contrast',
+    saturation: 'Saturation',
+    warmth: 'Warmth',
+    highlight_recovery: 'Highlight recovery',
+    shadow_lift: 'Shadow lift',
+};
 
 /**
  * Render-safe projection for a "named entity" field that may arrive as a
@@ -512,6 +536,318 @@ function numericAdjustments(params: Record<string, unknown> | null | undefined):
 
 function proposalPhotoCount(proposal: WorkspaceProposal): number {
     return new Set(proposal.items.map((item) => item.photo_id)).size;
+}
+
+const RETOUCH_ADJUSTMENT_ORDER = [
+    'exposure',
+    'contrast',
+    'saturation',
+    'warmth',
+    'highlight_recovery',
+    'shadow_lift',
+];
+
+export function formatAdjustmentValue(value: number): string {
+    return `${value >= 0 ? '+' : ''}${value.toFixed(2)}`;
+}
+
+export function retouchAdjustmentKeys(
+    ...sets: Array<Record<string, number> | null | undefined>
+): string[] {
+    const keys = new Set<string>();
+    sets.forEach((set) => {
+        Object.keys(set ?? {}).forEach((key) => keys.add(key));
+    });
+
+    return [...keys].sort((left, right) => {
+        const leftIndex = RETOUCH_ADJUSTMENT_ORDER.indexOf(left);
+        const rightIndex = RETOUCH_ADJUSTMENT_ORDER.indexOf(right);
+        const normalizedLeft = leftIndex === -1 ? RETOUCH_ADJUSTMENT_ORDER.length : leftIndex;
+        const normalizedRight = rightIndex === -1 ? RETOUCH_ADJUSTMENT_ORDER.length : rightIndex;
+
+        return normalizedLeft === normalizedRight
+            ? left.localeCompare(right)
+            : normalizedLeft - normalizedRight;
+    });
+}
+
+function adjustmentLabel(key: string): string {
+    return key.replace(/_/g, ' ');
+}
+
+function AdjustmentGrid({
+    params,
+    keys,
+    testId,
+    prefix,
+}: {
+    params: Record<string, number> | null;
+    keys: string[];
+    testId: string;
+    prefix: string;
+}) {
+    return (
+        <dl className="mt-3 space-y-2 text-sm" data-testid={testId}>
+            {keys.length === 0 ? (
+                <div className="text-sm text-zinc-400">No adjustment values recorded.</div>
+            ) : (
+                keys.map((key) => {
+                    const value = params?.[key];
+                    return (
+                        <div
+                            key={key}
+                            className="flex items-baseline justify-between gap-4"
+                            data-testid={`${prefix}-${key}`}
+                        >
+                            <dt className="capitalize text-zinc-400">{adjustmentLabel(key)}</dt>
+                            <dd className="font-mono text-sm font-semibold tabular-nums text-zinc-100">
+                                {typeof value === 'number' && Number.isFinite(value)
+                                    ? formatAdjustmentValue(value)
+                                    : '—'}
+                            </dd>
+                        </div>
+                    );
+                })
+            )}
+        </dl>
+    );
+}
+
+export function RetouchTruthCard({ card }: { card: RetouchCard | null }) {
+    const retouchRenderFailed = Boolean(card?.executed && !card.derivative?.url);
+
+    if (!card) {
+        return (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-5 shadow-sm" data-testid="retouch-panel">
+                <h3 className="text-base font-semibold text-zinc-100">Retouch truth</h3>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-400">
+                    No retouch recorded for this photo.
+                </p>
+            </div>
+        );
+    }
+
+    const hasExecutedDerivative = Boolean(card.executed && card.derivative?.url);
+    const finalParams = card.executed?.params ?? card.derivative?.adjustments ?? (
+        card.status === 'approved' ? card.photographer_modification?.adjustments ?? null : null
+    );
+    const valueKeys = retouchAdjustmentKeys(
+        card.agent_original.params,
+        card.photographer_modification?.adjustments,
+        finalParams,
+    );
+    const resultLabel = hasExecutedDerivative
+        ? 'EXECUTED DERIVATIVE'
+        : retouchRenderFailed
+            ? 'EXECUTION FAILED'
+            : card.status === 'approved'
+                ? 'APPROVED PREVIEW'
+                : 'PREVIEW';
+    const resultDescription = hasExecutedDerivative
+        ? 'Executed derivative — approved by photographer.'
+        : retouchRenderFailed
+            ? 'Execution recorded, but no derivative was stored.'
+            : card.status === 'approved'
+                ? 'Approved preview — awaiting execution; no derivative has been executed.'
+                : card.status === 'modified'
+                    ? 'Photographer-modified preview — awaiting photographer approval.'
+                    : 'Preview only — awaiting photographer approval.';
+    const authorityTone = hasExecutedDerivative
+        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600'
+        : retouchRenderFailed
+            ? 'border-rose-500/40 bg-rose-500/10 text-rose-600'
+            : 'border-amber-400/40 bg-amber-400/10 text-amber-500';
+    const photoName = card.photo?.filename ?? 'selected photo';
+
+    return (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-5 shadow-sm" data-testid="retouch-panel">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                    <h3 className="text-base font-semibold text-zinc-100">Retouch truth</h3>
+                    <p className="mt-1 text-sm text-zinc-400">{photoName}</p>
+                </div>
+                <span
+                    className={`inline-flex min-h-11 items-center rounded-full border px-3 py-2 text-sm font-semibold ${authorityTone}`}
+                    data-testid="retouch-status"
+                >
+                    {resultLabel}
+                </span>
+            </div>
+
+            <div className="space-y-5">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2" data-testid="before-after">
+                    <figure className="min-w-0">
+                        <figcaption className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-300">
+                            ORIGINAL
+                        </figcaption>
+                        {card.original.url ? (
+                            <img
+                                src={card.original.url}
+                                alt={`${photoName} original`}
+                                data-testid="original-image"
+                                className="w-full rounded-lg border border-zinc-700 object-cover"
+                            />
+                        ) : (
+                            <div className="flex min-h-40 items-center justify-center rounded-lg border border-dashed border-zinc-700 text-sm text-zinc-400">
+                                Original image unavailable
+                            </div>
+                        )}
+                        <p className="mt-2 text-sm text-zinc-400">Source image</p>
+                    </figure>
+
+                    <figure className="min-w-0">
+                        <figcaption className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-300">
+                            {resultLabel}
+                        </figcaption>
+                        {card.derivative?.url ? (
+                            <img
+                                src={card.derivative.url}
+                                alt={`${photoName} ${hasExecutedDerivative ? 'executed derivative' : 'approved preview'}`}
+                                data-testid="derivative-image"
+                                className="w-full rounded-lg border border-zinc-700 object-cover"
+                            />
+                        ) : retouchRenderFailed ? (
+                            <div
+                                className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-4 py-5 text-sm leading-relaxed text-rose-700"
+                                data-testid="retouch-render-error"
+                                role="alert"
+                            >
+                                Retouch render failed: no approved derivative was stored.
+                            </div>
+                        ) : (
+                            <div
+                                className="flex min-h-40 items-center justify-center rounded-lg border border-dashed border-zinc-700 px-4 text-center text-sm leading-relaxed text-zinc-400"
+                                data-testid="derivative-placeholder"
+                            >
+                                {card.status === 'approved'
+                                    ? 'Approved preview recorded; awaiting execution.'
+                                    : 'No derivative is available before photographer approval.'}
+                            </div>
+                        )}
+                        <p className="mt-2 text-sm font-medium text-zinc-300" data-testid="derivative-state">
+                            {hasExecutedDerivative ? '✓ Executed derivative · approved by photographer' : resultDescription}
+                        </p>
+                    </figure>
+                </div>
+
+                {card.agent_original.influenced_by.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-2" data-testid="retouch-influenced-by">
+                        <span className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Brief influence</span>
+                        {card.agent_original.influenced_by.map((dimension) => (
+                            <code key={dimension} className="rounded bg-zinc-800/80 px-2 py-1 text-sm font-semibold text-zinc-200">
+                                {dimension}
+                            </code>
+                        ))}
+                    </div>
+                )}
+
+                <div className="rounded-lg border border-zinc-700/80 bg-zinc-950/40 p-4" data-testid="retouch-value-comparison">
+                    <div className="mb-3">
+                        <h4 className="text-base font-semibold text-zinc-100">Adjustment values</h4>
+                        <p className="mt-1 text-sm text-zinc-400">
+                            AI proposal and the values recorded for the photographer-approved result.
+                        </p>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <section className="rounded-lg border border-zinc-700 bg-zinc-900/70 p-4" data-testid="layer-agent-original">
+                            <h5 className="text-sm font-semibold uppercase tracking-wide text-zinc-300">AI PROPOSAL</h5>
+                            <p className="mt-1 text-sm text-zinc-400">Agent-suggested starting values</p>
+                            <div data-testid="ai-proposed-values">
+                                <AdjustmentGrid
+                                    params={card.agent_original.params}
+                                    keys={valueKeys}
+                                    prefix="ai-adjustment"
+                                    testId="ai-adjustment-values"
+                                />
+                            </div>
+                        </section>
+                        <section className="rounded-lg border border-zinc-700 bg-zinc-900/70 p-4" data-testid="layer-executed">
+                            <h5 className="text-sm font-semibold uppercase tracking-wide text-zinc-100">FINAL APPROVED VALUES</h5>
+                            <p className="mt-1 text-sm text-zinc-400">
+                                {hasExecutedDerivative
+                                    ? 'Values used by the executed derivative.'
+                                    : card.status === 'approved'
+                                        ? 'Approved values are ready; no derivative has been executed.'
+                                        : 'No final values recorded yet.'}
+                            </p>
+                            <div data-testid="final-approved-values">
+                                <AdjustmentGrid
+                                    params={finalParams}
+                                    keys={valueKeys}
+                                    prefix="final-adjustment"
+                                    testId="final-adjustment-values"
+                                />
+                            </div>
+                        </section>
+                    </div>
+                </div>
+
+                {card.photographer_modification?.adjustments && (
+                    <div className="rounded-lg border border-indigo-500/30 bg-indigo-500/10 p-4" data-testid="layer-photographer-modified">
+                        <h5 className="text-sm font-semibold uppercase tracking-wide text-indigo-700">
+                            PHOTOGRAPHER MODIFIED
+                        </h5>
+                        {card.photographer_modification.note && (
+                            <p className="mt-1 text-sm text-zinc-300">{card.photographer_modification.note}</p>
+                        )}
+                        <p className="mt-2 font-mono text-sm font-semibold tabular-nums text-zinc-100" data-testid="photographer-modified-values">
+                            {fmtAdjustments(card.photographer_modification.adjustments)}
+                        </p>
+                    </div>
+                )}
+
+                <p
+                    className={`flex items-start gap-2 rounded-lg border px-4 py-3 text-sm font-semibold leading-relaxed ${authorityTone}`}
+                    data-testid="human-authority-status"
+                    role="status"
+                >
+                    <span aria-hidden="true" data-testid="approval-check">
+                        {hasExecutedDerivative ? '✓' : '!' }
+                    </span>
+                    <span>{resultDescription}</span>
+                </p>
+
+                <details className="rounded-lg border border-zinc-700/80" data-testid="retouch-technical-details">
+                    <summary className="flex min-h-11 cursor-pointer items-center px-4 py-3 text-sm font-semibold text-zinc-300 transition-colors hover:bg-zinc-800/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-400/60">
+                        Technical details
+                    </summary>
+                    <div className="space-y-2 border-t border-zinc-700/80 px-4 py-3 text-xs leading-relaxed text-zinc-400" data-testid="retouch-evidence">
+                        <p>
+                            Original URL: <code className="break-all" data-testid="original-url">{card.original.url ?? '—'}</code>
+                        </p>
+                        <p>
+                            Original SHA-256: <code className="break-all" data-testid="original-sha">{card.original.sha256 ?? '—'}</code>
+                        </p>
+                        {card.derivative && (
+                            <>
+                                <p>
+                                    Derivative URL: <code className="break-all" data-testid="derivative-url">{card.derivative.url ?? '—'}</code>
+                                </p>
+                                <p>
+                                    Derivative SHA-256: <code className="break-all" data-testid="derivative-sha">{card.derivative.sha256 ?? '—'}</code>
+                                </p>
+                                <p>
+                                    Raw storage path: <code className="break-all">{card.derivative.storage_path}</code>
+                                </p>
+                                <p className={
+                                    card.derivative.sha256 && card.original.sha256 && card.derivative.sha256 !== card.original.sha256
+                                        ? 'text-emerald-700'
+                                        : 'text-zinc-400'
+                                } data-testid="checksum-divergence">
+                                    {card.derivative.sha256 && card.original.sha256
+                                        ? card.derivative.sha256 !== card.original.sha256
+                                            ? '✓ Derivative checksum differs from the original.'
+                                            : '✗ Derivative checksum matches the original; inspect.'
+                                        : 'Checksum comparison unavailable.'}
+                                </p>
+                                <p>Derivative provenance: <code>{card.derivative.provenance}</code></p>
+                            </>
+                        )}
+                    </div>
+                </details>
+            </div>
+        </div>
+    );
 }
 
 /* ---------------- Sprint 3 — context-aware culling constants ---------------- */
@@ -610,6 +946,8 @@ export default function Workspace({
     const [rejectTargetId, setRejectTargetId] = useState<number | null>(null);
     const [executeTargetId, setExecuteTargetId] = useState<number | null>(null);
     const [dismissQaTargetId, setDismissQaTargetId] = useState<number | null>(null);
+    // A7: proposal whose photographer approval is being revoked.
+    const [cancelTargetId, setCancelTargetId] = useState<number | null>(null);
     const [localProposals, setLocalProposals] = useState<WorkspaceProposal[]>(proposals);
     const [localActivity, setLocalActivity] = useState<ActivityEntry[]>(activity);
     const [references, setReferences] = useState<unknown[]>([]);
@@ -619,9 +957,16 @@ export default function Workspace({
 
     /* ---------------- Sprint 4 — retouch / QA / creative memory state ---------------- */
 
-    // Retouch truth card (server-rendered three-layer history).
-    const retouchCard = pageRetouchCard ?? null;
-    const retouchRenderFailed = Boolean(retouchCard?.executed && !retouchCard.derivative);
+    // B2: retouch truth card follows the currently selected photo. The page
+    // controller renders the card for the initially-selected photo; selecting
+    // another frame fetches that photo's card (null = no retouch recorded).
+    const pageCardForSelection = retouchCardForSelectedPhoto(pageRetouchCard ?? null, selectedId);
+    const [remoteRetouchCard, setRemoteRetouchCard] = useState<RetouchCard | null>(null);
+    const [retouchCardLoading, setRetouchCardLoading] = useState(false);
+    const retouchCard =
+        pageCardForSelection
+        ?? (remoteRetouchCard && remoteRetouchCard.photo?.id === selectedId ? remoteRetouchCard : null);
+    const retouchRenderFailed = Boolean(retouchCard?.executed && !retouchCard.derivative?.url);
     const [notify, setNotify] = useState<{ kind: 'ok' | 'err'; text: string } | null>(
         retouchRenderFailed
             ? { kind: 'err', text: 'Retouch render failed: no approved derivative was stored.' }
@@ -657,15 +1002,9 @@ export default function Workspace({
     /** Agent's original numeric adjustments for a retouch proposal. */
     const agentValuesFor = (p: WorkspaceProposal): Record<string, number> =>
         numericAdjustments(p.items[0]?.params ?? null);
-
-    /**
-     * Photographer-modified values for a proposal chain: the retouchCard's
-     * modification layer (server-truth) matched to this chain, else null.
-     */
-    const photographerValuesFor = (p: WorkspaceProposal): Record<string, number> | null =>
-        retouchCard?.photographer_modification?.adjustments ?? null;
-    // Photographer-edited adjustment values for the pending retouch proposal.
-    const [modifyValues, setModifyValues] = useState<{ exposure: string; warmth: string }>({ exposure: '', warmth: '' });
+    // A11: per-proposal drafts across ALL six Domain::RETOUCH_ADJUSTMENTS —
+    // no cross-proposal carry-over; each proposal starts from a clean draft.
+    const [modifyValues, setModifyValues] = useState<Record<number, Record<string, string>>>({});
     // Draft text for a new Creative Memory lesson.
     const [memoryDraft, setMemoryDraft] = useState('');
 
@@ -684,6 +1023,7 @@ export default function Workspace({
     const deleteTarget = photos.find((p) => p.id === deletePhotoId) ?? null;
     const rejectTarget = localProposals.find((p) => p.id === rejectTargetId) ?? null;
     const executeTarget = localProposals.find((p) => p.id === executeTargetId) ?? null;
+    const cancelTarget = localProposals.find((p) => p.id === cancelTargetId) ?? null;
     const dismissQaTarget = qaFindings.find((f) => f.id === dismissQaTargetId) ?? null;
 
     const closeDeletePhoto = () => {
@@ -830,6 +1170,44 @@ export default function Workspace({
             live = false;
         };
     }, [project.id, selectedId, analysisRefresh]);
+
+    // B2: fetch the selected photo's retouch card whenever the selection
+    // changes. The server-rendered page card already matches the initial
+    // selection; this keeps the truth card honest for every other frame.
+    // The shared `fetch` (not webmcpApi) hits the web route with the page's
+    // CSRF/session, mirroring the other human-authority calls.
+    useEffect(() => {
+        if (!selectedId) {
+            setRemoteRetouchCard(null);
+            return;
+        }
+        let live = true;
+        setRetouchCardLoading(true);
+        fetch(route('workspace.retouch-card', [project.id, selectedId]), {
+            headers: {
+                Accept: 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        })
+            .then(async (resp) => {
+                if (!live) return;
+                const j = await resp.json().catch(() => null);
+                if (resp.ok && j && typeof j === 'object' && 'retouch_card' in j) {
+                    setRemoteRetouchCard((j as { retouch_card: RetouchCard | null }).retouch_card ?? null);
+                } else if (live) {
+                    setRemoteRetouchCard(null);
+                }
+            })
+            .catch(() => {
+                if (live) setRemoteRetouchCard(null);
+            })
+            .finally(() => {
+                if (live) setRetouchCardLoading(false);
+            });
+        return () => {
+            live = false;
+        };
+    }, [project.id, selectedId]);
 
     /**
      * HUMAN-ONLY photographer decision (never a WebMCP tool). Persists
@@ -1109,11 +1487,18 @@ export default function Workspace({
 
     /** HUMAN-ONLY: photographer edits adjustment VALUES, superseding proposal lands pending_review. */
     const humanModify = async (proposal: WorkspaceProposal) => {
+        const draft = modifyValues[proposal.id] ?? {};
         const adjustments: Record<string, number> = {};
-        const exposure = parseFloat(modifyValues.exposure);
-        const warmth = parseFloat(modifyValues.warmth);
-        if (Number.isFinite(exposure)) adjustments.exposure = exposure;
-        if (Number.isFinite(warmth)) adjustments.warmth = warmth;
+        for (const key of RETOUCH_ADJUSTMENT_KEYS) {
+            const raw = draft[key];
+            if (raw === undefined || raw.trim() === '') continue;
+            const value = Number(raw);
+            if (!Number.isFinite(value) || value < -1 || value > 1) {
+                setNotify({ kind: 'err', text: `${RETOUCH_ADJUSTMENT_LABELS[key]} must be a number between -1 and 1.` });
+                return;
+            }
+            adjustments[key] = value;
+        }
         if (Object.keys(adjustments).length === 0) {
             setNotify({ kind: 'err', text: 'Enter at least one adjustment value to modify.' });
             return;
@@ -1140,7 +1525,12 @@ export default function Workspace({
                 ]);
                 addActivity({ tool_name: 'photographer_modify', authority: 'HUMAN', result_status: 'completed', output_summary: { proposal_id: proposal.id, superseded_by: j.superseding_draft.id, adjustments } });
                 setNotify({ kind: 'ok', text: `Values saved. New proposal #${j.superseding_draft.id} is pending your review.` });
-                setModifyValues({ exposure: '', warmth: '' });
+                // A11: the submitted proposal's draft is consumed; other
+                // proposals keep their own untouched drafts.
+                setModifyValues((cur) => {
+                    const { [proposal.id]: _consumed, ...rest } = cur;
+                    return rest;
+                });
             } else {
                 setNotify({ kind: 'err', text: `Modify failed: ${j?.error ?? resp.statusText}` });
             }
@@ -1187,6 +1577,39 @@ export default function Workspace({
         const target = localProposals.find((proposal) => proposal.id === executeTargetId) ?? null;
         if (!runAfterConfirmation(target, true, (proposal) => { void runExecute(proposal); })) {
             setExecuteTargetId(null);
+        }
+    };
+
+    /** A7: revoke a photographer approval that has not been executed yet. */
+    const humanCancelApproval = async (proposal: WorkspaceProposal) => {
+        setBusy('cancel');
+        try {
+            const resp = await fetch(route('proposals.cancel', [project.id, proposal.id]), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content ?? '',
+                },
+                body: JSON.stringify({ note: 'Photographer revoked approval before execution.' }),
+            });
+            const j = await resp.json().catch(() => null);
+            if (resp.ok && j?.proposal) {
+                setLocalProposals((ps) => ps.map((p) => (p.id === proposal.id ? { ...p, status: j.proposal.status ?? 'pending_review' } : p)));
+                addActivity({ tool_name: 'photographer_cancel_approval', authority: 'HUMAN', result_status: 'completed', output_summary: { proposal_id: proposal.id, status: j.proposal.status ?? 'pending_review' } });
+                setNotify({ kind: 'ok', text: `Approval revoked. Proposal #${proposal.id} is back to pending review.` });
+            } else {
+                setNotify({ kind: 'err', text: `Cancel approval failed: ${j?.error ?? resp.statusText}` });
+            }
+        } finally {
+            setBusy(null);
+        }
+    };
+
+    const confirmCancelApproval = () => {
+        const target = localProposals.find((proposal) => proposal.id === cancelTargetId) ?? null;
+        if (!runAfterConfirmation(target, true, (proposal) => { void humanCancelApproval(proposal); })) {
+            setCancelTargetId(null);
         }
     };
 
@@ -1342,7 +1765,7 @@ export default function Workspace({
                             type="button"
                             aria-label="Dismiss notification"
                             onClick={() => setNotify(null)}
-                            className="shrink-0 rounded px-1 text-lg leading-none text-current/70 transition hover:text-current focus:outline-none focus-visible:ring-2 focus-visible:ring-current"
+                            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded px-1 text-lg leading-none text-zinc-400 transition hover:bg-zinc-800/60 hover:text-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400"
                         >
                             ×
                         </button>
@@ -1407,6 +1830,21 @@ export default function Workspace({
                     onConfirm={confirmQaDismiss}
                 />
 
+                <WorkspaceConfirmDialog
+                    show={cancelTarget !== null}
+                    title="Cancel approval?"
+                    description={cancelTarget ? `Revoke your approval of proposal #${cancelTarget.id}? It returns to pending review and can no longer be executed until approved again.` : ''}
+                    processing={busy === 'cancel'}
+                    confirmTestId="workspace-confirm-cancel-approval"
+                    eyebrow="PROPOSAL GATE"
+                    confirmLabel="Cancel approval"
+                    cancelLabel="Keep approval"
+                    onClose={() => {
+                        if (busy !== 'cancel') setCancelTargetId(null);
+                    }}
+                    onConfirm={confirmCancelApproval}
+                />
+
                 <div className="grid grid-cols-1 gap-5 lg:grid-cols-[240px_1fr_320px]">
                     {/* ============ LEFT: photo grid ============ */}
                     <section className="td-fade-up td-delay-1 rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 shadow-sm">
@@ -1466,12 +1904,13 @@ export default function Workspace({
                                     {p.selection_state === 'culled' && (
                                         <span className="absolute left-1 top-1 rounded bg-rose-600 px-1 text-xs font-bold text-white">CULL</span>
                                     )}
-                                    <label className="absolute right-1 top-1 cursor-pointer rounded bg-black/50 p-0.5 text-zinc-100">
+                                    <label className="absolute right-1 top-1 flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded bg-black/50 text-zinc-100">
                                         <input
                                             type="checkbox"
+                                            aria-label={`Select ${p.filename} for culling`}
                                             checked={cullIds.includes(p.id)}
                                             onChange={() => toggleCull(p.id)}
-                                            className="h-3 w-3"
+                                            className="td-select h-5 w-5"
                                         />
                                     </label>
                                 </div>
@@ -1668,7 +2107,7 @@ export default function Workspace({
                                                                             ? 'border border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/15'
                                                                             : choice === 'reject'
                                                                                 ? 'border border-rose-500/40 bg-rose-500/10 text-rose-600 hover:bg-rose-500/15'
-                                                                                : 'border border-amber-400/40 bg-amber-400/10 text-amber-500 hover:bg-amber-400/10'
+                                                                                : 'border border-amber-400/40 bg-amber-400/10 text-amber-500 hover:bg-amber-400/20'
                                                                 }`}
                                                             >
                                                                 {choice.charAt(0).toUpperCase() + choice.slice(1)}
@@ -1707,7 +2146,7 @@ export default function Workspace({
                                                                         setOverrideOpen(false);
                                                                     }}
                                                                     disabled={busy !== null}
-                                                                    className="rounded-md bg-amber-400 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-400 disabled:opacity-40"
+                                                                    className="rounded-md bg-amber-400 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-300 disabled:opacity-40"
                                                                 >
                                                                     Override → {choice.charAt(0).toUpperCase() + choice.slice(1)}
                                                                 </button>
@@ -1820,115 +2259,10 @@ export default function Workspace({
 
                         <DecisionLedger decisions={decisions} />
 
-                        {/* ============ Sprint 4 — RETOUCH PANEL: ORIGINAL vs APPROVED ============ */}
-                        <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 shadow-sm" data-testid="retouch-panel">
-                            <div className="mb-2 flex items-center justify-between">
-                                <h3 className="text-sm font-semibold text-zinc-100">Retouch</h3>
-                                {retouchCard && (
-                                    <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${
-                                        retouchCard.status === 'executed'
-                                            ? 'bg-zinc-800 text-zinc-100'
-                                            : retouchCard.status === 'approved'
-                                                ? 'bg-emerald-500/15 text-emerald-600'
-                                                : 'bg-amber-400/10 text-amber-500'
-                                    }`} data-testid="retouch-status">
-                                        {retouchCard.status === 'executed' ? 'APPROVED BY PHOTOGRAPHER' : STATE_LABEL[retouchCard.status] ?? retouchCard.status}
-                                    </span>
-                                )}
-                            </div>
-
-                            {retouchCard ? (
-                                <div>
-                                    {/* BEFORE / AFTER — real image sources only */}
-                                    <div className="grid grid-cols-2 gap-2" data-testid="before-after">
-                                        <figure>
-                                            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-zinc-400">ORIGINAL</p>
-                                            {retouchCard.original.url ? (
-                                                <img src={retouchCard.original.url} alt="original" data-testid="original-image" className="w-full rounded-lg border border-zinc-800" />
-                                            ) : (
-                                                <div className="flex h-28 items-center justify-center rounded-lg bg-zinc-900 text-xs text-zinc-400">no original</div>
-                                            )}
-                                        </figure>
-                                        <figure>
-                                            <p className="mb-1 text-xs font-bold uppercase tracking-wide text-zinc-400">APPROVED / PREVIEW</p>
-                                            {retouchCard.derivative?.url ? (
-                                                <img src={retouchCard.derivative.url} alt="approved derivative" data-testid="derivative-image" className="w-full rounded-lg border-2 border-emerald-500/40" />
-                                            ) : retouchRenderFailed ? (
-                                                <div
-                                                    className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-4 text-xs text-rose-600"
-                                                    data-testid="retouch-render-error"
-                                                    role="alert"
-                                                >
-                                                    Retouch render failed: no approved derivative was stored.
-                                                </div>
-                                            ) : (
-                                                <div className="flex h-28 items-center justify-center rounded-lg border border-dashed border-zinc-700 text-xs text-zinc-400" data-testid="derivative-placeholder">
-                                                    {retouchCard.status === 'approved' ? 'Not rendered yet: execute the approved plan' : 'Not executed yet'}
-                                                </div>
-                                            )}
-                                        </figure>
-                                    </div>
-
-                                    {/* Creative Brief influence */}
-                                    {retouchCard.agent_original.influenced_by.length > 0 && (
-                                        <div className="mt-2 flex flex-wrap items-center gap-1.5" data-testid="retouch-influenced-by">
-                                            <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Brief influence</span>
-                                            {retouchCard.agent_original.influenced_by.map((dim) => (
-                                                <code key={dim} className="rounded bg-zinc-800/80 px-1.5 py-0.5 text-xs font-semibold text-zinc-200">{dim}</code>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {/* THREE-LAYER VALUE HISTORY — the trust core */}
-                                    <dl className="mt-3 space-y-1 text-xs" data-testid="retouch-layers">
-                                        <div className="flex items-baseline justify-between gap-2" data-testid="layer-agent-original">
-                                            <dt className="text-zinc-500">AI PROPOSAL</dt>
-                                            <dd className="font-semibold text-zinc-100">{fmtAdjustments(retouchCard.agent_original.params)}</dd>
-                                        </div>
-                                        {retouchCard.photographer_modification?.adjustments && (
-                                            <div className="flex items-baseline justify-between gap-2" data-testid="layer-photographer-modified">
-                                                <dt className="text-zinc-500">PHOTOGRAPHER MODIFIED{retouchCard.photographer_modification.note ? ': ' + retouchCard.photographer_modification.note : ''}</dt>
-                                                <dd className="font-semibold text-indigo-400">{fmtAdjustments(retouchCard.photographer_modification.adjustments)}</dd>
-                                            </div>
-                                        )}
-                                        {retouchCard.executed?.params && (
-                                            <div className="flex items-baseline justify-between gap-2 border-t border-zinc-800/70 pt-1" data-testid="layer-executed">
-                                                <dt className="font-semibold text-zinc-100">FINAL APPROVED VALUES</dt>
-                                                <dd className="font-bold text-emerald-400">{fmtAdjustments(retouchCard.executed.params)}</dd>
-                                            </div>
-                                        )}
-                                    </dl>
-
-                                    {/* Human-authority status */}
-                                    <p className="mt-2 rounded-md bg-emerald-500/10 px-2 py-1.5 text-xs font-semibold text-emerald-600" data-testid="human-authority-status">
-                                        {retouchCard.executed
-                                            ? 'APPROVED BY PHOTOGRAPHER: only the human-approved values were executed.'
-                                            : retouchCard.status === 'approved'
-                                                ? 'APPROVED: awaiting execution via apply_approved_plan.'
-                                                : retouchCard.status === 'modified'
-                                                    ? 'MODIFIED BY PHOTOGRAPHER: superseding proposal pending review.'
-                                                    : 'PENDING PHOTOGRAPHER REVIEW: nothing executes without photographer approval.'}
-                                    </p>
-
-                                    {/* Real before/after evidence: checksums make it verifiable */}
-                                    <div className="mt-2 space-y-0.5 text-xs text-zinc-400" data-testid="retouch-evidence">
-                                        <p>original sha256: <code data-testid="original-sha">{retouchCard.original.sha256 ? `${retouchCard.original.sha256.slice(0, 16)}…` : '—'}</code></p>
-                                        {retouchCard.derivative && (
-                                            <>
-                                                <p>derivative sha256: <code data-testid="derivative-sha">{retouchCard.derivative.sha256?.slice(0, 16)}…</code> ({retouchCard.derivative.storage_path})</p>
-                                                <p data-testid="checksum-divergence" className={retouchCard.derivative.sha256 && retouchCard.original.sha256 && retouchCard.derivative.sha256 !== retouchCard.original.sha256 ? 'text-emerald-400' : 'text-rose-400'}>
-                                                    {retouchCard.derivative.sha256 !== retouchCard.original.sha256
-                                                        ? '✓ derivative differs from original: original unchanged (byte-for-byte verified at execute time)'
-                                                        : '✗ derivative checksum equals original: inspect!'}
-                                                </p>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                            ) : (
-                                <p className="text-xs text-zinc-400">No retouch proposal yet: run the agent's Propose Retouch Plan.</p>
-                            )}
-                        </div>
+                        {retouchCardLoading && (
+                            <p className="text-xs text-zinc-500" role="status">Checking retouch status…</p>
+                        )}
+                        <RetouchTruthCard card={retouchCard} />
 
                         {/* ============ Sprint 4 — CONSISTENCY QA PANEL ============ */}
                         <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 shadow-sm" data-testid="qa-panel">
@@ -2112,22 +2446,15 @@ export default function Workspace({
                                                     {p.created_by ?? 'agent'} · {fmtTime(p.created_at)}
                                                 </div>
 
-                                                {/* Retouch proposal value layers — makes human authority obvious */}
+                                                {/* C5: honest per-proposal layer only. The proposal row
+                                                    shows the AI proposal values it actually carries; the
+                                                    photographer/executed truth lives on the retouch truth
+                                                    card for the selected photo — never a borrowed copy. */}
                                                 {(p.type === 'retouch' || p.type === 'batch_retouch') && p.items[0]?.params && (
                                                     <div className="mt-1.5 space-y-0.5 text-xs" data-testid={`proposal-${p.id}-values`}>
                                                         <p className="text-zinc-300">
                                                             AI proposal: <b data-testid="ai-proposed-values">{fmtAdjustments(agentValuesFor(p))}</b>
                                                         </p>
-                                                        {(p.status === 'approved' || p.status === 'executed') && (
-                                                            <p className="text-zinc-300">
-                                                                Photographer modified: <b data-testid="photographer-modified-values">{fmtAdjustments(photographerValuesFor(p) ?? agentValuesFor(p))}</b>
-                                                            </p>
-                                                        )}
-                                                        {p.status === 'executed' && (
-                                                            <p className="text-zinc-50">
-                                                                Final approved (executed): <b data-testid="final-approved-values">{fmtAdjustments(photographerValuesFor(p) ?? agentValuesFor(p))}</b>
-                                                            </p>
-                                                        )}
                                                     </div>
                                                 )}
 
@@ -2164,35 +2491,30 @@ export default function Workspace({
                                                                 <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
                                                                     Your values (agent proposed {fmtAdjustments(agentValuesFor(p))})
                                                                 </p>
-                                                                <div className="mt-1 flex items-center gap-2">
-                                                                    <label htmlFor={`mod-exposure-${p.id}`} className="text-xs text-zinc-300">Exposure</label>
-                                                                    <input
-                                                                        id={`mod-exposure-${p.id}`}
-                                                                        data-testid="modify-exposure"
-                                                                        type="number" step="0.01" min="-1" max="1"
-                                                                        value={modifyValues.exposure}
-                                                                        onChange={(e) => setModifyValues((v) => ({ ...v, exposure: e.target.value }))}
-                                                                        placeholder={String(agentValuesFor(p).exposure ?? 0)}
-                                                                        className="w-20 rounded border border-zinc-700 px-1.5 py-1 text-xs"
-                                                                    />
-                                                                    <label htmlFor={`mod-warmth-${p.id}`} className="text-xs text-zinc-300">Warmth</label>
-                                                                    <input
-                                                                        id={`mod-warmth-${p.id}`}
-                                                                        data-testid="modify-warmth"
-                                                                        type="number" step="0.01" min="-1" max="1"
-                                                                        value={modifyValues.warmth}
-                                                                        onChange={(e) => setModifyValues((v) => ({ ...v, warmth: e.target.value }))}
-                                                                        placeholder={String(agentValuesFor(p).warmth ?? 0)}
-                                                                        className="w-20 rounded border border-zinc-700 px-1.5 py-1 text-xs"
-                                                                    />
-                                                                    <button
-                                                                        onClick={() => void humanModify(p)}
-                                                                        disabled={busy !== null}
-                                                                        className="rounded bg-amber-400 px-2 py-1 text-xs font-semibold text-white hover:bg-amber-400 disabled:opacity-40"
-                                                                    >
-                                                                        Save values
-                                                                    </button>
+                                                                <div className="mt-1 grid grid-cols-2 gap-2">
+                                                                    {RETOUCH_ADJUSTMENT_KEYS.map((key) => (
+                                                                        <label key={key} htmlFor={`mod-${key}-${p.id}`} className="flex items-center justify-between gap-2 text-xs text-zinc-300">
+                                                                            <span>{RETOUCH_ADJUSTMENT_LABELS[key]}</span>
+                                                                            <input
+                                                                                id={`mod-${key}-${p.id}`}
+                                                                                data-testid={`modify-${key}`}
+                                                                                type="number" step="0.01" min="-1" max="1"
+                                                                                value={(modifyValues[p.id] ?? {})[key] ?? ''}
+                                                                                onChange={(e) => setModifyValues((v) => ({ ...v, [p.id]: { ...(v[p.id] ?? {}), [key]: e.target.value } }))}
+                                                                                placeholder={String(agentValuesFor(p)[key] ?? 0)}
+                                                                                className="w-20 rounded border border-zinc-700 px-1.5 py-1 text-xs"
+                                                                            />
+                                                                        </label>
+                                                                    ))}
                                                                 </div>
+                                                                <p className="mt-1 text-xs text-zinc-500">All values range from -1 to 1. Leave a field empty to skip it.</p>
+                                                                <button
+                                                                    onClick={() => void humanModify(p)}
+                                                                    disabled={busy !== null}
+                                                                    className="td-press mt-2 rounded bg-amber-400 px-2 py-1 text-xs font-semibold text-white hover:bg-amber-300 disabled:opacity-40"
+                                                                >
+                                                                    Save values
+                                                                </button>
                                                             </div>
                                                         )}
                                                     </div>
@@ -2207,6 +2529,18 @@ export default function Workspace({
                                                         title="Runs the dynamically-registered apply_approved_plan tool"
                                                     >
                                                         {busy === 'execute' ? (<><span className="td-spinner" aria-hidden="true" /> Executing…</>) : 'Execute Plan'}
+                                                    </button>
+                                                )}
+
+                                                {/* A7: only the photographer can revoke an approval that has not run. */}
+                                                {canPhotographerAct && p.status === 'approved' && !p.executed_at && (
+                                                    <button
+                                                        onClick={() => setCancelTargetId(p.id)}
+                                                        disabled={busy !== null}
+                                                        className="td-press mt-2 w-full rounded-md border border-zinc-700 px-2 py-1.5 text-xs font-semibold text-zinc-300 transition hover:border-rose-500/60 hover:text-rose-400 disabled:cursor-not-allowed disabled:opacity-40"
+                                                        title="Return this approved proposal to pending review before execution"
+                                                    >
+                                                        Cancel approval
                                                     </button>
                                                 )}
                                             </li>

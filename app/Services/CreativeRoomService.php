@@ -260,15 +260,24 @@ class CreativeRoomService
      * An agent account can never call this — the WebMCP catalog has no such
      * tool, and the guard is duplicated here for defense in depth.
      */
-    public function rejectConcept(Project $project, User $photographer, CreativeConcept $concept): CreativeConcept
-    {
+    public function rejectConcept(
+        Project $project,
+        User $photographer,
+        CreativeConcept $concept,
+        ?string $note = null,
+    ): CreativeConcept {
         $this->assertHumanPhotographer($photographer, 'reject', $project);
         $this->assertSameProject($concept, $project);
         $this->assertMutable($concept);
 
         $concept->forceFill(['status' => Domain::CONCEPT_STATUS_REJECTED])->save();
 
-        $this->recordDecision($project, $photographer, 'reject_concept', "Rejected concept #{$concept->id} ({$concept->title})");
+        $this->recordDecision(
+            $project,
+            $photographer,
+            'reject_concept',
+            "Rejected concept #{$concept->id} ({$concept->title})".($note ? " — {$note}" : ''),
+        );
 
         return $concept->fresh();
     }

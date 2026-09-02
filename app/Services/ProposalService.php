@@ -126,6 +126,44 @@ class ProposalService
     }
 
     /**
+     * Photographer cancels an approval before execution, returning the
+     * proposal to the review queue.
+     */
+    public function cancelApproval(Proposal $proposal, User $photographer, ?string $note = null): Proposal
+    {
+        return DB::transaction(function () use ($proposal, $photographer, $note) {
+            $locked = $this->lockApprovedUnexecuted($proposal->id);
+
+            $locked->forceFill([
+                'status' => Domain::STATE_PENDING_REVIEW,
+                'reviewed_by' => null,
+                'reviewed_at' => null,
+            ])->save();
+
+            PhotographerDecision::create([
+                'project_id' => $locked->project_id,
+                'proposal_id' => $locked->id,
+                'photographer_id' => $photographer->id,
+                'decision' => 'cancel',
+                'note' => $note,
+            ]);
+
+            // A cancelled retouch approval is only proposed again; it has not
+            // been approved or executed.
+            if (in_array($locked->type, [Domain::TYPE_RETOUCH, Domain::TYPE_BATCH_RETOUCH], true)) {
+                $locked->items()
+                    ->whereNotNull('photo_id')
+                    ->get()
+                    ->each(function (ProposalItem $item) {
+                        $item->photo?->forceFill(['retouch_state' => Domain::RETOUCH_PROPOSED])->saveQuietly();
+                    });
+            }
+
+            return $locked->fresh(['items.photo']);
+        });
+    }
+
+    /**
      * Photographer rejects a proposal.
      */
     public function reject(Proposal $proposal, User $photographer, ?string $note = null): Proposal
@@ -326,6 +364,22 @@ class ProposalService
 
         if (! in_array($locked->status, [Domain::STATE_PENDING_REVIEW, Domain::STATE_DRAFT], true)) {
             throw new \LogicException("Cannot review a proposal in state [{$locked->status}].");
+        }
+
+        return $locked;
+    }
+
+    private function lockApprovedUnexecuted(int $proposalId): Proposal
+    {
+        $locked = Proposal::whereKey($proposalId)->lockForUpdate()->first();
+
+        if ($locked === null) {
+            throw new \LogicException('Proposal not found.');
+        }
+
+        if ($locked->status !== Domain::STATE_APPROVED || $locked->executed_at !== null) {
+            $state = $locked->executed_at !== null ? Domain::STATE_EXECUTED : $locked->status;
+            throw new \LogicException("Cannot cancel approval for a proposal in state [{$state}].");
         }
 
         return $locked;

@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Domain\Domain;
 use App\Models\Project;
+use App\Services\AgentConversationService;
+use App\Services\AgentPresenceService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -27,6 +29,10 @@ class CreativeRoomPageController extends Controller
         $myRole = $project->members()
             ->where('user_id', $user->id)
             ->value('project_members.role');
+        $presenceEligible = $user->isAgent() && $myRole === Domain::ROLE_AGENT;
+        $canChat = $user->can('message', $project);
+        $presence = app(AgentPresenceService::class)->forProject($project);
+        $conversation = app(AgentConversationService::class)->forProject($project);
 
         $concepts = $project->creativeConcepts()
             ->with(['items', 'creator:id,name'])
@@ -90,6 +96,7 @@ class CreativeRoomPageController extends Controller
                     'id' => $user->id,
                     'name' => $user->name,
                     'is_agent' => $user->isAgent(),
+                    'presence_eligible' => $presenceEligible,
                 ],
             ],
             'my_role' => $myRole,
@@ -112,6 +119,11 @@ class CreativeRoomPageController extends Controller
                 'adopted_at' => $brief->created_at?->toISOString(),
             ] : null,
             'agent_activity' => $agentActivity,
+            'presence' => $presence,
+            'conversation' => $conversation,
+            'permissions' => [
+                'can_chat' => $canChat,
+            ],
             'webmcp' => [
                 'available' => true,
             ],

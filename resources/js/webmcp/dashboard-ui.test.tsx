@@ -235,6 +235,41 @@ describe('Dashboard darkroom view', () => {
         expect(html).toContain('Warm coastal portraits for the autumn editorial.');
     });
 
+    it('renders the owner-only invite-agent control and accessible form contract', () => {
+        pageFixture = {
+            props: makeProps({
+                project_meta: {
+                    1: {
+                        description: 'Warm coastal portraits for the autumn editorial.',
+                        can_manage: true,
+                        approved_proposals: 1,
+                        executed_proposals: 9,
+                        last_photo_at: '2026-08-30T14:02:00Z',
+                    },
+                },
+            }),
+        };
+        const html = render();
+
+        expect(html).toContain('data-testid="dashboard-project-1-invite-agent"');
+        expect(html).toContain('Invite an agent');
+        expect(html).toContain('data-testid="invite-agent-dialog-1"');
+        expect(html).toContain('data-testid="invite-agent-form-1"');
+        expect(html).toContain('aria-labelledby="invite-agent-title-1"');
+        expect(html).toContain('for="invite-agent-email-1"');
+        expect(html).toContain('id="invite-agent-email-1"');
+        expect(html).toContain('name="email"');
+        expect(html).toContain('Only existing agent accounts can be invited.');
+        expect(html).toContain('data-testid="invite-agent-submit-1"');
+    });
+
+    it('does not expose invite-agent management to non-owners', () => {
+        const html = render();
+
+        expect(html).not.toContain('data-testid="dashboard-project-1-invite-agent"');
+        expect(html).not.toContain('data-testid="invite-agent-dialog-1"');
+    });
+
     it('offers UNARCHIVE for an archived project', () => {
         pageFixture = {
             props: makeProps({

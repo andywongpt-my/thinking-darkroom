@@ -295,4 +295,167 @@ class ProposalAuthorityTest extends TestCase
         $proposal->refresh();
         $this->assertSame(Domain::STATE_PENDING_REVIEW, $proposal->status);
     }
+
+    /** An approved proposal can be requeued by its photographer. */
+    public function test_photographer_can_cancel_approved_unexecuted_proposal(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+        $photo = $project->photos()->first();
+        $proposal = $this->service->createProposal(
+            $project,
+            $agent,
+            Domain::TYPE_CULL,
+            [['photo_id' => $photo->id, 'action' => 'cull']],
+        );
+        $this->service->approve($proposal, $photographer);
+
+        $this->actingAs($photographer)
+            ->postJson(route('proposals.cancel', [$project->id, $proposal->id]), [
+                'note' => 'Please review the frame again.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('proposal.status', Domain::STATE_PENDING_REVIEW);
+
+        $proposal->refresh();
+        $this->assertSame(Domain::STATE_PENDING_REVIEW, $proposal->status);
+        $this->assertFalse($project->fresh()->hasEligibleExecutableProposal());
+        $this->assertDatabaseHas('photographer_decisions', [
+            'proposal_id' => $proposal->id,
+            'photographer_id' => $photographer->id,
+            'decision' => 'cancel',
+            'note' => 'Please review the frame again.',
+        ]);
+    }
+
+    /** A cancelled retouch approval is proposed again, not approved. */
+    public function test_cancelling_approved_retouch_proposal_restores_proposed_marker(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+        $photo = $project->photos()->first();
+        $proposal = $this->service->createProposal(
+            $project,
+            $agent,
+            Domain::TYPE_RETOUCH,
+            [['photo_id' => $photo->id, 'action' => 'retouch', 'params' => ['exposure' => 0.3]]],
+        );
+        $this->service->approve($proposal, $photographer);
+
+        $this->assertSame(Domain::RETOUCH_APPROVED, $photo->fresh()->retouch_state);
+
+        $this->actingAs($photographer)
+            ->postJson(route('proposals.cancel', [$project->id, $proposal->id]), [
+                'note' => 'Review the retouch again.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('proposal.status', Domain::STATE_PENDING_REVIEW);
+
+        $this->assertSame(Domain::RETOUCH_PROPOSED, $photo->fresh()->retouch_state);
+        $this->assertDatabaseHas('photographer_decisions', [
+            'proposal_id' => $proposal->id,
+            'photographer_id' => $photographer->id,
+            'decision' => 'cancel',
+            'note' => 'Review the retouch again.',
+        ]);
+    }
+
+    /** Agents, outsiders, viewers, and cross-project proposals are denied. */
+    public function test_cancel_requires_project_photographer_authority(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+        $photo = $project->photos()->first();
+        $proposal = $this->service->createProposal(
+            $project,
+            $agent,
+            Domain::TYPE_CULL,
+            [['photo_id' => $photo->id, 'action' => 'cull']],
+        );
+        $this->service->approve($proposal, $photographer);
+
+        $this->actingAs($agent)
+            ->postJson(route('proposals.cancel', [$project->id, $proposal->id]))
+            ->assertForbidden();
+
+        $outsider = User::factory()->create();
+        $this->actingAs($outsider)
+            ->postJson(route('proposals.cancel', [$project->id, $proposal->id]))
+            ->assertForbidden();
+
+        $viewer = User::factory()->create();
+        $project->members()->attach($viewer->id, ['role' => Domain::ROLE_VIEWER]);
+        $this->actingAs($viewer)
+            ->postJson(route('proposals.cancel', [$project->id, $proposal->id]))
+            ->assertForbidden();
+
+        $otherProject = Project::factory()->create(['owner_id' => $photographer->id]);
+        $otherProject->members()->attach($photographer->id, ['role' => Domain::ROLE_OWNER]);
+        $this->actingAs($photographer)
+            ->postJson(route('proposals.cancel', [$otherProject->id, $proposal->id]))
+            ->assertNotFound();
+
+        $this->assertSame(Domain::STATE_APPROVED, $proposal->fresh()->status);
+        $this->assertDatabaseMissing('photographer_decisions', [
+            'proposal_id' => $proposal->id,
+            'decision' => 'cancel',
+        ]);
+    }
+
+    /** Only approved, unexecuted proposals can be cancelled. */
+    public function test_cancel_rejects_pending_modified_and_executed_proposals(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+        $photos = $project->photos()->orderBy('id')->get();
+
+        $pending = $this->service->createProposal(
+            $project,
+            $agent,
+            Domain::TYPE_CULL,
+            [['photo_id' => $photos[0]->id, 'action' => 'cull']],
+        );
+        $this->actingAs($photographer)
+            ->postJson(route('proposals.cancel', [$project->id, $pending->id]))
+            ->assertStatus(409)
+            ->assertJsonPath('error', 'Cannot cancel approval for a proposal in state [pending_review].');
+        $this->assertSame(Domain::STATE_PENDING_REVIEW, $pending->fresh()->status);
+
+        $modified = $this->service->createProposal(
+            $project,
+            $agent,
+            Domain::TYPE_CULL,
+            [['photo_id' => $photos[1]->id, 'action' => 'cull']],
+        );
+        $this->service->requestModification($modified, $photographer, 'Needs another look.');
+        $this->actingAs($photographer)
+            ->postJson(route('proposals.cancel', [$project->id, $modified->id]))
+            ->assertStatus(409)
+            ->assertJsonPath('error', 'Cannot cancel approval for a proposal in state [modified].');
+        $this->assertSame(Domain::STATE_MODIFIED, $modified->fresh()->status);
+
+        $executed = $this->service->createProposal(
+            $project,
+            $agent,
+            Domain::TYPE_CULL,
+            [['photo_id' => $photos[2]->id, 'action' => 'cull']],
+        );
+        $this->service->approve($executed, $photographer);
+        $applicator = app(ProposalApplicator::class);
+        $this->service->execute($executed, $agent, fn (Proposal $proposal) => $applicator->apply($proposal));
+
+        $this->actingAs($photographer)
+            ->postJson(route('proposals.cancel', [$project->id, $executed->id]))
+            ->assertStatus(409)
+            ->assertJsonPath('error', 'Cannot cancel approval for a proposal in state [executed].');
+        $this->assertSame(Domain::STATE_EXECUTED, $executed->fresh()->status);
+        $this->assertDatabaseMissing('photographer_decisions', [
+            'proposal_id' => $pending->id,
+            'decision' => 'cancel',
+        ]);
+        $this->assertDatabaseMissing('photographer_decisions', [
+            'proposal_id' => $modified->id,
+            'decision' => 'cancel',
+        ]);
+        $this->assertDatabaseMissing('photographer_decisions', [
+            'proposal_id' => $executed->id,
+            'decision' => 'cancel',
+        ]);
+    }
 }

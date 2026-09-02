@@ -8,6 +8,7 @@ use App\Http\Controllers\CullingDecisionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\PhotographerReviewController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ProjectAgentController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\QaFindingReviewController;
 use App\Http\Controllers\WebmcpDiagnosticsController;
@@ -23,9 +24,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('projects.store');
     Route::patch('/projects/{project}', [ProjectController::class, 'update'])->name('projects.update');
     Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy');
+    Route::post('/projects/{project}/agents', [ProjectAgentController::class, 'store'])
+        ->name('projects.agents.store');
 
     // One main project workspace.
     Route::get('/projects/{project}', [WorkspacePageController::class, 'show'])->name('workspace.show');
+    Route::get('/projects/{project}/photos/{photo}/retouch-card', [WorkspacePageController::class, 'retouchCardForPhoto'])
+        ->name('workspace.retouch-card');
     Route::post('/projects/{project}/photos', [WorkspacePageController::class, 'upload'])
         ->middleware('throttle:workspace-upload')
         ->name('workspace.upload');
@@ -47,6 +52,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // HUMAN-ONLY review endpoints (never exposed as WebMCP tools).
     Route::post('/projects/{project}/proposals/{proposal}/approve', [PhotographerReviewController::class, 'approve'])
         ->name('proposals.approve');
+    Route::post('/projects/{project}/proposals/{proposal}/cancel', [PhotographerReviewController::class, 'cancel'])
+        ->name('proposals.cancel');
     Route::post('/projects/{project}/proposals/{proposal}/reject', [PhotographerReviewController::class, 'reject'])
         ->name('proposals.reject');
     Route::post('/projects/{project}/proposals/{proposal}/modify', [PhotographerReviewController::class, 'modify'])

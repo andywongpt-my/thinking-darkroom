@@ -10,12 +10,14 @@ use App\Services\AgentConversationService;
 use App\Services\AgentPresenceService;
 use App\Services\Culling\ContextAwareCullingService;
 use App\Services\Media\MediaStore;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use RuntimeException;
 use Throwable;
 
 class WorkspacePageController extends Controller
@@ -161,10 +163,9 @@ class WorkspacePageController extends Controller
             ])
             ->values();
 
-        // Sprint 4 — retouch truth card: the full three-layer history for the
-        // most recent retouch proposal chain (agent original → photographer
-        // modification → executed values) plus the real derivative evidence.
-        $retouch = $this->retouchCard($project);
+        // Sprint 4 — retouch truth card for the initially-selected photo. The
+        // browser fetches one project/photo card when the selection changes.
+        $retouch = $this->retouchCard($project, $photos->first()['id'] ?? null);
 
         return Inertia::render('Workspace', [
             'project' => [
@@ -222,21 +223,49 @@ class WorkspacePageController extends Controller
         ]);
     }
 
+    /** GET /projects/{project}/photos/{photo}/retouch-card. */
+    public function retouchCardForPhoto(Request $request, Project $project, Photo $photo): JsonResponse
+    {
+        $this->authorize('view', $project);
+        abort_unless($photo->project_id === $project->id, 404);
+
+        return response()->json([
+            'retouch_card' => $this->retouchCard($project, $photo->id),
+        ]);
+    }
+
     /**
      * Sprint 4 — the retouch truth card payload: three-layer adjustment
      * history (AGENT ORIGINAL → PHOTOGRAPHER MODIFICATION → EXECUTED) plus
      * real before/after evidence (URLs, checksums, dimensions) for the most
-     * recent retouch proposal chain in the project.
+     * most recent retouch proposal chain for one project photo.
      *
      * Everything here is read straight from the database and the storage
      * disk — the UI never fabricates values.
      *
      * @return array<string, mixed>|null
      */
-    private function retouchCard(Project $project): ?array
+    private function retouchCard(Project $project, ?int $photoId): ?array
     {
+        if ($photoId === null) {
+            return null;
+        }
+
+        $photo = Photo::query()
+            ->where('project_id', $project->id)
+            ->whereKey($photoId)
+            ->first();
+
+        if ($photo === null) {
+            return null;
+        }
+
         $chain = $project->proposals()
             ->whereIn('type', [Domain::TYPE_RETOUCH, Domain::TYPE_BATCH_RETOUCH])
+            ->whereHas('items', fn ($query) => $query->where('photo_id', $photoId))
+            ->with(['items' => fn ($query) => $query
+                ->where('photo_id', $photoId)
+                ->with('photo:id,filename,path,width,height')])
             ->orderByDesc('id')
             ->limit(6)
             ->get();
@@ -247,15 +276,13 @@ class WorkspacePageController extends Controller
 
         // Prefer the executed member of the chain; fall back to the newest.
         $proposal = $chain->firstWhere('executed_at', '!==', null) ?? $chain->first();
-        $proposal->load(['items.photo:id,filename,path,width,height']);
 
         $item = $proposal->items->first();
         if ($item === null) {
             return null;
         }
 
-        $photo = $item->photo;
-        $originalPath = $photo?->path;
+        $originalPath = $photo->path;
         $media = app(MediaStore::class);
 
         // Agent-original values: the superseding proposal's payload preserves
@@ -271,14 +298,17 @@ class WorkspacePageController extends Controller
             ->map(fn ($v) => (float) $v)
             ->all();
 
-        $agentOriginal = null;
-        if ($proposal->supersedes_id !== null) {
-            $parent = $project->proposals()->find($proposal->supersedes_id);
-            $agentOriginal = data_get($proposal->payload, 'original_items.0.params')
-                ?? $parent?->items->first()?->params;
-        }
-        $agentOriginal ??= $item->params;
-        $agentOriginal = $projectAdjustments($agentOriginal);
+        $parent = $proposal->supersedes_id !== null
+            ? $project->proposals()
+                ->with(['items' => fn ($query) => $query->where('photo_id', $photoId)])
+                ->find($proposal->supersedes_id)
+            : null;
+        $originalItem = collect(data_get($proposal->payload, 'original_items', []))
+            ->first(fn ($original) => is_array($original) && ($original['photo_id'] ?? null) === $photoId);
+        $agentSource = is_array($originalItem) ? ($originalItem['params'] ?? null) : null;
+        $agentSource ??= $parent?->items->first()?->params;
+        $agentSource ??= $item->params;
+        $agentOriginal = $projectAdjustments($agentSource);
 
         // Photographer modification: the superseded proposal's modify decision.
         $modification = null;
@@ -299,7 +329,9 @@ class WorkspacePageController extends Controller
         // truth for what actually ran), with the item result as fallback.
         $derivative = $originalPath
             ? PhotoDerivative::where('photo_id', $item->photo_id)
+                ->where('project_id', $project->id)
                 ->where('type', Domain::DERIVATIVE_APPROVED_RENDER)
+                ->where('proposal_id', $proposal->id)
                 ->first()
             : null;
 
@@ -346,9 +378,9 @@ class WorkspacePageController extends Controller
             ] : null,
             'agent_original' => [
                 'params' => $agentOriginal,
-                'influenced_by' => data_get($item->params, 'retouch_influenced_by', []),
-                'brief_aware' => (bool) data_get($item->params, 'brief_aware', false),
-                'note' => data_get($item->params, 'retouch_note'),
+                'influenced_by' => data_get($agentSource, 'retouch_influenced_by', []),
+                'brief_aware' => (bool) data_get($agentSource, 'brief_aware', false),
+                'note' => data_get($agentSource, 'retouch_note'),
             ],
             'photographer_modification' => $modification,
             'executed' => $executed !== null ? [
@@ -433,51 +465,66 @@ class WorkspacePageController extends Controller
         abort_unless($photo->project_id === $project->id, 404);
 
         $media = app(MediaStore::class);
+        $paths = $this->mediaPathsForPhoto($photo);
 
-        // Collect storage paths inside the transaction, delete the bytes AFTER
-        // it commits: byte stores cannot roll back, so deleting inside the
-        // transaction would orphan the row if the record delete ever failed
-        // (AGY 2026-09-02 audit Finding 1).
-        $paths = DB::transaction(function () use ($photo): array {
-            $paths = [];
+        try {
+            $this->deleteMediaOrFail($media, $paths);
+        } catch (Throwable $e) {
+            report($e);
 
-            foreach (PhotoDerivative::query()->where('photo_id', $photo->id)->get() as $derivative) {
-                if ($this->deletablePath($derivative->storage_path)) {
-                    $paths[] = $derivative->storage_path;
-                }
+            return back()->withErrors([
+                'media' => 'Unable to delete photo media. The photo was not deleted.',
+            ]);
+        }
+
+        try {
+            $deleted = DB::transaction(fn (): bool => $photo->delete() === true);
+            if (! $deleted) {
+                throw new RuntimeException('Photo deletion was vetoed or did not remove a database row.');
             }
+        } catch (Throwable $e) {
+            report($e);
 
-            if ($this->deletablePath($photo->path)) {
-                $paths[] = $photo->path;
-            }
-
-            $photo->delete();
-
-            return $paths;
-        });
-
-        foreach ($paths as $path) {
-            $this->tryDeleteMedia($media, $path);
+            return back()->withErrors([
+                'photo' => 'Photo records could not be deleted after media cleanup. Media may have been removed; please retry or contact support.',
+            ]);
         }
 
         return back()->with('flash', ['success' => 'Photo deleted.']);
     }
 
-    private function deletablePath(?string $path): bool
+    /**
+     * @return list<string>
+     */
+    private function mediaPathsForPhoto(Photo $photo): array
     {
-        return $path !== null && $path !== '';
+        return collect([
+            ...PhotoDerivative::query()
+                ->where('photo_id', $photo->id)
+                ->pluck('storage_path')
+                ->all(),
+            $photo->path,
+        ])
+            ->filter(fn ($path): bool => $this->deletablePath($path))
+            ->unique()
+            ->values()
+            ->all();
     }
 
-    private function tryDeleteMedia(MediaStore $mediaStore, ?string $path): void
+    private function deletablePath(mixed $path): bool
     {
-        if ($path === null || $path === '') {
-            return;
-        }
+        return is_string($path) && $path !== '';
+    }
 
-        try {
-            $mediaStore->delete($path);
-        } catch (Throwable) {
-            // A missing/unavailable byte store must not prevent database cleanup.
+    /**
+     * @param  list<string>  $paths
+     */
+    private function deleteMediaOrFail(MediaStore $mediaStore, array $paths): void
+    {
+        foreach ($paths as $path) {
+            if (! $mediaStore->delete($path) && $mediaStore->exists($path)) {
+                throw new RuntimeException('Media deletion returned an unsuccessful result.');
+            }
         }
     }
 }

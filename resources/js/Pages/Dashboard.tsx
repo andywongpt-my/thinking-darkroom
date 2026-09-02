@@ -150,20 +150,39 @@ function FilmProjectCard({ p, meta, canManage }: { p: DashboardProject; meta?: P
     const description = p.description ?? meta?.description ?? '';
     const [showRename, setShowRename] = useState(false);
     const [showDelete, setShowDelete] = useState(false);
+    const [showInviteAgent, setShowInviteAgent] = useState(false);
+    const [inviteFeedback, setInviteFeedback] = useState<string | null>(null);
     const [deleting, setDeleting] = useState(false);
     const nameInput = useRef<HTMLInputElement>(null);
     const descriptionInput = useRef<HTMLTextAreaElement>(null);
+    const inviteEmailInput = useRef<HTMLInputElement>(null);
     const renameTrigger = useRef<HTMLButtonElement>(null);
+    const inviteTrigger = useRef<HTMLButtonElement>(null);
     const { data, setData, patch, errors, processing, reset, clearErrors } = useForm({
         name: p.name,
         description,
     });
+    const {
+        data: inviteData,
+        setData: setInviteData,
+        post: postInvite,
+        errors: inviteErrors,
+        processing: inviteProcessing,
+        reset: resetInvite,
+        clearErrors: clearInviteErrors,
+    } = useForm({ email: '' });
 
     useEffect(() => {
         if (showRename) {
             nameInput.current?.focus();
         }
     }, [showRename]);
+
+    useEffect(() => {
+        if (showInviteAgent) {
+            inviteEmailInput.current?.focus();
+        }
+    }, [showInviteAgent]);
 
     const openRename = () => {
         clearErrors();
@@ -181,6 +200,41 @@ function FilmProjectCard({ p, meta, canManage }: { p: DashboardProject; meta?: P
         clearErrors();
         setShowRename(false);
         renameTrigger.current?.focus();
+    };
+
+    const openInviteAgent = () => {
+        clearInviteErrors();
+        setInviteData('email', '');
+        setInviteFeedback(null);
+        setShowInviteAgent(true);
+    };
+
+    const closeInviteAgent = () => {
+        if (inviteProcessing) {
+            return;
+        }
+
+        resetInvite();
+        clearInviteErrors();
+        setShowInviteAgent(false);
+        inviteTrigger.current?.focus();
+    };
+
+    const submitInviteAgent: FormEventHandler<HTMLFormElement> = (event) => {
+        event.preventDefault();
+        postInvite(route('projects.agents.store', p.id), {
+            preserveScroll: true,
+            onSuccess: () => {
+                resetInvite();
+                clearInviteErrors();
+                setShowInviteAgent(false);
+                setInviteFeedback('Agent invitation saved.');
+                inviteTrigger.current?.focus();
+            },
+            onError: () => {
+                inviteEmailInput.current?.focus();
+            },
+        });
     };
 
     const submitRename: FormEventHandler<HTMLFormElement> = (event) => {
@@ -247,6 +301,17 @@ function FilmProjectCard({ p, meta, canManage }: { p: DashboardProject; meta?: P
                                 className="td-press block w-full px-4 py-2 text-start text-sm text-zinc-300 transition hover:bg-zinc-800 hover:text-zinc-100 focus:bg-zinc-800 focus:outline-none"
                             >
                                 Rename
+                            </button>
+                            <button
+                                ref={inviteTrigger}
+                                type="button"
+                                data-testid={`dashboard-project-${p.id}-invite-agent`}
+                                aria-haspopup="dialog"
+                                aria-expanded={showInviteAgent}
+                                onClick={openInviteAgent}
+                                className="td-press block w-full px-4 py-2 text-start text-sm text-zinc-300 transition hover:bg-zinc-800 hover:text-zinc-100 focus:bg-zinc-800 focus:outline-none"
+                            >
+                                Invite an agent
                             </button>
                             <button
                                 type="button"
@@ -338,6 +403,16 @@ function FilmProjectCard({ p, meta, canManage }: { p: DashboardProject; meta?: P
 
             {canManage && (
                 <>
+                    {inviteFeedback && (
+                        <p
+                            role="status"
+                            aria-live="polite"
+                            data-testid={`invite-agent-feedback-${p.id}`}
+                            className="mx-5 mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-300"
+                        >
+                            {inviteFeedback}
+                        </p>
+                    )}
                     <Modal show={showRename} onClose={closeRename} maxWidth="lg">
                 <div className="bg-zinc-900 p-6 text-zinc-100 sm:p-7">
                     <div className="mb-6">
@@ -463,6 +538,82 @@ function FilmProjectCard({ p, meta, canManage }: { p: DashboardProject; meta?: P
                         </DangerButton>
                     </div>
                 </div>
+                    </Modal>
+
+                    <Modal show={showInviteAgent} onClose={closeInviteAgent} maxWidth="md">
+                        <div
+                            data-testid={`invite-agent-dialog-${p.id}`}
+                            className="bg-zinc-900 p-6 text-zinc-100 sm:p-7"
+                        >
+                            <div className="mb-6">
+                                <p className="font-mono text-xs uppercase tracking-[0.2em] text-amber-400/90">
+                                    PROJECT ACCESS
+                                </p>
+                                <h2 id={`invite-agent-title-${p.id}`} className="mt-2 text-xl font-semibold text-zinc-100">
+                                    Invite an agent
+                                </h2>
+                                <p id={`invite-agent-description-${p.id}`} className="mt-2 text-sm leading-relaxed text-zinc-400">
+                                    Add an existing agent account to {p.name}. Agents can propose, never decide.
+                                </p>
+                            </div>
+
+                            <form
+                                onSubmit={submitInviteAgent}
+                                aria-labelledby={`invite-agent-title-${p.id}`}
+                                aria-describedby={`invite-agent-description-${p.id}`}
+                                data-testid={`invite-agent-form-${p.id}`}
+                                className="space-y-5"
+                            >
+                                <div>
+                                    <label htmlFor={`invite-agent-email-${p.id}`} className="block text-sm font-medium text-zinc-200">
+                                        Agent email <span className="text-amber-400" aria-hidden="true">*</span>
+                                    </label>
+                                    <input
+                                        ref={inviteEmailInput}
+                                        id={`invite-agent-email-${p.id}`}
+                                        name="email"
+                                        type="email"
+                                        value={inviteData.email}
+                                        onChange={(event) => setInviteData('email', event.target.value)}
+                                        required
+                                        disabled={inviteProcessing}
+                                        maxLength={255}
+                                        autoComplete="email"
+                                        aria-invalid={Boolean(inviteErrors.email)}
+                                        aria-describedby={inviteErrors.email ? `invite-agent-email-error-${p.id}` : undefined}
+                                        className="mt-2 block w-full rounded-md border-zinc-700 bg-zinc-950 text-sm text-zinc-100 shadow-sm focus:border-amber-400 focus:ring-amber-400"
+                                    />
+                                    {inviteErrors.email && (
+                                        <p id={`invite-agent-email-error-${p.id}`} role="alert" className="mt-2 text-sm text-red-300">
+                                            {inviteErrors.email}
+                                        </p>
+                                    )}
+                                    <p className="mt-2 text-xs leading-relaxed text-zinc-500">
+                                        Only existing agent accounts can be invited.
+                                    </p>
+                                </div>
+
+                                <div className="flex flex-wrap justify-end gap-3 border-t border-zinc-800 pt-5">
+                                    <button
+                                        type="button"
+                                        data-testid={`invite-agent-cancel-${p.id}`}
+                                        onClick={closeInviteAgent}
+                                        disabled={inviteProcessing}
+                                        className="td-press rounded-lg border border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        data-testid={`invite-agent-submit-${p.id}`}
+                                        disabled={inviteProcessing}
+                                        className="td-press inline-flex items-center gap-2 rounded-lg border border-amber-400/60 bg-amber-400 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        {inviteProcessing ? (<><span className="td-spinner" aria-hidden="true" /> Inviting…</>) : 'Invite agent'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
                     </Modal>
                 </>
             )}

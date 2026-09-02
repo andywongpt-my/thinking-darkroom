@@ -10,6 +10,8 @@ use App\Models\User;
 use App\Services\Media\MediaStore;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use Mockery;
+use RuntimeException;
 use Tests\TestCase;
 
 class ProjectManagementTest extends TestCase
@@ -113,6 +115,139 @@ class ProjectManagementTest extends TestCase
         $this->assertDatabaseMissing('photo_derivatives', ['photo_id' => $photo->id]);
         $this->assertFalse($media->exists($original['path']));
         $this->assertFalse($media->exists($derivative['path']));
+    }
+
+    public function test_project_delete_retains_rows_and_reports_media_failure(): void
+    {
+        $owner = User::factory()->create();
+        $project = Project::factory()->create(['owner_id' => $owner->id]);
+        $project->members()->attach($owner->id, ['role' => Domain::ROLE_OWNER]);
+        $photo = Photo::factory()->create([
+            'project_id' => $project->id,
+            'path' => 'project-'.$project->id.'/original.jpg',
+        ]);
+        $media = Mockery::mock(MediaStore::class);
+        $media->shouldReceive('delete')
+            ->once()
+            ->with($photo->path)
+            ->andThrow(new RuntimeException('storage unavailable'));
+        $this->instance(MediaStore::class, $media);
+
+        $response = $this
+            ->from(route('dashboard'))
+            ->actingAs($owner)
+            ->delete(route('projects.destroy', $project));
+
+        $response
+            ->assertSessionHasErrors('media')
+            ->assertRedirect(route('dashboard'));
+        $this->assertDatabaseHas('projects', ['id' => $project->id]);
+        $this->assertDatabaseHas('photos', ['id' => $photo->id]);
+    }
+
+    public function test_photo_delete_retains_row_and_reports_media_failure(): void
+    {
+        $owner = User::factory()->create();
+        $project = Project::factory()->create(['owner_id' => $owner->id]);
+        $project->members()->attach($owner->id, ['role' => Domain::ROLE_OWNER]);
+        $photo = Photo::factory()->create([
+            'project_id' => $project->id,
+            'path' => 'project-'.$project->id.'/original.jpg',
+        ]);
+        $media = Mockery::mock(MediaStore::class);
+        $media->shouldReceive('delete')
+            ->once()
+            ->with($photo->path)
+            ->andThrow(new RuntimeException('storage unavailable'));
+        $this->instance(MediaStore::class, $media);
+
+        $response = $this
+            ->from(route('workspace.show', $project))
+            ->actingAs($owner)
+            ->delete(route('workspace.photos.destroy', [$project, $photo]));
+
+        $response
+            ->assertSessionHasErrors('media')
+            ->assertRedirect(route('workspace.show', $project));
+        $this->assertDatabaseHas('photos', ['id' => $photo->id]);
+    }
+
+    public function test_project_delete_reports_database_failure_after_media_cleanup(): void
+    {
+        $owner = User::factory()->create();
+        $project = Project::factory()->create(['owner_id' => $owner->id]);
+        $project->members()->attach($owner->id, ['role' => Domain::ROLE_OWNER]);
+        $photo = Photo::factory()->create([
+            'project_id' => $project->id,
+            'path' => 'project-'.$project->id.'/original.jpg',
+        ]);
+        $media = Mockery::mock(MediaStore::class);
+        $media->shouldReceive('delete')->once()->with($photo->path)->andReturnTrue();
+        $this->instance(MediaStore::class, $media);
+
+        Project::deleting(static fn (Project $deletingProject): bool => false);
+
+        try {
+            $response = $this
+                ->from(route('dashboard'))
+                ->actingAs($owner)
+                ->delete(route('projects.destroy', $project));
+        } finally {
+            Project::flushEventListeners();
+        }
+
+        $response
+            ->assertSessionHasErrors('project')
+            ->assertRedirect(route('dashboard'));
+        $this->assertDatabaseHas('projects', ['id' => $project->id]);
+    }
+
+    public function test_project_delete_retry_accepts_a_confirmed_missing_prior_media_path(): void
+    {
+        $owner = User::factory()->create();
+        $project = Project::factory()->create(['owner_id' => $owner->id]);
+        $project->members()->attach($owner->id, ['role' => Domain::ROLE_OWNER]);
+        $originalPath = 'project-'.$project->id.'/original.jpg';
+        $derivativePath = 'project-'.$project->id.'/derivatives/approved.jpg';
+        $photo = Photo::factory()->create([
+            'project_id' => $project->id,
+            'path' => $originalPath,
+        ]);
+        PhotoDerivative::query()->create([
+            'project_id' => $project->id,
+            'photo_id' => $photo->id,
+            'type' => Domain::DERIVATIVE_APPROVED_RENDER,
+            'storage_path' => $derivativePath,
+            'adjustments' => ['exposure' => 0.2],
+            'provenance' => 'test',
+        ]);
+
+        $firstAttemptMedia = Mockery::mock(MediaStore::class);
+        $firstAttemptMedia->shouldReceive('delete')->once()->with($originalPath)->andReturnTrue();
+        $firstAttemptMedia->shouldReceive('delete')->once()->with($derivativePath)->andThrow(new RuntimeException('storage unavailable'));
+        $this->instance(MediaStore::class, $firstAttemptMedia);
+
+        $this
+            ->from(route('dashboard'))
+            ->actingAs($owner)
+            ->delete(route('projects.destroy', $project))
+            ->assertSessionHasErrors('media')
+            ->assertRedirect(route('dashboard'));
+        $this->assertDatabaseHas('projects', ['id' => $project->id]);
+
+        $retryMedia = Mockery::mock(MediaStore::class);
+        $retryMedia->shouldReceive('delete')->once()->with($originalPath)->andReturnFalse();
+        $retryMedia->shouldReceive('exists')->zeroOrMoreTimes()->with($originalPath)->andReturnFalse();
+        $retryMedia->shouldReceive('delete')->once()->with($derivativePath)->andReturnTrue();
+        $this->instance(MediaStore::class, $retryMedia);
+
+        $this
+            ->from(route('dashboard'))
+            ->actingAs($owner)
+            ->delete(route('projects.destroy', $project))
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('dashboard'));
+        $this->assertDatabaseMissing('projects', ['id' => $project->id]);
     }
 
     public function test_non_owner_member_cannot_update_project(): void

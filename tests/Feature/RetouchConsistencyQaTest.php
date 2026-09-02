@@ -732,6 +732,58 @@ class RetouchConsistencyQaTest extends TestCase
         $this->assertSame($bytesBefore, Storage::disk('public')->get($photo->path));
     }
 
+    public function test_workspace_retouch_card_endpoint_is_scoped_to_selected_photo_and_project(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+        $photos = $project->photos()->orderBy('id')->take(3)->get();
+        $first = $photos[0];
+        $second = $photos[1];
+        $this->putRealJpeg($first);
+        $this->putRealJpeg($second);
+
+        $this->service->createProposal(
+            $project,
+            $agent,
+            Domain::TYPE_RETOUCH,
+            [['photo_id' => $first->id, 'action' => 'retouch', 'params' => ['exposure' => 0.11]]],
+        );
+        $this->service->createProposal(
+            $project,
+            $agent,
+            Domain::TYPE_RETOUCH,
+            [['photo_id' => $second->id, 'action' => 'retouch', 'params' => ['warmth' => 0.77]]],
+        );
+
+        $firstResponse = $this->actingAs($photographer)
+            ->getJson(route('workspace.retouch-card', [$project->id, $first->id]))
+            ->assertOk();
+        $secondResponse = $this->actingAs($photographer)
+            ->getJson(route('workspace.retouch-card', [$project->id, $second->id]))
+            ->assertOk();
+
+        $this->assertSame($first->id, $firstResponse->json('retouch_card.photo.id'));
+        $this->assertSame(['exposure' => 0.11], self::normAdjustments($firstResponse->json('retouch_card.agent_original.params')));
+        $this->assertSame($second->id, $secondResponse->json('retouch_card.photo.id'));
+        $this->assertSame(['warmth' => 0.77], self::normAdjustments($secondResponse->json('retouch_card.agent_original.params')));
+
+        $thirdResponse = $this->actingAs($photographer)
+            ->getJson(route('workspace.retouch-card', [$project->id, $photos[2]->id]))
+            ->assertOk();
+        $this->assertNull($thirdResponse->json('retouch_card'));
+
+        $otherProject = Project::factory()->withPhotos(1)->create();
+        $otherPhoto = $otherProject->photos()->first();
+
+        $this->actingAs($photographer)
+            ->getJson(route('workspace.retouch-card', [$project->id, $otherPhoto->id]))
+            ->assertNotFound();
+
+        $outsider = User::factory()->create();
+        $this->actingAs($outsider)
+            ->getJson(route('workspace.retouch-card', [$project->id, $first->id]))
+            ->assertForbidden();
+    }
+
     public function test_workspace_retouch_card_layers_show_only_adjustment_values(): void
     {
         // REGRESSION: the Workspace page's retouch truth card must present a

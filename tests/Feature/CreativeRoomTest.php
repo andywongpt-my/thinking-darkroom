@@ -11,6 +11,8 @@ use App\Models\User;
 use App\Services\CreativeRoomService;
 use App\Support\WebmcpToolCatalog;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 /**
@@ -88,6 +90,50 @@ class CreativeRoomTest extends TestCase
         );
     }
 
+    public function test_creative_room_page_bootstraps_conversation_presence_current_user_and_chat_permission(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+        $messageBody = 'Please explain how this direction serves the set.';
+
+        $this->actingAs($photographer)
+            ->postJson(route('agent-conversation.store', $project), [
+                'body' => $messageBody,
+                'client_message_id' => (string) Str::uuid(),
+            ])
+            ->assertCreated();
+
+        $this->actingAs($agent)
+            ->postJson(route('api.presence.heartbeat', $project))
+            ->assertOk();
+
+        $this->actingAs($photographer)
+            ->get(route('creative.show', $project))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('CreativeRoom')
+                ->where('request.user.id', $photographer->id)
+                ->where('request.user.name', 'Maya Photographer')
+                ->where('request.user.is_agent', false)
+                ->where('request.user.presence_eligible', false)
+                ->where('presence.project_id', $project->id)
+                ->where('presence.online', true)
+                ->where('permissions.can_chat', true)
+                ->where('conversation.project_id', $project->id)
+                ->where('conversation.trust_boundary', 'untrusted_project_conversation')
+                ->has('conversation.messages', 1)
+                ->where('conversation.messages.0.body', $messageBody));
+
+        $this->actingAs($agent)
+            ->get(route('creative.show', $project))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('CreativeRoom')
+                ->where('request.user.id', $agent->id)
+                ->where('request.user.is_agent', true)
+                ->where('request.user.presence_eligible', true)
+                ->where('permissions.can_chat', true));
+    }
+
     /* ------------------------------------------------------------------ */
     /*  1–3. Propose / propose ≠ adopt / photographer adopts */
     /* ------------------------------------------------------------------ */
@@ -138,6 +184,38 @@ class CreativeRoomTest extends TestCase
         $brief = $project->creativeBriefs()->where('status', 'active')->first();
         $this->assertNotNull($brief);
         $this->assertSame($concept->title, $brief->creative_direction);
+    }
+
+    public function test_human_review_endpoints_persist_optional_adoption_and_rejection_notes(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+        $rejected = $this->proposeOne($project, $agent, 'Not This Direction');
+        $rejectNote = 'The palette fights the intended quiet morning mood.';
+
+        $this->actingAs($photographer)
+            ->postJson(route('creative.concepts.reject', [$project, $rejected]), ['note' => $rejectNote])
+            ->assertOk();
+
+        $this->assertDatabaseHas('photographer_decisions', [
+            'project_id' => $project->id,
+            'photographer_id' => $photographer->id,
+            'decision' => 'reject_concept',
+            'note' => "Rejected concept #{$rejected->id} ({$rejected->title}) — {$rejectNote}",
+        ]);
+
+        $adopted = $this->proposeOne($project, $agent, 'The Direction');
+        $adoptNote = 'This keeps the subject intimate without losing structure.';
+
+        $this->actingAs($photographer)
+            ->postJson(route('creative.concepts.adopt', [$project, $adopted]), ['note' => $adoptNote])
+            ->assertOk();
+
+        $this->assertDatabaseHas('photographer_decisions', [
+            'project_id' => $project->id,
+            'photographer_id' => $photographer->id,
+            'decision' => 'adopt_concept',
+            'note' => "Adopted creative direction: {$adopted->title} — {$adoptNote}",
+        ]);
     }
 
     /* ------------------------------------------------------------------ */

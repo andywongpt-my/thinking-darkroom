@@ -213,6 +213,78 @@ describe('Sprint 2 — Creative Room page (Task 10)', () => {
         expect(html).toContain('Editorial Portraits');
     });
 
+    it('B4 mounts the project-scoped conversation with server-rendered initial messages', () => {
+        const html = ssrText(mountPage({
+            request: { user: { id: 1, name: 'Maya', is_agent: false, presence_eligible: false } },
+            presence: {
+                project_id: 7,
+                online: true,
+                agents: [{ id: 2, name: 'WebMCP Agent', status: 'online', last_seen_at: '2026-09-02T01:00:00.000Z' }],
+                checked_at: '2026-09-02T01:00:01.000Z',
+            },
+            conversation: {
+                project_id: 7,
+                trust_boundary: 'untrusted_project_conversation',
+                messages: [{
+                    id: 42,
+                    body: 'The agent has context.',
+                    client_message_id: null,
+                    author: { id: 2, name: 'WebMCP Agent', kind: 'agent' },
+                    created_at: '2026-09-02T01:00:00.000Z',
+                }],
+                latest_id: 42,
+                has_older: false,
+            },
+            permissions: { can_chat: true },
+        }));
+
+        expect(html).toContain('data-testid="agent-chat-launcher"');
+        expect(html).toContain('Chat with agent');
+        expect(html).toContain('>1</span>');
+    });
+
+    it('C14 renders an optional explanation note only with human review controls', () => {
+        const photographerPage = mountPage({
+            concepts: [concept({ id: 21, status: 'proposed' })],
+        });
+
+        expect(photographerPage).toContain('data-testid="concept-decision-note-21"');
+        expect(photographerPage).toContain('Explanation note (optional)');
+        expect(photographerPage).toContain('Why are you adopting or rejecting this concept?');
+
+        const agentPage = mountPage({
+            request: { user: { id: 2, name: 'Agent', is_agent: true, presence_eligible: true } },
+            my_role: 'agent',
+            can_review: false,
+            concepts: [concept({ id: 21, status: 'proposed' })],
+        });
+        expect(agentPage).not.toContain('data-testid="concept-decision-note-21"');
+    });
+
+    it('C14 passes trimmed optional notes to the existing human-only APIs', async () => {
+        const pageModule = await import('@/Pages/CreativeRoom');
+        const adoptSpy = vi.spyOn(webmcpApi, 'adoptConcept').mockResolvedValue({
+            ok: true,
+            status: 200,
+            data: null,
+            error: null,
+        });
+        const rejectSpy = vi.spyOn(webmcpApi, 'rejectConcept').mockResolvedValue({
+            ok: true,
+            status: 200,
+            data: null,
+            error: null,
+        });
+
+        await pageModule.submitCreativeRoomDecision('adopt', 7, 21, '  chosen for the quiet mood  ');
+        await pageModule.submitCreativeRoomDecision('reject', 7, 21, '  not aligned with the brief  ');
+        await pageModule.submitCreativeRoomDecision('reject', 7, 21, '   ');
+
+        expect(adoptSpy).toHaveBeenCalledWith(7, 21, 'chosen for the quiet mood');
+        expect(rejectSpy).toHaveBeenNthCalledWith(1, 7, 21, 'not aligned with the brief');
+        expect(rejectSpy).toHaveBeenNthCalledWith(2, 7, 21, undefined);
+    });
+
     it('2. renders a proposed concept as AI PROPOSAL', () => {
         const html = mountPage({
             concepts: [concept({ id: 11, title: 'Quiet Dawn', status: 'proposed' })],

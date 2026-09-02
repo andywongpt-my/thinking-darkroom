@@ -80,7 +80,8 @@ vi.mock('@/Layouts/AuthenticatedLayout', () => ({
 (globalThis as Record<string, unknown>).route = (name: string, id?: number) =>
     name === 'workspace.show' ? `/projects/${id}` : `/${name}`;
 
-const WorkspacePage = (await import('@/Pages/Workspace')).default as React.FC;
+const WorkspaceModule = await import('@/Pages/Workspace');
+const WorkspacePage = WorkspaceModule.default as React.FC;
 
 /* ------------------------------------------------------------- webmcp fixture */
 
@@ -370,11 +371,11 @@ afterEach(() => {
 });
 
 describe('Sprint 4 — Workspace retouch / QA / creative-memory UI + registry certification', () => {
-    it('1. renders the retouch panel with ORIGINAL vs APPROVED surfaces', () => {
+    it('1. renders the retouch panel with ORIGINAL vs EXECUTED DERIVATIVE surfaces', () => {
         const html = mount(baseProps());
         expect(html).toContain('data-testid="retouch-panel"');
         expect(text(html)).toContain('ORIGINAL');
-        expect(text(html)).toContain('APPROVED / PREVIEW');
+        expect(text(html)).toContain('EXECUTED DERIVATIVE');
         expect(html).toContain('data-testid="before-after"');
     });
 
@@ -397,6 +398,24 @@ describe('Sprint 4 — Workspace retouch / QA / creative-memory UI + registry ce
         expect(html).toContain('data-testid="retouch-render-error"');
         expect(text(html)).toContain('Retouch render failed');
         expect(text(html)).toContain('no approved derivative was stored');
+        expect(html).toContain('data-testid="workspace-notify"');
+        expect(html).toContain('aria-label="Dismiss notification"');
+    });
+
+    it('3c. gives cull selection an accessible photo name and 44px target', () => {
+        const html = mount(baseProps());
+        expect(html).toContain('aria-label="Select 02-soft-emotive-gaze.jpg for culling"');
+        expect(html).toContain('min-h-11 min-w-11');
+    });
+
+    it('3d. B2 only exposes a card for the selected photo and states when none exists', () => {
+        expect(WorkspaceModule.retouchCardForSelectedPhoto(RETOUCH_CARD, 101)).toBe(RETOUCH_CARD);
+        expect(WorkspaceModule.retouchCardForSelectedPhoto(RETOUCH_CARD, 102)).toBeNull();
+
+        const html = renderToString(
+            createElement(WorkspaceModule.RetouchTruthCard, { card: null }),
+        );
+        expect(text(html)).toContain('No retouch recorded for this photo.');
     });
 
     it('4. original and derivative URLs differ (two distinct sources)', () => {
@@ -410,7 +429,8 @@ describe('Sprint 4 — Workspace retouch / QA / creative-memory UI + registry ce
         const html = mount(baseProps());
         expect(html).toContain('data-testid="layer-agent-original"');
         expect(text(html)).toContain('AI PROPOSAL');
-        expect(text(html)).toContain('+0.3 exposure · +0.22 warmth');
+        expect(text(html)).toContain('+0.30');
+        expect(text(html)).toContain('+0.22');
         expect(html).toContain('data-testid="ai-proposed-values"');
     });
 
@@ -418,26 +438,75 @@ describe('Sprint 4 — Workspace retouch / QA / creative-memory UI + registry ce
         const html = mount(baseProps());
         expect(html).toContain('data-testid="layer-photographer-modified"');
         expect(text(html)).toContain('PHOTOGRAPHER MODIFIED');
-        expect(text(html)).toContain('+0.25 exposure · +0.08 warmth');
+        expect(text(html)).toContain('+0.25');
+        expect(text(html)).toContain('+0.08');
         expect(html).toContain('data-testid="photographer-modified-values"');
     });
 
-    it('7. renders the executed values equal to the photographer-modified values (NOT the agent proposal)', () => {
+    it('7. renders AI and executed values in stable parallel columns', () => {
         const html = mount(baseProps());
         expect(html).toContain('data-testid="layer-executed"');
+        expect(html).toContain('data-testid="retouch-value-comparison"');
         expect(text(html)).toContain('FINAL APPROVED VALUES');
-        const finalValues = text(html).match(/FINAL APPROVED VALUES<\/dt>[^]*?>([^<]+)</);
-        expect(finalValues?.[1]).toContain('+0.25 exposure · +0.08 warmth');
-        // the executed layer must NOT echo the agent-original values
-        expect(finalValues?.[1]).not.toContain('+0.3 exposure · +0.22 warmth');
+        expect(html).toContain('data-testid="ai-adjustment-exposure"');
+        expect(html).toContain('data-testid="final-adjustment-exposure"');
+        expect(html).toContain('data-testid="ai-adjustment-warmth"');
+        expect(html).toContain('data-testid="final-adjustment-warmth"');
+        expect(text(html)).toContain('+0.30');
+        expect(text(html)).toContain('+0.25');
+        expect(text(html)).not.toContain('+0.3 exposure');
         expect(html).toContain('data-testid="final-approved-values"');
     });
 
     it('8. renders the human authority state (approval, not agent execution)', () => {
         const html = mount(baseProps());
         expect(html).toContain('data-testid="human-authority-status"');
-        expect(text(html)).toContain('APPROVED BY PHOTOGRAPHER');
-        expect(text(html)).toContain('only the human-approved values were executed');
+        expect(text(html)).toContain('Executed derivative');
+        expect(text(html)).toContain('approved by photographer');
+        expect(html).toContain('data-testid="approval-check"');
+    });
+
+    it('8b. labels an approved preview as not yet executed', () => {
+        const html = mount(baseProps({
+            retouchCard: {
+                ...RETOUCH_CARD,
+                status: 'approved',
+                derivative: null,
+                executed: null,
+            },
+        }));
+
+        expect(text(html)).toContain('APPROVED PREVIEW');
+        expect(text(html)).toContain('awaiting execution');
+        expect(text(html)).not.toContain('EXECUTED DERIVATIVE');
+        expect(html).toContain('data-testid="derivative-placeholder"');
+    });
+
+    it('8d. labels a photographer-modified proposal as awaiting approval', () => {
+        const html = mount(baseProps({
+            retouchCard: {
+                ...RETOUCH_CARD,
+                status: 'modified',
+                derivative: null,
+                executed: null,
+            },
+        }));
+
+        expect(text(html)).toContain('Photographer-modified preview — awaiting photographer approval.');
+        expect(text(html)).not.toContain('Approved preview — awaiting execution');
+    });
+
+    it('8c. keeps hashes and raw storage paths inside accessible technical details', () => {
+        const html = mount(baseProps());
+        const detailsStart = html.indexOf('<details');
+        const evidenceStart = html.indexOf('data-testid="retouch-evidence"');
+
+        expect(detailsStart).toBeGreaterThan(-1);
+        expect(evidenceStart).toBeGreaterThan(detailsStart);
+        expect(html.slice(0, detailsStart)).not.toContain('Raw storage path:');
+        expect(html).toContain('Technical details');
+        expect(html).toContain('data-testid="original-sha"');
+        expect(html).toContain('data-testid="derivative-sha"');
     });
 
     it('9. renders the Modify UI for the photographer (human-only adjustment editing)', () => {

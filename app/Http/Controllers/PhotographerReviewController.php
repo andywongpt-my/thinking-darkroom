@@ -36,6 +36,26 @@ class PhotographerReviewController extends Controller
         ])]);
     }
 
+    public function cancel(Request $request, Project $project, Proposal $proposal): JsonResponse
+    {
+        $this->authorizePhotographer($request, $project, $proposal);
+
+        $validated = $request->validate(['note' => ['sometimes', 'nullable', 'string', 'max:2000']]);
+        try {
+            $proposal = $this->proposals->cancelApproval(
+                $proposal,
+                $request->user(),
+                $validated['note'] ?? null,
+            );
+        } catch (\LogicException $e) {
+            return response()->json(['error' => $e->getMessage()], 409);
+        }
+
+        return response()->json(['proposal' => $proposal->only([
+            'id', 'project_id', 'type', 'status', 'summary', 'reviewed_at', 'executed_at',
+        ])]);
+    }
+
     public function reject(Request $request, Project $project, Proposal $proposal): JsonResponse
     {
         $this->authorizePhotographer($request, $project, $proposal);

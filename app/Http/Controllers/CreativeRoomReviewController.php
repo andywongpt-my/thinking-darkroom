@@ -71,7 +71,12 @@ class CreativeRoomReviewController extends Controller
         $validated = $request->validate(['note' => ['sometimes', 'string', 'max:2000']]);
 
         try {
-            $concept = $this->creative->rejectConcept($project, $request->user(), $concept);
+            $concept = $this->creative->rejectConcept(
+                $project,
+                $request->user(),
+                $concept,
+                $validated['note'] ?? null,
+            );
         } catch (\LogicException $e) {
             return response()->json(['error' => $e->getMessage()], 409);
         }

@@ -1,11 +1,12 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import AgentChatPanel from '@/Components/AgentChatPanel';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useWebmcpRegistry } from '@/webmcp/use-webmcp';
 import { webmcpApi } from '@/webmcp/api';
 import { onConceptMutatingActivity } from '@/webmcp/events';
 import { autoDismissNotification } from '@/webmcp/notifications';
-import type { ConceptPayload } from '@/webmcp/api';
+import type { AgentConversation, AgentPresence, ConceptPayload } from '@/webmcp/api';
 
 /* ------------------------------------------------------------------ types */
 
@@ -18,7 +19,7 @@ interface PageProps extends Record<string, unknown> {
         status: string;
         owner: string | null;
     };
-    request: { user: { id: number; name: string; is_agent: boolean } };
+    request: { user: { id: number; name: string; is_agent: boolean; presence_eligible?: boolean } };
     my_role: string | null;
     can_review: boolean;
     brainstorm: {
@@ -44,6 +45,11 @@ interface PageProps extends Record<string, unknown> {
         output_summary: Record<string, unknown> | null;
         created_at: string;
     }[];
+    presence?: AgentPresence;
+    conversation?: AgentConversation;
+    permissions?: {
+        can_chat?: boolean;
+    };
     webmcp: { available: boolean };
 }
 
@@ -135,6 +141,20 @@ export function creativeRoomViewState(
     return { brief, activity };
 }
 
+/** Route photographer decisions through the existing human-only API paths. */
+export function submitCreativeRoomDecision(
+    action: 'adopt' | 'reject',
+    projectId: number,
+    conceptId: number,
+    note?: string,
+) {
+    const normalizedNote = note?.trim() || undefined;
+
+    return action === 'adopt'
+        ? webmcpApi.adoptConcept(projectId, conceptId, normalizedNote)
+        : webmcpApi.rejectConcept(projectId, conceptId, normalizedNote);
+}
+
 /* ------------------------------------------------------------ component */
 
 export default function CreativeRoom() {
@@ -148,9 +168,26 @@ export default function CreativeRoom() {
         adopted_concept_id: initialAdoptedId,
         brief: initialBrief,
         agent_activity: initialActivity,
+        presence: pagePresence,
+        conversation: pageConversation,
+        permissions: pagePermissions,
     } = page.props;
 
     const isAgent = request.user.is_agent;
+    const permissions = pagePermissions ?? { can_chat: false };
+    const conversation = pageConversation ?? {
+        project_id: project.id,
+        trust_boundary: 'untrusted_project_conversation' as const,
+        messages: [],
+        latest_id: null,
+        has_older: false,
+    };
+    const presence = pagePresence ?? {
+        project_id: project.id,
+        online: false,
+        agents: [],
+        checked_at: '',
+    };
 
     /* --------------------------- WebMCP registry --------------------------- */
     // Sprint 2 tools ride on the same certified registry lifecycle as Sprint 1
@@ -165,6 +202,7 @@ export default function CreativeRoom() {
     const [brainstormInput, setBrainstormInput] = useState('');
     const [brainstormOpen, setBrainstormOpen] = useState(false);
     const [mergeSelection, setMergeSelection] = useState<number[]>([]);
+    const [decisionNotes, setDecisionNotes] = useState<Record<number, string>>({});
     const [busy, setBusy] = useState<string | null>(null);
     const [notify, setNotify] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
     const notifyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -241,9 +279,10 @@ export default function CreativeRoom() {
 
     const doReject = async (concept: ConceptPayload) => {
         setBusy(`reject-${concept.id}`);
-        const res = await webmcpApi.rejectConcept(project.id, concept.id);
+        const res = await submitCreativeRoomDecision('reject', project.id, concept.id, decisionNotes[concept.id]);
         setBusy(null);
         if (res.ok && res.data) {
+            setDecisionNotes((notes) => ({ ...notes, [concept.id]: '' }));
             setConcepts((cs) => cs.map((c) => (c.id === concept.id ? res.data!.concept : c)));
             setNotify({ kind: 'ok', text: `"${concept.title}" rejected. History preserved.` });
         } else {
@@ -253,11 +292,12 @@ export default function CreativeRoom() {
 
     const doAdopt = async (concept: ConceptPayload) => {
         setBusy(`adopt-${concept.id}`);
-        const res = await webmcpApi.adoptConcept(project.id, concept.id);
+        const res = await submitCreativeRoomDecision('adopt', project.id, concept.id, decisionNotes[concept.id]);
         setBusy(null);
         if (res.ok && res.data) {
             const refreshed = await refreshList();
             if (!refreshed) return;
+            setDecisionNotes((notes) => ({ ...notes, [concept.id]: '' }));
             setNotify({ kind: 'ok', text: `Creative direction adopted: "${concept.title}". Structured brief persisted.` });
             reloadPage();
         } else {
@@ -355,6 +395,14 @@ export default function CreativeRoom() {
                         </button>
                     </div>
                 )}
+
+                <AgentChatPanel
+                    projectId={project.id}
+                    currentUser={request.user}
+                    canSend={permissions.can_chat ?? false}
+                    initialConversation={conversation}
+                    presence={presence}
+                />
 
                 <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px]">
                     {/* ================= LEFT / MAIN ================= */}
@@ -560,35 +608,53 @@ export default function CreativeRoom() {
 
                                                 {/* Human actions — photographer only, never agent, never terminal state */}
                                                 {can_review && !isTerminal && (
-                                                    <div className="mt-3 flex flex-wrap gap-1.5 border-t border-zinc-800/70 pt-2.5">
-                                                        <button
-                                                            onClick={() => doExplore(c)}
-                                                            disabled={busy !== null}
-                                                            className="rounded bg-sky-600 px-2 py-1 text-xs font-semibold text-white hover:bg-sky-500 disabled:opacity-40"
+                                                    <div className="mt-3 border-t border-zinc-800/70 pt-2.5">
+                                                        <label
+                                                            htmlFor={`concept-decision-note-${c.id}`}
+                                                            className="text-xs font-semibold text-zinc-300"
                                                         >
-                                                            Explore
-                                                        </button>
-                                                        <button
-                                                            onClick={() => doReject(c)}
-                                                            disabled={busy !== null}
-                                                            className="rounded bg-rose-600 px-2 py-1 text-xs font-semibold text-white hover:bg-rose-500 disabled:opacity-40"
-                                                        >
-                                                            Reject
-                                                        </button>
-                                                        <button
-                                                            onClick={() => toggleMergeSelect(c.id)}
-                                                            className={`rounded px-2 py-1 text-xs font-semibold ${mergeSelection.includes(c.id) ? 'bg-violet-700 text-white' : 'border border-violet-500/40 text-violet-700 hover:bg-violet-500/10'}`}
-                                                        >
-                                                            {mergeSelection.includes(c.id) ? '✓ Selected' : 'Select'}
-                                                        </button>
-                                                        <button
-                                                            onClick={() => doAdopt(c)}
-                                                            disabled={busy !== null}
-                                                            className="ms-auto rounded bg-emerald-500 px-2.5 py-1 text-xs font-bold text-zinc-100 hover:bg-emerald-400 disabled:opacity-40"
-                                                            title="Adopt as the project's current Creative Direction"
-                                                        >
-                                                            Adopt as Creative Direction
-                                                        </button>
+                                                            Explanation note (optional)
+                                                        </label>
+                                                        <textarea
+                                                            id={`concept-decision-note-${c.id}`}
+                                                            data-testid={`concept-decision-note-${c.id}`}
+                                                            value={decisionNotes[c.id] ?? ''}
+                                                            onChange={(e) => setDecisionNotes((notes) => ({ ...notes, [c.id]: e.target.value }))}
+                                                            rows={2}
+                                                            maxLength={2000}
+                                                            placeholder="Why are you adopting or rejecting this concept? (optional)"
+                                                            className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-950/40 p-2 text-xs text-zinc-100 focus:border-zinc-600 focus:outline-none"
+                                                        />
+                                                        <div className="mt-2 flex flex-wrap gap-1.5">
+                                                            <button
+                                                                onClick={() => doExplore(c)}
+                                                                disabled={busy !== null}
+                                                                className="rounded bg-sky-600 px-2 py-1 text-xs font-semibold text-white hover:bg-sky-500 disabled:opacity-40"
+                                                            >
+                                                                Explore
+                                                            </button>
+                                                            <button
+                                                                onClick={() => doReject(c)}
+                                                                disabled={busy !== null}
+                                                                className="rounded bg-rose-600 px-2 py-1 text-xs font-semibold text-white hover:bg-rose-500 disabled:opacity-40"
+                                                            >
+                                                                Reject
+                                                            </button>
+                                                            <button
+                                                                onClick={() => toggleMergeSelect(c.id)}
+                                                                className={`rounded px-2 py-1 text-xs font-semibold ${mergeSelection.includes(c.id) ? 'bg-violet-700 text-white' : 'border border-violet-500/40 text-violet-700 hover:bg-violet-500/10'}`}
+                                                            >
+                                                                {mergeSelection.includes(c.id) ? '✓ Selected' : 'Select'}
+                                                            </button>
+                                                            <button
+                                                                onClick={() => doAdopt(c)}
+                                                                disabled={busy !== null}
+                                                                className="ms-auto rounded bg-emerald-500 px-2.5 py-1 text-xs font-bold text-zinc-100 hover:bg-emerald-400 disabled:opacity-40"
+                                                                title="Adopt as the project's current Creative Direction"
+                                                            >
+                                                                Adopt as Creative Direction
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 )}
                                             </article>
