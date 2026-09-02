@@ -75,7 +75,7 @@ function SprocketStrip({ animate = false }: { animate?: boolean }) {
     return (
         <div aria-hidden="true" className={`flex items-center justify-between px-2 py-1.5 ${animate ? 'transition-transform duration-500 ease-out group-hover:translate-x-2' : ''}`}>
             {Array.from({ length: 10 }).map((_, i) => (
-                <span key={i} className="h-1.5 w-2.5 rounded-[2px] bg-black/60" />
+                <span key={i} className="h-1.5 w-2.5 rounded-[2px] bg-zinc-700" />
             ))}
         </div>
     );

@@ -50,8 +50,8 @@ interface PageProps extends Record<string, unknown> {
 /* ------------------------------------------------------------- constants */
 
 const AUTHORITY_COLOR: Record<string, string> = {
-    READ: 'bg-sky-500/15 text-sky-300',
-    ANALYZE: 'bg-violet-500/15 text-violet-300',
+    READ: 'bg-sky-500/15 text-sky-500',
+    ANALYZE: 'bg-violet-500/15 text-violet-500',
     PROPOSE: 'bg-amber-400/10 text-amber-300',
     EXECUTE: 'bg-emerald-500/15 text-emerald-300',
 };
@@ -64,10 +64,10 @@ const STATUS_DOT: Record<string, string> = {
 
 /** Authority-state language: a judge must tell AI PROPOSAL from ADOPTED instantly. */
 const STATUS_STYLE: Record<string, { label: string; badge: string; ring: string }> = {
-    proposed: { label: 'AI PROPOSAL', badge: 'bg-amber-400/10 text-amber-300', ring: 'border-amber-400/30' },
-    exploring: { label: 'EXPLORING', badge: 'bg-sky-500/15 text-sky-300', ring: 'border-sky-500/40' },
+    proposed: { label: 'AI PROPOSAL', badge: 'bg-amber-400/10 text-amber-500', ring: 'border-amber-400/30' },
+    exploring: { label: 'EXPLORING', badge: 'bg-sky-500/15 text-sky-500', ring: 'border-sky-500/40' },
     rejected: { label: 'REJECTED', badge: 'bg-rose-500/15 text-rose-400', ring: 'border-rose-500/30' },
-    merged: { label: 'MERGED', badge: 'bg-violet-500/15 text-violet-300', ring: 'border-violet-500/30' },
+    merged: { label: 'MERGED', badge: 'bg-violet-500/15 text-violet-500', ring: 'border-violet-500/30' },
     superseded: { label: 'SUPERSEDED', badge: 'bg-zinc-900 text-zinc-500', ring: 'border-zinc-800' },
     adopted: { label: 'ADOPTED BY PHOTOGRAPHER', badge: 'bg-emerald-500 text-zinc-950', ring: 'border-emerald-500' },
 };
@@ -564,14 +564,14 @@ export default function CreativeRoom() {
                                                         <button
                                                             onClick={() => doExplore(c)}
                                                             disabled={busy !== null}
-                                                            className="rounded bg-sky-600 px-2 py-1 text-xs font-semibold text-zinc-100 hover:bg-sky-500 disabled:opacity-40"
+                                                            className="rounded bg-sky-600 px-2 py-1 text-xs font-semibold text-white hover:bg-sky-500 disabled:opacity-40"
                                                         >
                                                             Explore
                                                         </button>
                                                         <button
                                                             onClick={() => doReject(c)}
                                                             disabled={busy !== null}
-                                                            className="rounded bg-rose-600 px-2 py-1 text-xs font-semibold text-zinc-100 hover:bg-rose-500 disabled:opacity-40"
+                                                            className="rounded bg-rose-600 px-2 py-1 text-xs font-semibold text-white hover:bg-rose-500 disabled:opacity-40"
                                                         >
                                                             Reject
                                                         </button>

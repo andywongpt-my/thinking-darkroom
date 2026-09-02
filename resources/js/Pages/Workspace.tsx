@@ -174,8 +174,8 @@ const STATE_LABEL: Record<string, string> = {
 };
 
 const AUTHORITY_COLOR: Record<string, string> = {
-    READ: 'bg-sky-500/15 text-sky-300',
-    ANALYZE: 'bg-violet-500/15 text-violet-300',
+    READ: 'bg-sky-500/15 text-sky-500',
+    ANALYZE: 'bg-violet-500/15 text-violet-500',
     PROPOSE: 'bg-amber-400/10 text-amber-300',
     EXECUTE: 'bg-emerald-500/15 text-emerald-300',
 };
@@ -1464,7 +1464,7 @@ export default function Workspace({
                                         </span>
                                     )}
                                     {p.selection_state === 'culled' && (
-                                        <span className="absolute left-1 top-1 rounded bg-rose-600 px-1 text-xs font-bold text-zinc-100">CULL</span>
+                                        <span className="absolute left-1 top-1 rounded bg-rose-600 px-1 text-xs font-bold text-white">CULL</span>
                                     )}
                                     <label className="absolute right-1 top-1 cursor-pointer rounded bg-black/50 p-0.5 text-zinc-100">
                                         <input
@@ -1949,7 +1949,7 @@ export default function Workspace({
                                             <div className="flex items-center justify-between gap-2">
                                                 <span className="text-xs font-bold text-zinc-100" data-testid={`qa-category-${f.id}`}>{f.category.replace(/_/g, ' ')}</span>
                                                 <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold ${
-                                                    f.severity === 'info' ? 'bg-sky-500/15 text-sky-400'
+                                                    f.severity === 'info' ? 'bg-sky-500/15 text-sky-500'
                                                         : f.severity === 'low' ? 'bg-amber-400/10 text-amber-400'
                                                             : f.severity === 'medium' || f.severity === 'warning' ? 'bg-amber-400/10 text-amber-300'
                                                                 : 'bg-rose-500/15 text-rose-400'
@@ -1973,7 +1973,7 @@ export default function Workspace({
                                                 </div>
                                             )}
                                             <div className="mt-1.5 flex items-center gap-2">
-                                                <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${f.status === 'open' ? 'bg-amber-400/10 text-amber-400' : f.status === 'acknowledged' ? 'bg-sky-500/15 text-sky-400' : 'bg-zinc-800 text-zinc-300'}`} data-testid={`qa-status-${f.id}`}>
+                                                <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${f.status === 'open' ? 'bg-amber-400/10 text-amber-400' : f.status === 'acknowledged' ? 'bg-sky-500/15 text-sky-500' : 'bg-zinc-800 text-zinc-300'}`} data-testid={`qa-status-${f.id}`}>
                                                     {f.status}
                                                 </span>
                                                 {canPhotographerAct && f.status === 'open' && (
@@ -1981,7 +1981,7 @@ export default function Workspace({
                                                         <button
                                                             onClick={() => void respondQaFinding(f, 'acknowledge')}
                                                             disabled={busy !== null}
-                                                            className="rounded border border-sky-500/40 px-2 py-0.5 text-xs font-semibold text-sky-400 hover:bg-sky-500/10 disabled:opacity-40"
+                                                            className="rounded border border-sky-500/40 px-2 py-0.5 text-xs font-semibold text-sky-500 hover:bg-sky-500/10 disabled:opacity-40"
                                                         >
                                                             Acknowledge
                                                         </button>

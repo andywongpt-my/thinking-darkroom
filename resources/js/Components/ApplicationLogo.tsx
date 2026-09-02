@@ -40,7 +40,7 @@ export default function ApplicationLogo({ decorative = false, ...props }: Applic
                 strokeWidth="3"
             />
             <path d="M24.5 24.5h15v4.2h-5.4v10.8h-4.2V28.7h-5.4v-4.2Z" fill="currentColor" />
-            <circle data-part="safelight" cx="43.5" cy="20.5" r="3.5" fill="#fbbf24" />
+            <circle data-part="safelight" cx="43.5" cy="20.5" r="3.5" fill="#0071E3" />
         </svg>
     );
 }

@@ -284,7 +284,7 @@ export default function AgentChatPanel({
                                     <button
                                         type="submit"
                                         disabled={sending || draft.trim().length === 0}
-                                        className="rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-zinc-100 hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
+                                        className="rounded-lg bg-amber-400 px-3 py-1.5 text-xs font-semibold text-zinc-950 hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
                                     >
                                         {sending ? 'Sending…' : 'Send'}
                                     </button>
@@ -314,7 +314,7 @@ export default function AgentChatPanel({
                 aria-expanded={open}
                 aria-controls="agent-chat-panel"
                 data-testid="agent-chat-launcher"
-                className="td-press fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-zinc-900 px-4 py-3 text-sm font-semibold text-zinc-100 shadow-xl transition hover:-translate-y-0.5 hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-amber-400/60 focus:ring-offset-2"
+                className="td-press fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-950 shadow-xl transition hover:-translate-y-0.5 hover:bg-zinc-200 focus:outline-none focus:ring-2 focus:ring-amber-400/60 focus:ring-offset-2"
             >
                 <span
                     aria-hidden="true"

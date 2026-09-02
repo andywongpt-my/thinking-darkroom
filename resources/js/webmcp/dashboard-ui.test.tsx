@@ -143,7 +143,7 @@ describe('Dashboard darkroom view', () => {
     it('renders film sprocket strips for darkroom identity', () => {
         const html = render();
         // Sprocket holes: 10 per strip × 2 strips on the film card.
-        expect((html.match(/bg-black\/60/g) ?? []).length).toBeGreaterThanOrEqual(20);
+        expect((html.match(/bg-zinc-700/g) ?? []).length).toBeGreaterThanOrEqual(20);
     });
 
     it('renders project stats: photos, awaiting you, executed', () => {
