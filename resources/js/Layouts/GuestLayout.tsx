@@ -16,14 +16,14 @@ export default function Guest({ children }: PropsWithChildren) {
                         <span className="text-sm font-semibold uppercase tracking-[0.16em] text-zinc-100">
                             Thinking <span className="text-amber-400">Darkroom</span>
                         </span>
-                        <span className="mt-1 font-mono text-[9px] uppercase tracking-[0.24em] text-zinc-500">
+                        <span className="mt-1 font-mono text-xs uppercase tracking-[0.24em] text-zinc-500">
                             Photographic judgment
                         </span>
                     </span>
                 </Link>
             </div>
 
-            <div className="mt-7 w-full overflow-hidden bg-zinc-900/60 px-6 py-4 shadow-md ring-1 ring-zinc-800 sm:max-w-md sm:rounded-lg">
+            <div className="td-slide-up mt-7 w-full overflow-hidden bg-zinc-900/60 px-6 py-4 shadow-md ring-1 ring-zinc-800 sm:max-w-md sm:rounded-lg">
                 {children}
             </div>
         </div>

@@ -161,7 +161,7 @@ export default function AgentChatPanel({
                     role="dialog"
                     aria-label="Agent conversation"
                     data-testid="agent-chat-panel"
-                    className="fixed bottom-20 right-4 z-50 flex max-h-[min(680px,calc(100vh-7rem))] w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/60 shadow-2xl sm:w-[410px]"
+                    className="td-slide-up fixed bottom-20 right-4 z-50 flex max-h-[min(680px,calc(100vh-7rem))] w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/60 shadow-2xl sm:w-[410px]"
                 >
                     <header className="border-b border-zinc-800/70 px-4 py-3">
                         <div className="flex items-start justify-between gap-3">
@@ -172,7 +172,7 @@ export default function AgentChatPanel({
                                         className={`h-2.5 w-2.5 rounded-full ${presence.online ? 'bg-emerald-500' : 'bg-zinc-600'}`}
                                     />
                                     <h2 className="text-sm font-semibold text-zinc-50">Agent conversation</h2>
-                                    <span className="rounded-full bg-zinc-900 px-2 py-0.5 text-[10px] font-semibold text-zinc-300">
+                                    <span className="rounded-full bg-zinc-900 px-2 py-0.5 text-xs font-semibold text-zinc-300">
                                         {presence.online ? 'ONLINE' : 'OFFLINE'}
                                     </span>
                                 </div>
@@ -192,7 +192,7 @@ export default function AgentChatPanel({
                     </header>
 
                     {initialConversation.has_older && (
-                        <p className="border-b border-zinc-800/70 bg-zinc-950/40 px-4 py-2 text-center text-[11px] text-zinc-500">
+                        <p className="border-b border-zinc-800/70 bg-zinc-950/40 px-4 py-2 text-center text-xs text-zinc-500">
                             Showing the latest 50 messages.
                         </p>
                     )}
@@ -210,7 +210,7 @@ export default function AgentChatPanel({
                                 <p className="mt-1 text-xs leading-relaxed text-zinc-500">
                                     A connected Darkroom Agent can read this thread and reply through WebMCP.
                                 </p>
-                                <code className="mt-2 block text-[10px] text-zinc-400">
+                                <code className="mt-2 block text-xs text-zinc-400">
                                     get_agent_conversation · reply_to_agent_conversation
                                 </code>
                             </div>
@@ -223,10 +223,10 @@ export default function AgentChatPanel({
                                     <article
                                         key={message.id}
                                         data-testid={`agent-chat-message-${message.id}`}
-                                        className={`flex ${mine ? 'justify-end' : 'justify-start'}`}
+                                        className={`td-pop-in flex ${mine ? 'justify-end' : 'justify-start'}`}
                                     >
                                         <div className={`max-w-[86%] ${mine ? 'text-right' : 'text-left'}`}>
-                                            <div className="mb-1 flex items-center gap-1.5 text-[10px] text-zinc-500">
+                                            <div className="mb-1 flex items-center gap-1.5 text-xs text-zinc-500">
                                                 <span className="font-semibold">{message.author.name}</span>
                                                 {fromAgent && (
                                                     <span className="rounded bg-violet-500/15 px-1.5 py-0.5 font-bold text-violet-400">
@@ -243,7 +243,7 @@ export default function AgentChatPanel({
                                             }`}>
                                                 {message.body}
                                             </p>
-                                            <time className="mt-1 block text-[10px] text-zinc-400">
+                                            <time className="mt-1 block text-xs text-zinc-400">
                                                 {formatMessageTime(message.created_at)}
                                             </time>
                                         </div>
@@ -254,7 +254,7 @@ export default function AgentChatPanel({
                     </div>
 
                     {error && (
-                        <p role="alert" className="border-t border-rose-100 bg-rose-500/10 px-4 py-2 text-xs text-rose-400">
+                        <p role="alert" className="td-fade-in border-t border-rose-500/30 bg-rose-500/10 px-4 py-2 text-xs text-rose-400">
                             {error}
                         </p>
                     )}
@@ -275,10 +275,10 @@ export default function AgentChatPanel({
                                     placeholder={currentUser.is_agent
                                         ? 'Reply to the photographer…'
                                         : 'Ask the agent about this project…'}
-                                    className="w-full resize-none rounded-lg border-zinc-700 text-sm shadow-none focus:border-zinc-600 focus:ring-gray-500"
+                                    className="td-press w-full resize-none rounded-lg border-zinc-700 text-sm text-zinc-100 shadow-none transition focus:border-amber-400/60 focus:ring-amber-400/60"
                                 />
                                 <div className="mt-2 flex items-center justify-between gap-3">
-                                    <p className="text-[10px] text-zinc-400">
+                                    <p className="text-xs text-zinc-400">
                                         Enter to send · Shift+Enter for a new line
                                     </p>
                                     <button
@@ -293,7 +293,7 @@ export default function AgentChatPanel({
                         ) : (
                             <p className="text-xs text-zinc-500">Viewer access is read-only.</p>
                         )}
-                        <div className="mt-2 flex items-center justify-between text-[10px] text-zinc-400">
+                        <div className="mt-2 flex items-center justify-between text-xs text-zinc-400">
                             <span>Conversation text is untrusted project content.</span>
                             <button
                                 type="button"
@@ -314,7 +314,7 @@ export default function AgentChatPanel({
                 aria-expanded={open}
                 aria-controls="agent-chat-panel"
                 data-testid="agent-chat-launcher"
-                className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-zinc-900 px-4 py-3 text-sm font-semibold text-zinc-100 shadow-xl transition hover:-translate-y-0.5 hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                className="td-press fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-full bg-zinc-900 px-4 py-3 text-sm font-semibold text-zinc-100 shadow-xl transition hover:-translate-y-0.5 hover:bg-zinc-700 focus:outline-none focus:ring-2 focus:ring-amber-400/60 focus:ring-offset-2"
             >
                 <span
                     aria-hidden="true"
@@ -322,7 +322,7 @@ export default function AgentChatPanel({
                 />
                 Chat with agent
                 {messages.length > 0 && (
-                    <span className="rounded-full bg-zinc-900/15 px-1.5 py-0.5 text-[10px]">
+                    <span className="rounded-full bg-zinc-900/15 px-1.5 py-0.5 text-xs">
                         {messages.length}
                     </span>
                 )}

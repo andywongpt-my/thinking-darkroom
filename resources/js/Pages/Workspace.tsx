@@ -194,7 +194,7 @@ const DECISION_BADGE: Record<string, string> = {
 };
 
 function fmtTime(iso: string | null): string {
-    if (!iso) return '—';
+    if (!iso) return 'not recorded';
     return new Date(iso).toLocaleString();
 }
 
@@ -296,7 +296,7 @@ export function PhotoDeleteDialog({
     return (
         <Modal show={show} onClose={onClose} maxWidth="md">
             <div className="bg-zinc-900 p-6 text-zinc-100 sm:p-7">
-                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-rose-300">IRREVERSIBLE CUT</p>
+                <p className="font-mono text-xs uppercase tracking-[0.2em] text-rose-300">IRREVERSIBLE CUT</p>
                 <h2 id="delete-photo-title" className="mt-2 text-xl font-semibold text-zinc-100">
                     Delete photo?
                 </h2>
@@ -312,9 +312,9 @@ export function PhotoDeleteDialog({
                         data-testid="workspace-delete-photo-cancel"
                         onClick={onClose}
                         disabled={processing}
-                        className="rounded-md border border-zinc-700 px-4 py-2 text-xs font-semibold tracking-[0.12em] text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="td-press rounded-lg border border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                        KEEP PHOTO
+                        Keep photo
                     </button>
                     <DangerButton
                         type="button"
@@ -323,7 +323,7 @@ export function PhotoDeleteDialog({
                         onClick={onConfirm}
                         disabled={processing}
                     >
-                        {processing ? 'DELETING…' : 'DELETE PHOTO'}
+                        {processing ? (<><span className="td-spinner" aria-hidden="true" /> Deleting…</>) : 'Delete photo'}
                     </DangerButton>
                 </div>
             </div>
@@ -340,8 +340,8 @@ export function WorkspaceConfirmDialog({
     onClose,
     onConfirm,
     eyebrow = 'IRREVERSIBLE CUT',
-    cancelLabel = 'KEEP',
-    confirmLabel = 'PROCEED',
+    cancelLabel = 'Keep',
+    confirmLabel = 'Proceed',
 }: {
     show: boolean;
     title: string;
@@ -357,7 +357,7 @@ export function WorkspaceConfirmDialog({
     return (
         <Modal show={show} onClose={onClose} maxWidth="md">
             <div className="bg-zinc-900 p-6 text-zinc-100 sm:p-7">
-                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-rose-300">{eyebrow}</p>
+                <p className="font-mono text-xs uppercase tracking-[0.2em] text-rose-300">{eyebrow}</p>
                 <h2 className="mt-2 text-xl font-semibold text-zinc-100">{title}</h2>
                 <p className="mt-3 text-sm leading-relaxed text-zinc-400">{description}</p>
                 <div className="mt-6 flex flex-wrap justify-end gap-3 border-t border-zinc-800 pt-5">
@@ -366,7 +366,7 @@ export function WorkspaceConfirmDialog({
                         data-testid={`${confirmTestId}-cancel`}
                         onClick={onClose}
                         disabled={processing}
-                        className="rounded-md border border-zinc-700 px-4 py-2 text-xs font-semibold tracking-[0.12em] text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="td-press rounded-lg border border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                         {cancelLabel}
                     </button>
@@ -377,7 +377,7 @@ export function WorkspaceConfirmDialog({
                         onClick={onConfirm}
                         disabled={processing}
                     >
-                        {processing ? 'PROCESSING…' : confirmLabel}
+                        {processing ? (<><span className="td-spinner" aria-hidden="true" /> Processing…</>) : confirmLabel}
                     </DangerButton>
                 </div>
             </div>
@@ -391,7 +391,7 @@ export function DecisionLedger({ decisions }: { decisions: WorkspaceDecision[] }
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 shadow-sm" data-testid="decision-history-panel">
             <div className="mb-2 flex items-center justify-between gap-2">
                 <h3 className="text-sm font-semibold text-zinc-100">Decision ledger</h3>
-                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-zinc-500">
+                <span className="font-mono text-xs uppercase tracking-[0.16em] text-zinc-500">
                     {decisions.length} recorded
                 </span>
             </div>
@@ -405,12 +405,12 @@ export function DecisionLedger({ decisions }: { decisions: WorkspaceDecision[] }
                             <li key={entry.id} className="rounded-lg border border-zinc-800/70 p-2" data-testid={`decision-${entry.id}`}>
                                 <div className="flex items-center justify-between gap-2">
                                     <div className="flex min-w-0 items-center gap-2">
-                                        <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold tracking-wide ${DECISION_BADGE[key] ?? 'bg-zinc-800 text-zinc-200'}`}>
+                                        <span className={`rounded-full px-2 py-0.5 text-xs font-bold tracking-wide ${DECISION_BADGE[key] ?? 'bg-zinc-800 text-zinc-200'}`}>
                                             {entry.decision.toUpperCase()}
                                         </span>
                                         <span className="truncate text-xs text-zinc-300">{entry.photographer ?? 'photographer'}</span>
                                     </div>
-                                    <time className="shrink-0 text-[10px] text-zinc-500" dateTime={entry.decided_at}>
+                                    <time className="shrink-0 text-xs text-zinc-500" dateTime={entry.decided_at}>
                                         {fmtTime(entry.decided_at)}
                                     </time>
                                 </div>
@@ -880,7 +880,7 @@ export default function Workspace({
 
             // merge any fresh inspection fields (keep selection_state in sync)
             setSelectedId((cur) => (ph.data!.photos.some((p) => p.id === cur) ? cur : ph.data!.photos[0]?.id ?? null));
-            setNotify({ kind: 'ok', text: `Workspace refreshed — ${ctx.data!.counts.total} photos.` });
+            setNotify({ kind: 'ok', text: `Workspace refreshed: ${ctx.data!.counts.total} photos.` });
             router.reload({ only: ['photos', 'proposals', 'retouchCard', 'activity', 'decisions', 'qaFindings', 'creativeMemories'] });
         } finally {
             setBusy(null);
@@ -995,7 +995,7 @@ export default function Workspace({
                     kind: 'ok',
                     text: res.data.refreshed_observations > 0
                         ? `Analysis refreshed ${res.data.refreshed_observations} prior unavailable observation(s)${res.data.newly_analyzed > 0 ? ` and created ${res.data.newly_analyzed} new observation(s)` : ''}.`
-                        : `Analysis complete — ${res.data.newly_analyzed} new observation(s).`,
+                        : `Analysis complete: ${res.data.newly_analyzed} new observation(s).`,
                 });
             } else {
                 addActivity({
@@ -1017,7 +1017,7 @@ export default function Workspace({
         setBusy(null);
         if (res.ok && res.data) {
             addActivity({ tool_name: 'run_consistency_review', authority: 'ANALYZE', result_status: 'completed', output_summary: { findings: res.data.created_findings.length } });
-            setNotify({ kind: 'ok', text: `Consistency review done — ${res.data.created_findings.length} finding(s).` });
+            setNotify({ kind: 'ok', text: `Consistency review done: ${res.data.created_findings.length} finding(s).` });
         } else {
             setNotify({ kind: 'err', text: `run_consistency_review failed: ${res.error}` });
         }
@@ -1037,7 +1037,7 @@ export default function Workspace({
             if (resp.ok && j?.proposal) {
                 setLocalProposals((ps) => ps.map((p) => (p.id === proposal.id ? { ...p, status: 'approved' } : p)));
                 addActivity({ tool_name: 'photographer_approve', authority: 'EXECUTE', result_status: 'completed', output_summary: { proposal_id: proposal.id, by: request.user.name } });
-                setNotify({ kind: 'ok', text: `Proposal #${proposal.id} approved — apply_approved_plan is now registered.` });
+                setNotify({ kind: 'ok', text: `Proposal #${proposal.id} approved. apply_approved_plan is now registered.` });
             } else {
                 setNotify({ kind: 'err', text: `Approval failed: ${j?.error ?? resp.statusText}` });
             }
@@ -1088,9 +1088,9 @@ export default function Workspace({
             const execution = (res.data as { payload?: { execution?: { items_applied?: number; items_failed?: number; items_skipped?: number; items_attempted?: number } } }).payload?.execution;
             const partial = execution && ((execution.items_failed ?? 0) > 0 || (execution.items_skipped ?? 0) > 0);
             if (partial) {
-                setNotify({ kind: 'err', text: `Proposal #${target.id} executed with issues — applied ${execution?.items_applied ?? 0}/${execution?.items_attempted ?? 0}, ${execution?.items_failed ?? 0} failed, ${execution?.items_skipped ?? 0} skipped.` });
+                setNotify({ kind: 'err', text: `Proposal #${target.id} executed with issues: applied ${execution?.items_applied ?? 0}/${execution?.items_attempted ?? 0}, ${execution?.items_failed ?? 0} failed, ${execution?.items_skipped ?? 0} skipped.` });
             } else {
-                setNotify({ kind: 'ok', text: `Proposal #${target.id} executed — apply_approved_plan removed.` });
+                setNotify({ kind: 'ok', text: `Proposal #${target.id} executed. apply_approved_plan removed.` });
             }
             setExecuteTargetId(null);
             // refresh photo state from server
@@ -1139,7 +1139,7 @@ export default function Workspace({
                     ...ps.map((p) => (p.id === proposal.id ? { ...p, status: 'modified' } : p)),
                 ]);
                 addActivity({ tool_name: 'photographer_modify', authority: 'HUMAN', result_status: 'completed', output_summary: { proposal_id: proposal.id, superseded_by: j.superseding_draft.id, adjustments } });
-                setNotify({ kind: 'ok', text: `Values saved — new proposal #${j.superseding_draft.id} is pending your review.` });
+                setNotify({ kind: 'ok', text: `Values saved. New proposal #${j.superseding_draft.id} is pending your review.` });
                 setModifyValues({ exposure: '', warmth: '' });
             } else {
                 setNotify({ kind: 'err', text: `Modify failed: ${j?.error ?? resp.statusText}` });
@@ -1300,12 +1300,12 @@ export default function Workspace({
                     aria-live="polite"
                     data-testid="agent-presence-strip"
                     data-status={agentPresence.online ? 'online' : 'offline'}
-                    className={`mb-4 flex items-start gap-3 rounded-lg border px-4 py-3 ${agentPresence.online ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-zinc-800 bg-zinc-950/40'}`}
+                    className={`td-slide-down mb-4 flex items-start gap-3 rounded-lg border px-4 py-3 ${agentPresence.online ? 'border-emerald-500/30 bg-emerald-500/10' : 'border-zinc-800 bg-zinc-950/40'}`}
                 >
                     <span
                         aria-hidden="true"
                         data-testid="agent-presence-dot"
-                        className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${agentPresence.online ? 'bg-emerald-500' : 'bg-zinc-600'}`}
+                        className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${agentPresence.online ? 'td-live-dot bg-emerald-500' : 'bg-zinc-600'}`}
                     />
                     <div>
                         <p className={`text-sm font-semibold ${agentPresence.online ? 'text-emerald-300' : 'text-zinc-200'}`}>
@@ -1333,8 +1333,11 @@ export default function Workspace({
                     <div className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-400">{flash.success}</div>
                 )}
                 {notify && (
-                    <div role="status" aria-live="polite" data-testid="workspace-notify" className={`mb-4 flex items-start justify-between gap-3 rounded-lg border px-4 py-3 text-sm ${notify.kind === 'ok' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-rose-500/30 bg-rose-500/10 text-rose-400'}`}>
-                        <span>{notify.text}</span>
+                    <div role="status" aria-live="polite" data-testid="workspace-notify" className={`td-slide-down mb-4 flex items-start justify-between gap-3 rounded-lg border px-4 py-3 text-sm ${notify.kind === 'ok' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-rose-500/30 bg-rose-500/10 text-rose-400'}`}>
+                        <span className="flex items-start gap-2.5">
+                            <span aria-hidden="true" className={`mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full ${notify.kind === 'ok' ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                            {notify.text}
+                        </span>
                         <button
                             type="button"
                             aria-label="Dismiss notification"
@@ -1361,7 +1364,7 @@ export default function Workspace({
                     processing={busy === 'reject'}
                     confirmTestId="workspace-confirm-reject"
                     eyebrow="PROPOSAL GATE"
-                    cancelLabel="KEEP PROPOSAL"
+                    cancelLabel="Keep proposal"
                     onClose={() => {
                         if (busy !== 'reject') setRejectTargetId(null);
                     }}
@@ -1383,7 +1386,7 @@ export default function Workspace({
                     processing={busy === 'execute'}
                     confirmTestId="workspace-confirm-execute"
                     eyebrow="IRREVERSIBLE CUT"
-                    cancelLabel="KEEP PLAN"
+                    cancelLabel="Keep plan"
                     onClose={() => {
                         if (busy !== 'execute') setExecuteTargetId(null);
                     }}
@@ -1397,7 +1400,7 @@ export default function Workspace({
                     processing={dismissQaTarget !== null && busy === `qa-${dismissQaTarget.id}`}
                     confirmTestId="workspace-confirm-dismiss-qa"
                     eyebrow="QA REVIEW GATE"
-                    cancelLabel="KEEP FINDING"
+                    cancelLabel="Keep finding"
                     onClose={() => {
                         if (!dismissQaTarget || busy !== `qa-${dismissQaTarget.id}`) setDismissQaTargetId(null);
                     }}
@@ -1406,7 +1409,7 @@ export default function Workspace({
 
                 <div className="grid grid-cols-1 gap-5 lg:grid-cols-[240px_1fr_320px]">
                     {/* ============ LEFT: photo grid ============ */}
-                    <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 shadow-sm">
+                    <section className="td-fade-up td-delay-1 rounded-xl border border-zinc-800 bg-zinc-900/60 p-3 shadow-sm">
                         <div className="mb-2 flex items-center justify-between">
                             <h3 className="text-sm font-semibold text-zinc-100">Photos</h3>
                             {permissions.can_upload && (
@@ -1414,9 +1417,9 @@ export default function Workspace({
                                     <button
                                         onClick={() => uploadRef.current?.click()}
                                         disabled={busy !== null}
-                                        className="rounded-md bg-zinc-800 px-2 py-1 text-xs font-medium text-zinc-100 hover:bg-zinc-700 disabled:opacity-40"
+                                        className="td-press inline-flex items-center gap-1.5 rounded-md bg-zinc-800 px-2.5 py-1.5 text-xs font-medium text-zinc-100 transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
                                     >
-                                        {busy === 'upload' ? 'Uploading…' : '+ Upload'}
+                                        {busy === 'upload' ? (<><span className="td-spinner" aria-hidden="true" /> Uploading…</>) : (<><span aria-hidden="true">+</span> Upload</>)}
                                     </button>
                                     <input
                                         ref={uploadRef}
@@ -1437,7 +1440,7 @@ export default function Workspace({
                                 <div key={p.id} className="group relative">
                                     <button
                                         onClick={() => setSelectedId(p.id)}
-                                        className={`w-full overflow-hidden rounded-md border-2 ${selectedId === p.id ? 'border-amber-500' : 'border-transparent'} ${p.selection_state === 'culled' ? 'opacity-50' : ''}`}
+                                        className={`td-press w-full overflow-hidden rounded-md border-2 transition-all duration-200 hover:border-zinc-500 ${selectedId === p.id ? 'border-amber-500' : 'border-transparent'} ${p.selection_state === 'culled' ? 'opacity-60 grayscale' : ''}`}
                                     >
                                         {p.url ? (
                                             <img src={p.url} alt={p.filename} className="aspect-square w-full object-cover" loading="lazy" />
@@ -1454,7 +1457,7 @@ export default function Workspace({
                                             onKeyDown={(e) => {
                                                 if (e.key === 'Enter' || e.key === ' ') setSelectedId(p.id);
                                             }}
-                                            className={`absolute left-1 bottom-1 cursor-pointer rounded px-1 text-[9px] font-bold tracking-wide ${recMeta.badge}`}
+                                            className={`absolute left-1 bottom-1 cursor-pointer rounded px-1 text-xs font-bold tracking-wide ${recMeta.badge}`}
                                             title={`Agent recommendation: ${recMeta.label} (${confidencePct(rec?.confidence ?? 0)})`}
                                         >
                                             {recMeta.label}
@@ -1478,7 +1481,7 @@ export default function Workspace({
                     </section>
 
                     {/* ============ CENTER: selected photo / overview ============ */}
-                    <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 shadow-sm">
+                    <section className="td-fade-up td-delay-2 rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 shadow-sm">
                         {selected ? (
                             <>
                                 <div className="mb-3 flex items-start justify-between gap-3">
@@ -1502,9 +1505,9 @@ export default function Workspace({
                                                 data-testid="workspace-delete-photo"
                                                 onClick={() => setDeletePhotoId(selected.id)}
                                                 disabled={busy !== null || deletingPhoto}
-                                                className="rounded-md border border-rose-500/50 bg-rose-500/10 px-2.5 py-1.5 font-mono text-[10px] font-semibold tracking-[0.12em] text-rose-300 transition hover:bg-rose-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:cursor-not-allowed disabled:opacity-40"
+                                                className="td-press rounded-md border border-rose-500/50 bg-rose-500/10 px-2.5 py-1.5 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 disabled:cursor-not-allowed disabled:opacity-40"
                                             >
-                                                DELETE
+                                                Delete
                                             </button>
                                         )}
                                     </div>
@@ -1798,7 +1801,7 @@ export default function Workspace({
                     </section>
 
                     {/* ============ RIGHT: Creative Direction + Retouch + QA + Agent Proposal + Memory ============ */}
-                    <section className="space-y-5">
+                    <section className="td-fade-up td-delay-3 space-y-5">
                         {/* Creative Direction */}
                         <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 shadow-sm">
                             <h3 className="mb-2 text-sm font-semibold text-zinc-100">Creative Direction</h3>
@@ -1945,7 +1948,7 @@ export default function Workspace({
                                         <li key={f.id} className="rounded-lg border border-zinc-800 p-2" data-testid={`qa-finding-${f.id}`}>
                                             <div className="flex items-center justify-between gap-2">
                                                 <span className="text-xs font-bold text-zinc-100" data-testid={`qa-category-${f.id}`}>{f.category.replace(/_/g, ' ')}</span>
-                                                <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
+                                                <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold ${
                                                     f.severity === 'info' ? 'bg-sky-500/15 text-sky-400'
                                                         : f.severity === 'low' ? 'bg-amber-400/10 text-amber-400'
                                                             : f.severity === 'medium' || f.severity === 'warning' ? 'bg-amber-400/10 text-amber-300'
@@ -2019,9 +2022,9 @@ export default function Workspace({
                                     <button
                                         onClick={() => void storeMemory(memoryDraft)}
                                         disabled={busy !== null}
-                                        className="rounded bg-zinc-800 px-2 py-1 text-xs font-semibold text-zinc-100 hover:bg-zinc-700 disabled:opacity-40"
+                                        className="td-press inline-flex items-center gap-1.5 rounded-md bg-zinc-800 px-2.5 py-1 text-xs font-semibold text-zinc-100 transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
                                     >
-                                        {busy === 'memory' ? '…' : 'Save'}
+                                        {busy === 'memory' ? (<><span className="td-spinner" aria-hidden="true" /> Saving…</>) : 'Save'}
                                     </button>
                                 </div>
                             )}
@@ -2047,34 +2050,34 @@ export default function Workspace({
                                 <button
                                     onClick={runProposeCull}
                                     disabled={busy !== null || !isAgent}
-                                    className="w-full rounded-md bg-amber-600 px-3 py-2 text-xs font-semibold text-zinc-100 hover:bg-amber-300 disabled:opacity-40"
+                                    className="td-press flex w-full items-center justify-center gap-2 rounded-md bg-amber-600 px-3 py-2 text-xs font-semibold text-zinc-100 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
                                     title={!isAgent ? 'Log in as the agent to propose.' : 'Create a cull proposal (does not change selections)'}
                                 >
-                                    {busy === 'cull' ? '…' : `Propose Cull (${cullIds.length} selected)`}
+                                    {busy === 'cull' ? (<><span className="td-spinner" aria-hidden="true" /> Proposing…</>) : `Propose Cull (${cullIds.length} selected)`}
                                 </button>
                                 <button
                                     onClick={runRetouchPlan}
                                     disabled={busy !== null || !isAgent}
-                                    className="w-full rounded-md bg-amber-400 px-3 py-2 text-xs font-semibold text-zinc-100 hover:bg-amber-400 disabled:opacity-40"
+                                    className="td-press flex w-full items-center justify-center gap-2 rounded-md bg-amber-400 px-3 py-2 text-xs font-semibold text-zinc-100 transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
                                 >
-                                    {busy === 'retouch' ? '…' : 'Propose Retouch Plan'}
+                                    {busy === 'retouch' ? (<><span className="td-spinner" aria-hidden="true" /> Proposing…</>) : 'Propose Retouch Plan'}
                                 </button>
                                 {isAgent && (
                                     <button
                                         onClick={runAnalyze}
                                         disabled={busy !== null}
-                                        className="w-full rounded-md bg-violet-500 px-3 py-2 text-xs font-semibold text-zinc-100 hover:bg-violet-500 disabled:opacity-40"
+                                        className="td-press flex w-full items-center justify-center gap-2 rounded-md bg-violet-500 px-3 py-2 text-xs font-semibold text-zinc-100 transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-40"
                                         title="Persist non-final photo observations before reading recommendations"
                                     >
-                                        {busy === 'analyze' ? 'Analyzing…' : 'Analyze Project Photos'}
+                                        {busy === 'analyze' ? (<><span className="td-spinner" aria-hidden="true" /> Analyzing…</>) : 'Analyze Project Photos'}
                                     </button>
                                 )}
                                 <button
                                     onClick={runReview}
                                     disabled={busy !== null || !isAgent}
-                                    className="w-full rounded-md bg-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-100 hover:bg-zinc-800 disabled:opacity-40"
+                                    className="td-press flex w-full items-center justify-center gap-2 rounded-md bg-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-100 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
                                 >
-                                    {busy === 'review' ? '…' : 'Run Consistency Review'}
+                                    {busy === 'review' ? (<><span className="td-spinner" aria-hidden="true" /> Reviewing…</>) : 'Run Consistency Review'}
                                 </button>
                                 {!isAgent && (
                                     <p className="text-xs text-zinc-400">
@@ -2200,10 +2203,10 @@ export default function Workspace({
                                                     <button
                                                         onClick={() => setExecuteTargetId(p.id)}
                                                         disabled={busy !== null}
-                                                        className="mt-2 w-full rounded bg-zinc-800 px-2 py-1 text-xs font-semibold text-zinc-100 hover:bg-zinc-700 disabled:opacity-40"
+                                                        className="td-press mt-2 w-full rounded-md bg-zinc-800 px-2 py-1.5 text-xs font-semibold text-zinc-100 transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
                                                         title="Runs the dynamically-registered apply_approved_plan tool"
                                                     >
-                                                        Execute Plan
+                                                        {busy === 'execute' ? (<><span className="td-spinner" aria-hidden="true" /> Executing…</>) : 'Execute Plan'}
                                                     </button>
                                                 )}
                                             </li>
@@ -2231,11 +2234,11 @@ export default function Workspace({
                                             <div className="min-w-0">
                                                 <div className="flex flex-wrap items-center gap-1.5">
                                                     <code className="rounded bg-zinc-900 px-1 text-xs font-semibold text-zinc-100">{a.tool_name}</code>
-                                                    <span className={`rounded-full px-1.5 text-[9px] font-bold ${AUTHORITY_COLOR[a.authority] ?? 'bg-zinc-900 text-zinc-300'}`}>{a.authority}</span>
+                                                    <span className={`rounded-full px-1.5 text-xs font-bold ${AUTHORITY_COLOR[a.authority] ?? 'bg-zinc-900 text-zinc-300'}`}>{a.authority}</span>
                                                 </div>
                                                 <div className="mt-0.5 text-xs text-zinc-400">{fmtTime(a.created_at)} · {a.result_status}</div>
                                                 {a.output_summary && (
-                                                    <pre className="mt-1 max-w-full overflow-x-auto rounded bg-zinc-950/40 p-1 text-[9px] leading-tight text-zinc-500">{JSON.stringify(a.output_summary)}</pre>
+                                                    <pre className="mt-1 max-w-full overflow-x-auto rounded bg-zinc-950/40 p-1 text-xs leading-tight text-zinc-500">{JSON.stringify(a.output_summary)}</pre>
                                                 )}
                                             </div>
                                         </li>
@@ -2247,7 +2250,7 @@ export default function Workspace({
                 </div>
 
                 {/* ============ BOTTOM: WebMCP diagnostics panel ============ */}
-                <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-900/60 shadow-sm">
+                <div className="td-fade-up td-delay-4 mt-6 rounded-xl border border-zinc-800 bg-zinc-900/60 shadow-sm">
                     <button
                         onClick={() => setDiagOpen((o) => !o)}
                         className="flex w-full items-center justify-between px-4 py-3 text-left"
@@ -2260,7 +2263,14 @@ export default function Workspace({
                                 <span className="ms-2 rounded-full bg-amber-400/10 px-2 py-0.5 text-xs font-bold text-amber-400">fallback (no WebMCP API)</span>
                             )}
                         </span>
-                        <span className="text-zinc-400">{diagOpen ? '▾' : '▸'}</span>
+                        <svg
+                            aria-hidden="true"
+                            className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform duration-300 ease-out ${diagOpen ? 'rotate-90' : ''}`}
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                        >
+                            <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                        </svg>
                     </button>
                     {diagOpen && (
                         <div className="border-t border-zinc-800/70 px-4 py-3">
@@ -2288,7 +2298,7 @@ export default function Workspace({
                                         <tr key={t.name} className="border-b border-zinc-800/70">
                                             <td className="py-1.5 pr-2 font-mono text-xs text-zinc-100">{t.name}</td>
                                             <td className="py-1.5 pr-2">
-                                                <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${AUTHORITY_COLOR[t.authority] ?? ''}`}>{t.authority}</span>
+                                                <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold ${AUTHORITY_COLOR[t.authority] ?? ''}`}>{t.authority}</span>
                                             </td>
                                             <td className="py-1.5 pr-2 text-zinc-500">{t.dynamic ? '●' : '—'}</td>
                                             <td className="py-1.5 pr-2 text-zinc-400">{fmtTime(t.registeredAt)}</td>

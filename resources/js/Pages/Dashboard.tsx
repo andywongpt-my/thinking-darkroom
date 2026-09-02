@@ -71,9 +71,9 @@ function relativeTime(iso: string | null | undefined): string {
     return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-function SprocketStrip() {
+function SprocketStrip({ animate = false }: { animate?: boolean }) {
     return (
-        <div aria-hidden="true" className="flex items-center justify-between px-2 py-1.5">
+        <div aria-hidden="true" className={`flex items-center justify-between px-2 py-1.5 ${animate ? 'transition-transform duration-500 ease-out group-hover:translate-x-2' : ''}`}>
             {Array.from({ length: 10 }).map((_, i) => (
                 <span key={i} className="h-1.5 w-2.5 rounded-[2px] bg-black/60" />
             ))}
@@ -85,12 +85,12 @@ function ToolLadder({ tools }: { tools: DashboardTools }) {
     const rungs: Array<{ label: string; count: number; note: string; tone: string }> = [
         { label: 'READ', count: tools.byAuthority.READ ?? 0, note: 'observe pixels, never change them', tone: 'text-zinc-400' },
         { label: 'ANALYZE', count: tools.byAuthority.ANALYZE ?? 0, note: 'compute judgment, hold it', tone: 'text-zinc-400' },
-        { label: 'PROPOSE', count: tools.byAuthority.PROPOSE ?? 0, note: 'recommend — human decides', tone: 'text-zinc-400' },
+        { label: 'PROPOSE', count: tools.byAuthority.PROPOSE ?? 0, note: 'recommend. Human decides.', tone: 'text-zinc-400' },
         { label: 'EXECUTE', count: tools.byAuthority.EXECUTE ?? 0, note: 'exists only after approval', tone: 'text-amber-400/90' },
     ];
 
     return (
-        <section aria-label="Agent authority model" className="rounded-xl border border-zinc-800 bg-zinc-900/60">
+        <section aria-label="Agent authority model" className="td-fade-up td-delay-3 rounded-xl border border-zinc-800 bg-zinc-900/60">
             <div className="flex items-baseline justify-between border-b border-zinc-800 px-5 py-4">
                 <h2 className="text-sm font-semibold text-zinc-200">Agent authority ladder</h2>
                 <span className="font-mono text-xs text-zinc-500" data-testid="dashboard-tool-count">
@@ -99,7 +99,7 @@ function ToolLadder({ tools }: { tools: DashboardTools }) {
             </div>
             <ol className="divide-y divide-zinc-800/70">
                 {rungs.map((r) => (
-                    <li key={r.label} className="flex items-center gap-4 px-5 py-3">
+                    <li key={r.label} className="flex items-center gap-4 px-5 py-3 transition-colors duration-200 hover:bg-zinc-950/50">
                         <span className="w-20 font-mono text-sm font-medium text-zinc-200">{r.label}</span>
                         <span className="font-mono text-sm tabular-nums text-zinc-300">{String(r.count).padStart(2, '0')}</span>
                         <span className={`text-xs ${r.tone}`}>{r.note}</span>
@@ -109,7 +109,7 @@ function ToolLadder({ tools }: { tools: DashboardTools }) {
             {tools.dynamic && (
                 <p className="border-t border-zinc-800 px-5 py-3 text-xs leading-relaxed text-zinc-400">
                     <span className="font-mono text-amber-400/90">{tools.dynamic.name}</span>{' '}
-                    is registered the moment you approve a proposal — and unregistered the instant it runs.
+                    is registered the moment you approve a proposal, and unregistered the instant it runs.
                     An agent cannot execute what you never approved, because the tool does not exist yet.
                 </p>
             )}
@@ -123,7 +123,7 @@ function AgentPresencePanel({ agent }: { agent: DashboardAgent }) {
             <div className="flex items-center gap-2.5">
                 <span
                     data-testid="dashboard-agent-status"
-                    className={`h-2 w-2 rounded-full ${agent.online ? 'bg-amber-400' : 'bg-zinc-600'}`}
+                    className={`h-2 w-2 rounded-full ${agent.online ? 'td-live-dot bg-amber-400' : 'bg-zinc-600'}`}
                 />
                 <span className="text-sm font-medium text-zinc-200">Studio agent</span>
                 <span className={`ml-auto font-mono text-xs ${agent.online ? 'text-amber-400/90' : 'text-zinc-500'}`}>
@@ -222,7 +222,7 @@ function FilmProjectCard({ p, meta, canManage }: { p: DashboardProject; meta?: P
     return (
         <div
             data-testid={`dashboard-project-${p.id}`}
-            className="group relative overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/60 transition duration-200 hover:border-amber-400/40"
+            className="td-fade-up group relative overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/60 transition duration-200 hover:border-amber-400/40 hover:shadow-lg hover:shadow-black/40"
         >
             {canManage && (
                 <div className="absolute right-4 top-10 z-30">
@@ -244,25 +244,25 @@ function FilmProjectCard({ p, meta, canManage }: { p: DashboardProject; meta?: P
                                 type="button"
                                 data-testid={`dashboard-project-${p.id}-rename`}
                                 onClick={openRename}
-                                className="block w-full px-4 py-2 text-start font-mono text-[11px] tracking-[0.12em] text-zinc-300 transition hover:bg-zinc-800 hover:text-zinc-100 focus:bg-zinc-800 focus:outline-none"
+                                className="td-press block w-full px-4 py-2 text-start text-sm text-zinc-300 transition hover:bg-zinc-800 hover:text-zinc-100 focus:bg-zinc-800 focus:outline-none"
                             >
-                                RENAME
+                                Rename
                             </button>
                             <button
                                 type="button"
                                 data-testid={`dashboard-project-${p.id}-archive`}
                                 onClick={toggleArchive}
-                                className="block w-full px-4 py-2 text-start font-mono text-[11px] tracking-[0.12em] text-zinc-300 transition hover:bg-zinc-800 hover:text-zinc-100 focus:bg-zinc-800 focus:outline-none"
+                                className="td-press block w-full px-4 py-2 text-start text-sm text-zinc-300 transition hover:bg-zinc-800 hover:text-zinc-100 focus:bg-zinc-800 focus:outline-none"
                             >
-                                {p.status === 'archived' ? 'UNARCHIVE' : 'ARCHIVE'}
+                                {p.status === 'archived' ? 'Unarchive' : 'Archive'}
                             </button>
                             <button
                                 type="button"
                                 data-testid={`dashboard-project-${p.id}-delete`}
                                 onClick={() => setShowDelete(true)}
-                                className="block w-full px-4 py-2 text-start font-mono text-[11px] tracking-[0.12em] text-rose-300 transition hover:bg-rose-950/50 hover:text-rose-200 focus:bg-rose-950/50 focus:outline-none"
+                                className="td-press block w-full px-4 py-2 text-start text-sm text-rose-300 transition hover:bg-rose-950/50 hover:text-rose-200 focus:bg-rose-950/50 focus:outline-none"
                             >
-                                DELETE
+                                Delete
                             </button>
                         </Dropdown.Content>
                     </Dropdown>
@@ -276,7 +276,7 @@ function FilmProjectCard({ p, meta, canManage }: { p: DashboardProject; meta?: P
             >
                 {/* top sprocket strip */}
                 <div className="border-b border-zinc-800 bg-zinc-950/40">
-                    <SprocketStrip />
+                    <SprocketStrip animate />
                 </div>
 
                 <div className="p-5">
@@ -288,34 +288,34 @@ function FilmProjectCard({ p, meta, canManage }: { p: DashboardProject; meta?: P
                             aria-hidden="true"
                         />
                         <h3 className="min-w-0 truncate text-base font-semibold text-zinc-100">{p.name}</h3>
-                        <span className="ml-auto shrink-0 font-mono text-[10px] tracking-[0.18em] text-zinc-500">
+                        <span className="ml-auto shrink-0 font-mono text-xs tracking-[0.18em] text-zinc-500">
                             {STATUS_LABEL[p.status] ?? p.status.toUpperCase()}
                         </span>
                     </div>
 
                     <div className="mt-5 grid grid-cols-3 gap-2 text-center" data-testid={`dashboard-project-${p.id}-stats`}>
-                        <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 py-2.5">
-                            <dd className="font-mono text-lg font-semibold tabular-nums text-zinc-100">{p.photo_count}</dd>
-                            <dt className="mt-0.5 text-[11px] text-zinc-500">photos</dt>
+                        <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 py-2.5 transition-colors duration-200 group-hover:border-zinc-700">
+                            <dd className="text-lg font-semibold tabular-nums text-zinc-100">{p.photo_count}</dd>
+                            <dt className="mt-0.5 text-xs text-zinc-500">photos</dt>
                         </div>
-                        <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 py-2.5">
+                        <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 py-2.5 transition-colors duration-200 group-hover:border-zinc-700">
                             <dd
-                                className={`font-mono text-lg font-semibold tabular-nums ${
+                                className={`text-lg font-semibold tabular-nums ${
                                     p.pending_proposals > 0 ? 'text-amber-400' : 'text-zinc-100'
                                 }`}
                             >
                                 {p.pending_proposals}
                             </dd>
-                            <dt className="mt-0.5 text-[11px] text-zinc-500">awaiting you</dt>
+                            <dt className="mt-0.5 text-xs text-zinc-500">awaiting you</dt>
                         </div>
-                        <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 py-2.5">
-                            <dd className="font-mono text-lg font-semibold tabular-nums text-zinc-100">{executed}</dd>
-                            <dt className="mt-0.5 text-[11px] text-zinc-500">executed</dt>
+                        <div className="rounded-lg border border-zinc-800/80 bg-zinc-950/40 py-2.5 transition-colors duration-200 group-hover:border-zinc-700">
+                            <dd className="text-lg font-semibold tabular-nums text-zinc-100">{executed}</dd>
+                            <dt className="mt-0.5 text-xs text-zinc-500">executed</dt>
                         </div>
                     </div>
 
                     {(approved > 0 || executed > 0) && (
-                        <p className="mt-3 font-mono text-[11px] text-zinc-600">
+                        <p className="mt-3 text-xs text-zinc-600">
                             {executed} executed · {approved} approved awaiting run
                         </p>
                     )}
@@ -332,7 +332,7 @@ function FilmProjectCard({ p, meta, canManage }: { p: DashboardProject; meta?: P
 
                 {/* bottom sprocket strip */}
                 <div className="border-t border-zinc-800 bg-zinc-950/40">
-                    <SprocketStrip />
+                    <SprocketStrip animate />
                 </div>
             </Link>
 
@@ -341,7 +341,7 @@ function FilmProjectCard({ p, meta, canManage }: { p: DashboardProject; meta?: P
                     <Modal show={showRename} onClose={closeRename} maxWidth="lg">
                 <div className="bg-zinc-900 p-6 text-zinc-100 sm:p-7">
                     <div className="mb-6">
-                        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-amber-400/90">
+                        <p className="font-mono text-xs uppercase tracking-[0.2em] text-amber-400/90">
                             PROJECT NOTES
                         </p>
                         <h2 id={`rename-project-title-${p.id}`} className="mt-2 text-xl font-semibold text-zinc-100">
@@ -414,17 +414,17 @@ function FilmProjectCard({ p, meta, canManage }: { p: DashboardProject; meta?: P
                                 data-testid={`rename-project-cancel-${p.id}`}
                                 onClick={closeRename}
                                 disabled={processing}
-                                className="rounded-md border border-zinc-700 px-4 py-2 text-xs font-semibold tracking-[0.12em] text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="td-press rounded-lg border border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                                CANCEL
+                                Cancel
                             </button>
                             <button
                                 type="submit"
                                 data-testid={`rename-project-submit-${p.id}`}
                                 disabled={processing}
-                                className="rounded-md border border-amber-400/60 bg-amber-400 px-4 py-2 text-xs font-semibold tracking-[0.12em] text-zinc-950 transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="td-press inline-flex items-center gap-2 rounded-lg border border-amber-400/60 bg-amber-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                                {processing ? 'SAVING…' : 'SAVE PROJECT'}
+                                {processing ? (<><span className="td-spinner" aria-hidden="true" /> Saving…</>) : 'Save project'}
                             </button>
                         </div>
                     </form>
@@ -433,7 +433,7 @@ function FilmProjectCard({ p, meta, canManage }: { p: DashboardProject; meta?: P
 
             <Modal show={showDelete} onClose={() => !deleting && setShowDelete(false)} maxWidth="md">
                 <div className="bg-zinc-900 p-6 text-zinc-100 sm:p-7">
-                    <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-rose-300">IRREVERSIBLE CUT</p>
+                    <p className="font-mono text-xs uppercase tracking-[0.2em] text-rose-300">IRREVERSIBLE CUT</p>
                     <h2 id={`delete-project-title-${p.id}`} className="mt-2 text-xl font-semibold text-zinc-100">
                         Delete project?
                     </h2>
@@ -449,9 +449,9 @@ function FilmProjectCard({ p, meta, canManage }: { p: DashboardProject; meta?: P
                             data-testid={`delete-project-cancel-${p.id}`}
                             onClick={() => setShowDelete(false)}
                             disabled={deleting}
-                            className="rounded-md border border-zinc-700 px-4 py-2 text-xs font-semibold tracking-[0.12em] text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="td-press rounded-lg border border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                            KEEP PROJECT
+                            Keep project
                         </button>
                         <DangerButton
                             type="button"
@@ -459,7 +459,7 @@ function FilmProjectCard({ p, meta, canManage }: { p: DashboardProject; meta?: P
                             onClick={confirmDelete}
                             disabled={deleting}
                         >
-                            {deleting ? 'DELETING…' : 'DELETE PROJECT'}
+                            {deleting ? (<><span className="td-spinner" aria-hidden="true" /> Deleting…</>) : 'Delete project'}
                         </DangerButton>
                     </div>
                 </div>
@@ -540,15 +540,16 @@ function CreateProjectDialog() {
                 aria-haspopup="dialog"
                 aria-expanded={show}
                 onClick={open}
-                className="inline-flex items-center rounded-md border border-amber-400/60 bg-amber-400 px-3 py-2 text-xs font-semibold tracking-[0.12em] text-zinc-950 transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
+                className="td-press inline-flex items-center gap-1.5 rounded-lg border border-amber-400/60 bg-amber-400 px-3 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
             >
-                ADD NEW PROJECT
+                <span aria-hidden="true" className="text-base leading-none">+</span>
+                New project
             </button>
 
             <Modal show={show} onClose={close} maxWidth="lg">
                 <div className="bg-zinc-900 p-6 text-zinc-100 sm:p-7">
                     <div className="mb-6">
-                        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-amber-400/90">
+                        <p className="font-mono text-xs uppercase tracking-[0.2em] text-amber-400/90">
                             NEW DARKROOM
                         </p>
                         <h2 id="new-project-title" className="mt-2 text-xl font-semibold text-zinc-100">
@@ -621,17 +622,17 @@ function CreateProjectDialog() {
                                 data-testid="new-project-cancel"
                                 onClick={close}
                                 disabled={processing}
-                                className="rounded-md border border-zinc-700 px-4 py-2 text-xs font-semibold tracking-[0.12em] text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="td-press rounded-lg border border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-300 transition hover:border-zinc-500 hover:text-zinc-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                                CANCEL
+                                Cancel
                             </button>
                             <button
                                 type="submit"
                                 data-testid="new-project-submit"
                                 disabled={processing}
-                                className="rounded-md border border-amber-400/60 bg-amber-400 px-4 py-2 text-xs font-semibold tracking-[0.12em] text-zinc-950 transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="td-press inline-flex items-center gap-2 rounded-lg border border-amber-400/60 bg-amber-400 px-4 py-2 text-sm font-semibold text-zinc-950 transition hover:bg-amber-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                                {processing ? 'CREATING…' : 'CREATE PROJECT'}
+                                {processing ? (<><span className="td-spinner" aria-hidden="true" /> Creating…</>) : 'Create project'}
                             </button>
                         </div>
                     </form>
@@ -652,12 +653,12 @@ export default function Dashboard({ projects, can_create_project, project_meta, 
                     <div>
                         <h1 className="text-2xl font-semibold tracking-tight text-zinc-100">Dashboard</h1>
                         <p className="mt-1 text-sm text-zinc-400">
-                            Your darkroom — the agent develops, you keep the final cut.
+                            Your darkroom: the agent develops, you keep the final cut.
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-4">
                         {canCreateProject && <CreateProjectDialog />}
-                        <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-600" suppressHydrationWarning>
+                        <p className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-600" suppressHydrationWarning>
                             {now ? `SAFELIGHT ON · ${new Date(now).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : 'SAFELIGHT ON'}
                         </p>
                     </div>
@@ -672,7 +673,7 @@ export default function Dashboard({ projects, can_create_project, project_meta, 
                         <div className="grid gap-6 lg:grid-cols-3">
                             {/* Project film strips — 2/3 width, primary surface */}
                             <div className="lg:col-span-2">
-                                <h2 className="mb-3 text-sm font-semibold text-zinc-200">Projects</h2>
+                                <h2 className="td-fade-in mb-3 text-sm font-semibold text-zinc-200">Projects</h2>
                                 <div className="grid gap-5 md:grid-cols-2">
                                     {projects.map((p) => (
                                         <FilmProjectCard
@@ -692,7 +693,7 @@ export default function Dashboard({ projects, can_create_project, project_meta, 
                             </div>
                         </div>
                     ) : (
-                        <div className="mx-auto max-w-xl rounded-xl border border-zinc-800 bg-zinc-900/60 p-10 text-center">
+                        <div className="td-fade-up mx-auto max-w-xl rounded-xl border border-zinc-800 bg-zinc-900/60 p-10 text-center">
                             <div aria-hidden="true" className="mx-auto mb-5 w-fit rounded-lg bg-zinc-950/60 px-4 py-3">
                                 <SprocketStrip />
                             </div>

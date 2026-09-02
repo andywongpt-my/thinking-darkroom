@@ -65,7 +65,7 @@ describe('Workspace audit regressions', () => {
             }),
         );
 
-        expect(html).toContain('DELETING');
+        expect(html).toContain('Deleting');
         expect(html).toMatch(/workspace-delete-photo-confirm[^>]*disabled=""/);
     });
 

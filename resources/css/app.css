@@ -7,3 +7,111 @@
 html {
     color-scheme: dark;
 }
+
+/* ------------------------------------------------------------------ */
+/* Darkroom motion layer.                                              */
+/* Dashboards are data surfaces: entrance stagger + micro-interaction  */
+/* only. No infinite loops except the live-status pulse, which signals */
+/* a heartbeat. Everything collapses under prefers-reduced-motion.      */
+/* ------------------------------------------------------------------ */
+
+@keyframes td-fade-up {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes td-fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes td-slide-down {
+    from { opacity: 0; transform: translateY(-10px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes td-slide-up {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes td-pop-in {
+    from { opacity: 0; transform: scale(0.96); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+/* Heartbeat for live status dots: two soft pulses then a rest.
+   Signals "alive" without demanding attention. */
+@keyframes td-soft-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.45); }
+    50%      { box-shadow: 0 0 0 5px rgba(251, 191, 36, 0); }
+}
+
+@keyframes td-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Entrance utilities. Delay scale is capped at 320ms so a full grid
+   never reads as PowerPoint. */
+.td-fade-up   { opacity: 0; animation: td-fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.td-fade-in   { opacity: 0; animation: td-fade-in 0.45s ease-out forwards; }
+.td-slide-down { opacity: 0; animation: td-slide-down 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.td-slide-up  { opacity: 0; animation: td-slide-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+.td-pop-in    { opacity: 0; animation: td-pop-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+
+.td-delay-1 { animation-delay: 0.04s; }
+.td-delay-2 { animation-delay: 0.08s; }
+.td-delay-3 { animation-delay: 0.12s; }
+.td-delay-4 { animation-delay: 0.16s; }
+.td-delay-5 { animation-delay: 0.20s; }
+.td-delay-6 { animation-delay: 0.24s; }
+.td-delay-7 { animation-delay: 0.28s; }
+.td-delay-8 { animation-delay: 0.32s; }
+
+/* Live status heartbeat (amber safelight dot). */
+.td-live-dot {
+    animation: td-soft-pulse 2.6s ease-in-out infinite;
+}
+
+/* Inline busy spinner for buttons that are working. */
+.td-spinner {
+    display: inline-block;
+    width: 0.75rem;
+    height: 0.75rem;
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    border-top-color: currentColor;
+    border-radius: 9999px;
+    animation: td-spin 0.7s linear infinite;
+}
+
+/* Tactile press feedback, one vocabulary everywhere. */
+.td-press {
+    transition: transform 120ms cubic-bezier(0.22, 1, 0.36, 1), background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out, box-shadow 150ms ease-out, opacity 150ms ease-out;
+}
+.td-press:active { transform: scale(0.97); }
+
+/* Amber selection tint for form fields that own the safelight accent. */
+.td-select {
+    accent-color: #fbbf24;
+}
+
+/* All motion collapses for users who ask for less of it. */
+@media (prefers-reduced-motion: reduce) {
+    .td-fade-up,
+    .td-fade-in,
+    .td-slide-down,
+    .td-slide-up,
+    .td-pop-in {
+        animation: none;
+        opacity: 1;
+    }
+    .td-live-dot,
+    .td-spinner {
+        animation: none;
+    }
+    .td-press,
+    .td-press:active {
+        transition: none;
+        transform: none;
+    }
+}

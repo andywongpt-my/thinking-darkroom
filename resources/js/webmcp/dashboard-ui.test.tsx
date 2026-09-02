@@ -228,7 +228,7 @@ describe('Dashboard darkroom view', () => {
         expect(html).toContain('data-testid="dashboard-project-1-rename"');
         expect(html).toContain('data-testid="dashboard-project-1-archive"');
         expect(html).toContain('data-testid="dashboard-project-1-delete"');
-        expect(html).toContain('ARCHIVE');
+        expect(html).toContain('Archive');
         expect(html).toContain('data-testid="delete-project-confirm-1"');
         expect(html).toContain('permanently removes');
         expect(html).toContain('including its photos and proposals');
@@ -253,8 +253,8 @@ describe('Dashboard darkroom view', () => {
 
         const html = render();
 
-        expect(html).toContain('UNARCHIVE');
         expect(html).toContain('ARCHIVED');
+        expect(html).toContain('Unarchive');
     });
 
     it('renders ADD NEW PROJECT and its form for a human with or without existing projects', () => {
@@ -263,7 +263,7 @@ describe('Dashboard darkroom view', () => {
             const html = render();
 
             expect(html).toContain('data-testid="dashboard-add-project"');
-            expect(html).toContain('ADD NEW PROJECT');
+            expect(html).toContain('New project');
             expect(html).toContain('data-testid="new-project-dialog"');
             expect(html).toContain('<form');
             expect(html).toContain('aria-labelledby="new-project-title"');
@@ -277,8 +277,8 @@ describe('Dashboard darkroom view', () => {
             expect(html).toContain('for="project-description"');
             expect(html).toContain('id="project-description"');
             expect(html).toContain('name="description"');
-            expect(html).toContain('CANCEL');
-            expect(html).toContain('CREATE PROJECT');
+            expect(html).toContain('Cancel');
+            expect(html).toContain('Create project');
         }
     });
 

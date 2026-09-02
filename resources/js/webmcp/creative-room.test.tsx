@@ -367,11 +367,11 @@ describe('Sprint 2 — Creative Room page (Task 10)', () => {
         expect(withHistory).toContain('Golden hour, calm coastal mood, honest expressions');
         expect(withHistory).toContain('Maya');
         expect(withHistory).toContain('2026');
-        expect(withHistory).toContain('ADD MORE THINKING');
+        expect(withHistory).toContain('Add more thinking');
 
         const fresh = mountPage({ brainstorm: null });
         expect(fresh).not.toContain('data-testid="brainstorm-history"');
-        expect(fresh).toContain('OPEN BRAINSTORM');
+        expect(fresh).toContain('Open brainstorm');
     });
 
     it('9. human action controls render only for a photographer who can review, and never for agents or terminal states', () => {

@@ -220,7 +220,7 @@ export default function CreativeRoom() {
         setBusy(null);
         if (res.ok) {
             setBrainstormOpen(false);
-            setNotify({ kind: 'ok', text: 'Brainstorm session opened — the agent can now reason from your input.' });
+            setNotify({ kind: 'ok', text: 'Brainstorm session opened. The agent can now reason from your input.' });
             reloadPage();
         } else {
             setNotify({ kind: 'err', text: `Brainstorm failed: ${res.error}` });
@@ -233,7 +233,7 @@ export default function CreativeRoom() {
         setBusy(null);
         if (res.ok && res.data) {
             setConcepts((cs) => cs.map((c) => (c.id === concept.id ? res.data!.concept : c)));
-            setNotify({ kind: 'ok', text: `Exploring "${concept.title}" — lineage preserved.` });
+            setNotify({ kind: 'ok', text: `Exploring "${concept.title}". Lineage preserved.` });
         } else {
             setNotify({ kind: 'err', text: `Explore failed: ${res.error}` });
         }
@@ -245,7 +245,7 @@ export default function CreativeRoom() {
         setBusy(null);
         if (res.ok && res.data) {
             setConcepts((cs) => cs.map((c) => (c.id === concept.id ? res.data!.concept : c)));
-            setNotify({ kind: 'ok', text: `"${concept.title}" rejected — history preserved.` });
+            setNotify({ kind: 'ok', text: `"${concept.title}" rejected. History preserved.` });
         } else {
             setNotify({ kind: 'err', text: `Reject failed: ${res.error}` });
         }
@@ -317,7 +317,7 @@ export default function CreativeRoom() {
             header={
                 <div className="flex items-center justify-between">
                     <h2 className="text-xl font-semibold leading-tight text-zinc-100">
-                        Creative Room — {project.name}
+                        Creative Room · {project.name}
                     </h2>
                     <Link
                         href={route('workspace.show', project.id)}
@@ -328,7 +328,7 @@ export default function CreativeRoom() {
                 </div>
             }
         >
-            <Head title={`Creative Room — ${project.name}`} />
+            <Head title={`Creative Room · ${project.name}`} />
 
             <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
                 {webmcpUnavailable && (
@@ -342,7 +342,7 @@ export default function CreativeRoom() {
                         role="status"
                         aria-live="polite"
                         data-testid="creative-room-notify"
-                        className={`mb-4 flex items-start justify-between gap-3 rounded-lg border px-4 py-3 text-sm ${notify.kind === 'ok' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-rose-500/30 bg-rose-500/10 text-rose-400'}`}
+                        className={`td-slide-down mb-4 flex items-start justify-between gap-3 rounded-lg border px-4 py-3 text-sm ${notify.kind === 'ok' ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400' : 'border-rose-500/30 bg-rose-500/10 text-rose-400'}`}
                     >
                         <span>{notify.text}</span>
                         <button
@@ -360,10 +360,10 @@ export default function CreativeRoom() {
                     {/* ================= LEFT / MAIN ================= */}
                     <div className="space-y-5">
                         {/* ------- A. Creative Canvas ------- */}
-                        <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-5 shadow-sm">
+                        <section className="td-fade-up td-delay-1 rounded-xl border border-zinc-800 bg-zinc-900/60 p-5 shadow-sm">
                             <div className="mb-3 flex items-center justify-between">
                                 <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-                                    Creative Canvas — current project intent
+                                    Creative Canvas · current project intent
                                 </h3>
                                 {brainstorm && (
                                     <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-xs font-bold text-indigo-400">
@@ -394,7 +394,7 @@ export default function CreativeRoom() {
                                         {brainstorm
                                             ? 'Review the AI concepts below, then adopt one as the direction.'
                                             : can_review
-                                                ? 'Open a brainstorm to capture your freeform thinking — the agent proposes concepts from it.'
+                                                ? 'Open a brainstorm to capture your freeform thinking. The agent proposes concepts from it.'
                                                 : 'The photographer has not opened a brainstorm yet.'}
                                     </p>
                                     {brainstorm && (
@@ -411,10 +411,10 @@ export default function CreativeRoom() {
                                     className="mt-4 rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-3"
                                 >
                                     <div className="flex flex-wrap items-center justify-between gap-2">
-                                        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-indigo-300">
+                                        <p className="font-mono text-xs uppercase tracking-[0.16em] text-indigo-300">
                                             PREVIOUS THINKING · {brainstorm.photographer ?? 'PHOTOGRAPHER'}
                                         </p>
-                                        <time className="text-[11px] text-zinc-500" dateTime={brainstorm.created_at}>
+                                        <time className="text-xs text-zinc-500" dateTime={brainstorm.created_at}>
                                             {fmtTime(brainstorm.created_at)}
                                         </time>
                                     </div>
@@ -429,9 +429,9 @@ export default function CreativeRoom() {
                                     {!brainstormOpen ? (
                                         <button
                                             onClick={() => setBrainstormOpen(true)}
-                                            className="rounded-md bg-zinc-900 px-4 py-2 text-xs font-semibold text-zinc-100 hover:bg-zinc-700"
+                                            className="td-press rounded-md bg-zinc-900 px-4 py-2 text-xs font-semibold text-zinc-100 transition hover:bg-zinc-700"
                                         >
-                                            {brainstorm ? 'ADD MORE THINKING' : 'OPEN BRAINSTORM'}
+                                            {brainstorm ? 'Add more thinking' : 'Open brainstorm'}
                                         </button>
                                     ) : (
                                         <div className="space-y-2">
@@ -440,7 +440,7 @@ export default function CreativeRoom() {
                                                 onChange={(e) => setBrainstormInput(e.target.value)}
                                                 rows={3}
                                                 maxLength={4000}
-                                                placeholder="Freeform creative thinking — mood, references, what you want this set to feel like…"
+                                                placeholder="Freeform creative thinking: mood, references, what you want this set to feel like…"
                                                 className="w-full rounded-lg border border-zinc-700 p-3 text-xs focus:border-zinc-600 focus:outline-none"
                                             />
                                             <div className="flex gap-2">
@@ -465,7 +465,7 @@ export default function CreativeRoom() {
                         </section>
 
                         {/* ------- B + C. Concept cards + human actions ------- */}
-                        <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-5 shadow-sm">
+                        <section className="td-fade-up td-delay-2 rounded-xl border border-zinc-800 bg-zinc-900/60 p-5 shadow-sm">
                             <div className="mb-3 flex items-center justify-between">
                                 <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
                                     Concepts {concepts.length > 0 && <span className="text-zinc-400">({concepts.length})</span>}
@@ -520,7 +520,7 @@ export default function CreativeRoom() {
                                                     <h4 className="text-sm font-bold text-zinc-50">{c.title}</h4>
                                                     <span
                                                         data-testid="authority-state"
-                                                        className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-extrabold tracking-wide ${style.badge}`}
+                                                        className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-extrabold tracking-wide ${style.badge}`}
                                                     >
                                                         {style.label}
                                                     </span>
@@ -531,7 +531,7 @@ export default function CreativeRoom() {
                                                 <dl className="mb-2 grid grid-cols-1 gap-1">
                                                     {dimensionEntries(c.content).map(([k, v]) => (
                                                         <div key={k} className="rounded bg-zinc-950/40 px-2 py-1">
-                                                            <dt className="text-[9px] font-semibold uppercase tracking-wide text-zinc-400">
+                                                            <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
                                                                 {k.replace(/_/g, ' ')}
                                                             </dt>
                                                             <dd className="text-xs text-zinc-200">{v}</dd>
@@ -600,27 +600,27 @@ export default function CreativeRoom() {
                     </div>
 
                     {/* ================= RIGHT: Agent Collaboration Panel ================= */}
-                    <aside className="space-y-5">
+                    <aside className="td-fade-up td-delay-3 space-y-5">
                         <section className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 shadow-sm">
                             <h3 className="mb-2 text-sm font-semibold text-zinc-100">Agent Collaboration</h3>
                             <p className="mb-2 text-xs leading-relaxed text-zinc-500">
                                 The agent <b>explores · analyzes · proposes · remembers</b>. It can never adopt,
-                                reject or commit a creative direction — those are photographer-only actions.
+                                reject or commit a creative direction. Those are photographer-only actions.
                             </p>
                             <div className="rounded-lg bg-zinc-950/40 p-2.5">
-                                <p className="text-[9px] font-semibold uppercase tracking-wide text-zinc-400">WebMCP registry</p>
+                                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">WebMCP registry</p>
                                 <div className="mt-1 flex flex-wrap gap-1">
-                                    <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${snapshot?.webmcpAvailable ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-400/10 text-amber-400'}`}>
+                                    <span className={`rounded px-1.5 py-0.5 text-xs font-bold ${snapshot?.webmcpAvailable ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-400/10 text-amber-400'}`}>
                                         {snapshot?.webmcpAvailable ? 'document.modelContext live' : 'fallback context'}
                                     </span>
-                                    <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[9px] font-bold text-zinc-200">
+                                    <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-xs font-bold text-zinc-200">
                                         {snapshot?.registered.length ?? 0} tools
                                     </span>
                                 </div>
                                 <ul className="mt-2 space-y-0.5">
                                     {(snapshot?.registered ?? []).map((t) => (
                                         <li key={t.name} className="flex items-center gap-1.5">
-                                            <span className={`rounded-full px-1.5 text-[8px] font-bold ${AUTHORITY_COLOR[t.authority] ?? 'bg-zinc-900 text-zinc-300'}`}>
+                                            <span className={`rounded-full px-1.5 text-xs font-bold ${AUTHORITY_COLOR[t.authority] ?? 'bg-zinc-900 text-zinc-300'}`}>
                                                 {t.authority}
                                             </span>
                                             <code className="text-xs text-zinc-300">{t.name}</code>
@@ -629,7 +629,7 @@ export default function CreativeRoom() {
                                 </ul>
                             </div>
                             <div className="mt-2 rounded-lg bg-zinc-950/40 p-2.5 text-xs text-zinc-500">
-                                <p className="text-[9px] font-semibold uppercase tracking-wide text-zinc-400">Current context</p>
+                                <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Current context</p>
                                 <p className="mt-1">
                                     Concepts: <b>{concepts.length}</b> · Adopted: <b>{adopted ? `#${adopted.id}` : 'none'}</b> ·
                                     Registry: <b>{registry ? 'active' : '—'}</b>
@@ -649,13 +649,13 @@ export default function CreativeRoom() {
                                             <div className="min-w-0">
                                                 <div className="flex flex-wrap items-center gap-1.5">
                                                     <code className="rounded bg-zinc-900 px-1 text-xs font-semibold text-zinc-100">{a.tool_name}</code>
-                                                    <span className={`rounded-full px-1.5 text-[8px] font-bold ${AUTHORITY_COLOR[a.authority] ?? 'bg-zinc-900 text-zinc-300'}`}>
+                                                    <span className={`rounded-full px-1.5 text-xs font-bold ${AUTHORITY_COLOR[a.authority] ?? 'bg-zinc-900 text-zinc-300'}`}>
                                                         {a.authority}
                                                     </span>
                                                 </div>
-                                                <div className="mt-0.5 text-[9px] text-zinc-400">{fmtTime(a.created_at)} · {a.result_status}</div>
+                                                <div className="mt-0.5 text-xs text-zinc-400">{fmtTime(a.created_at)} · {a.result_status}</div>
                                                 {a.output_summary && (
-                                                    <pre className="mt-0.5 max-w-full overflow-x-auto rounded bg-zinc-950/40 p-1 text-[8px] leading-tight text-zinc-500">
+                                                    <pre className="mt-0.5 max-w-full overflow-x-auto rounded bg-zinc-950/40 p-1 text-xs leading-tight text-zinc-500">
                                                         {JSON.stringify(a.output_summary)}
                                                     </pre>
                                                 )}
@@ -672,7 +672,7 @@ export default function CreativeRoom() {
                                 <p className="text-xs text-emerald-400">
                                     {brief.creative_direction} · adopted {fmtTime(brief.adopted_at)}
                                 </p>
-                                <pre className="mt-2 max-h-56 overflow-auto rounded-lg bg-zinc-900/60 p-2 text-[9px] leading-relaxed text-zinc-200">
+                                <pre className="mt-2 max-h-56 overflow-auto rounded-lg bg-zinc-900/60 p-2 text-xs leading-relaxed text-zinc-200">
                                     {JSON.stringify(brief.payload, null, 2)}
                                 </pre>
                             </section>
@@ -685,7 +685,7 @@ export default function CreativeRoom() {
                     <h4 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">Authority state language</h4>
                     <div className="mt-2 flex flex-wrap gap-2">
                         {Object.entries(STATUS_STYLE).map(([k, v]) => (
-                            <span key={k} className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold tracking-wide ${v.badge}`}>
+                            <span key={k} className={`rounded-full px-2 py-0.5 text-xs font-extrabold tracking-wide ${v.badge}`}>
                                 {v.label}
                             </span>
                         ))}
