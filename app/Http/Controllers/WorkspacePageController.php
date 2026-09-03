@@ -22,7 +22,7 @@ use Throwable;
 
 class WorkspacePageController extends Controller
 {
-    /** GET / — redirects to the newest project the signed-in user can access. */
+    /** GET / — the dashboard is the app home; projects are one click away. */
     public function root(Request $request): \Symfony\Component\HttpFoundation\RedirectResponse
     {
         $user = $request->user();
@@ -30,13 +30,7 @@ class WorkspacePageController extends Controller
             return redirect()->route('login');
         }
 
-        $project = Project::whereHas('members', fn ($q) => $q->where('user_id', $user->id))
-            ->orderByDesc('id')
-            ->first();
-
-        return $project
-            ? redirect()->route('workspace.show', $project)
-            : redirect()->route('dashboard');
+        return redirect()->route('dashboard');
     }
 
     /** GET /projects/{project} — the ONE main project workspace page. */
