@@ -29,7 +29,7 @@
     "VIEW_COMPILED_PATH": "/tmp/views",
     "SSR_TEMP_PATH": "/tmp/ssr",
     "CACHE_STORE": "file",
-    "SESSION_DRIVER": "cookie",
+    "SESSION_DRIVER": "database",
     "SESSION_SECURE_COOKIE": "true",
     "SESSION_ENCRYPT": "true",
     "LOG_CHANNEL": "stderr",
