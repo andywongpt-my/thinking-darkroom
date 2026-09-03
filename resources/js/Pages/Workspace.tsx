@@ -4,6 +4,7 @@ import DangerButton from '@/Components/DangerButton';
 import Modal from '@/Components/Modal';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useWebmcpRegistry } from '@/webmcp/use-webmcp';
 import { webmcpApi } from '@/webmcp/api';
 import { autoDismissNotification } from '@/webmcp/notifications';
@@ -468,6 +469,129 @@ export function PhotoExifGrid({
     );
 }
 
+export function CullingCenterSkeleton() {
+    return (
+        <div
+            data-testid="culling-center-skeleton"
+            role="status"
+            aria-busy="true"
+            aria-label="Loading culling context"
+            className="mt-4 space-y-3 rounded-xl border border-zinc-700/80 bg-zinc-950/40 p-4"
+        >
+            <div className="h-3 w-1/3 animate-pulse rounded bg-zinc-800/70" />
+            <div className="space-y-2">
+                {[0, 1, 2, 3].map((index) => (
+                    <div
+                        key={`culling-center-skeleton-${index}`}
+                        className={`h-3 animate-pulse rounded bg-zinc-800/70 ${index % 2 === 0 ? 'w-full' : 'w-4/5'}`}
+                    />
+                ))}
+            </div>
+        </div>
+    );
+}
+
+export function CullingLightbox({
+    selected,
+    comparisonPhoto,
+    compareMode,
+    onClose,
+    onToggleCompare,
+}: {
+    selected: WorkspacePhoto;
+    comparisonPhoto: WorkspacePhoto | null;
+    compareMode: boolean;
+    onClose: () => void;
+    onToggleCompare: () => void;
+}) {
+    return (
+        <div
+            data-testid="culling-lightbox"
+            role="dialog"
+            aria-modal="true"
+            aria-label={compareMode && comparisonPhoto ? 'Compare photos' : `Inspect ${selected.filename} at 1:1`}
+            onClick={onClose}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/95 p-4 sm:p-6"
+        >
+            <div
+                className="flex max-h-full w-full max-w-7xl flex-col overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-900 p-4 shadow-2xl sm:p-6"
+                onClick={(event) => event.stopPropagation()}
+            >
+                <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                            {compareMode && comparisonPhoto ? 'Compare' : 'Inspect 1:1'}
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-zinc-100">{selected.filename}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {comparisonPhoto && (
+                            <button
+                                type="button"
+                                data-testid="culling-lightbox-compare-toggle"
+                                onClick={onToggleCompare}
+                                className="td-press rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-semibold text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                            >
+                                {compareMode ? 'Single view' : 'Compare'}
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            data-testid="culling-lightbox-close"
+                            aria-label="Close 1:1 inspector"
+                            onClick={onClose}
+                            className="td-press flex min-h-11 min-w-11 items-center justify-center rounded-md border border-zinc-700 text-xl leading-none text-zinc-300 transition hover:border-zinc-500 hover:bg-zinc-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                        >
+                            ×
+                        </button>
+                    </div>
+                </div>
+
+                {compareMode && comparisonPhoto ? (
+                    <div className="grid min-h-0 grid-cols-1 gap-4 md:grid-cols-2" data-testid="culling-compare-view">
+                        {[selected, comparisonPhoto].map((photo) => (
+                            <figure key={photo.id} className="min-w-0">
+                                <div className="flex min-h-64 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-950/40 p-2">
+                                    {photo.url ? (
+                                        <img
+                                            src={photo.url}
+                                            alt={`${photo.filename} original at 1:1`}
+                                            className="max-h-[72vh] w-full object-contain"
+                                        />
+                                    ) : (
+                                        <span className="text-sm text-zinc-400">Original image unavailable</span>
+                                    )}
+                                </div>
+                                <figcaption className="mt-2 truncate text-xs font-semibold text-zinc-200" title={photo.filename}>
+                                    {photo.filename}
+                                </figcaption>
+                            </figure>
+                        ))}
+                    </div>
+                ) : (
+                    <figure className="min-h-0">
+                        <div className="flex min-h-64 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-950/40 p-2">
+                            {selected.url ? (
+                                <img
+                                    src={selected.url}
+                                    alt={`${selected.filename} original at 1:1`}
+                                    className="max-h-[78vh] w-full object-contain"
+                                />
+                            ) : (
+                                <span className="text-sm text-zinc-400">Original image unavailable</span>
+                            )}
+                        </div>
+                        <figcaption className="mt-2 truncate text-xs font-semibold text-zinc-200" title={selected.filename}>
+                            {selected.filename}
+                        </figcaption>
+                    </figure>
+                )}
+                <p className="mt-4 text-xs text-zinc-500">Click outside or press Escape to close.</p>
+            </div>
+        </div>
+    );
+}
+
 /**
  * The per-photo READ endpoint documents 409 as the normal pre-analysis state:
  * observations do not exist until the agent explicitly runs ANALYZE.
@@ -905,6 +1029,31 @@ export function tradeoffParts(tradeoff: string | null | undefined): { before: st
 /** Culling decision the photographer may record. */
 export type CullingChoice = 'keep' | 'review' | 'reject';
 
+/** Return the next frame in the photo grid, wrapping at either edge. */
+export function cullingNavigationTarget(
+    photoIds: number[],
+    selectedId: number | null,
+    direction: 'previous' | 'next',
+): number | null {
+    if (photoIds.length === 0) return null;
+
+    const currentIndex = selectedId === null ? -1 : photoIds.indexOf(selectedId);
+    if (currentIndex === -1) {
+        return photoIds[direction === 'next' ? 0 : photoIds.length - 1] ?? null;
+    }
+
+    const delta = direction === 'next' ? 1 : -1;
+    return photoIds[(currentIndex + delta + photoIds.length) % photoIds.length] ?? null;
+}
+
+/** Keep culling shortcuts from firing while an editable control owns focus. */
+export function isCullingKeyboardInput(
+    target: { tagName?: string; isContentEditable?: boolean } | null,
+): boolean {
+    const tagName = target?.tagName?.toUpperCase();
+    return tagName === 'INPUT' || tagName === 'TEXTAREA' || target?.isContentEditable === true;
+}
+
 export default function Workspace({
     initialCulling: initialCullingProp,
     initialAnalysis = null,
@@ -1102,6 +1251,8 @@ export default function Workspace({
     const [myDecisions, setMyDecisions] = useState<Record<number, PhotographerDecisionPayload['decision']>>({});
     const [overrideNote, setOverrideNote] = useState('');
     const [overrideOpen, setOverrideOpen] = useState(false);
+    const [lightboxOpen, setLightboxOpen] = useState(false);
+    const [compareMode, setCompareMode] = useState(false);
 
     const recFor = useMemo(() => {
         const map = new Map<number, CullingRecommendationEntry>();
@@ -1110,6 +1261,40 @@ export default function Workspace({
     }, [culling]);
 
     const selectedRec = selected ? recFor.get(selected.id) ?? null : null;
+
+    const selectedDuplicateGroup = useMemo(
+        () => selected
+            ? (culling?.context.duplicate_groups ?? []).find((group) => group.photo_ids.includes(selected.id)) ?? null
+            : null,
+        [culling, selected],
+    );
+    const comparisonPhoto = useMemo(
+        () => selectedDuplicateGroup
+            ? photos.find((photo) => photo.id !== selected?.id && selectedDuplicateGroup.photo_ids.includes(photo.id)) ?? null
+            : null,
+        [photos, selected?.id, selectedDuplicateGroup],
+    );
+
+    const closeLightbox = () => {
+        setLightboxOpen(false);
+        setCompareMode(false);
+    };
+
+    const openLightbox = (compare = false) => {
+        if (!selected) return;
+        setCompareMode(compare && comparisonPhoto !== null);
+        setLightboxOpen(true);
+    };
+
+    useEffect(() => {
+        if (!lightboxOpen) return;
+
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') closeLightbox();
+        };
+        document.addEventListener('keydown', closeOnEscape);
+        return () => document.removeEventListener('keydown', closeOnEscape);
+    }, [lightboxOpen]);
 
     // Load the project-wide culling context once per project (and after overrides).
     const loadCulling = async () => {
@@ -1708,6 +1893,72 @@ export default function Workspace({
         setCullIds((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
     };
 
+    const applyBatchCullingDecision = async (decision: CullingChoice) => {
+        const selectedIds = cullIds.filter((id) => photos.some((photo) => photo.id === id));
+        if (selectedIds.length === 0) {
+            setNotify({ kind: 'err', text: 'Select at least one photo before applying a batch decision.' });
+            return;
+        }
+
+        setBusy(`batch-cull-${decision}`);
+        let succeeded = 0;
+        const failedPhotos: string[] = [];
+
+        try {
+            for (const photoId of selectedIds) {
+                const photoName = photos.find((photo) => photo.id === photoId)?.filename ?? `Photo #${photoId}`;
+                try {
+                    const result = await recordCullingDecision(photoId, decision);
+                    if (result) {
+                        succeeded += 1;
+                    } else {
+                        failedPhotos.push(photoName);
+                        setNotify({ kind: 'err', text: `Decision failed for ${photoName}.` });
+                    }
+                } catch (error) {
+                    const reason = error instanceof Error ? error.message : String(error);
+                    failedPhotos.push(photoName);
+                    setNotify({ kind: 'err', text: `Decision failed for ${photoName}: ${reason}` });
+                }
+            }
+
+            const failed = selectedIds.length - succeeded;
+            const failedSummary = failedPhotos.length > 0 ? ` Failed: ${failedPhotos.join(', ')}.` : '';
+            setCullIds([]);
+            setNotify({
+                kind: failed > 0 ? 'err' : 'ok',
+                text: `Applied ${decision.toUpperCase()} to ${succeeded}/${selectedIds.length} selected photo(s).${failed > 0 ? ` ${failed} failed.` : ''}${failedSummary}`,
+            });
+            router.reload({ only: ['photos', 'proposals', 'retouchCard', 'activity', 'decisions', 'qaFindings', 'creativeMemories'] });
+        } finally {
+            setBusy(null);
+        }
+    };
+
+    const handleCullingKeyboard = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+        if (isCullingKeyboardInput(event.target as { tagName?: string; isContentEditable?: boolean } | null)) {
+            return;
+        }
+
+        const photoIds = photos.map((photo) => photo.id);
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+            event.preventDefault();
+            setSelectedId(cullingNavigationTarget(
+                photoIds,
+                selectedId,
+                event.key === 'ArrowLeft' ? 'previous' : 'next',
+            ));
+            return;
+        }
+
+        if (!canPhotographerAct || busy !== null || selectedId === null) return;
+        const decision = ({ k: 'keep', r: 'review', x: 'reject' } as Record<string, CullingChoice>)[event.key.toLowerCase()];
+        if (!decision) return;
+
+        event.preventDefault();
+        void recordCullingDecision(selectedId, decision);
+    };
+
     const webmcpUnavailable = Boolean(snapshot && !snapshot.webmcpAvailable);
 
     return (
@@ -1884,52 +2135,174 @@ export default function Workspace({
                                 </>
                             )}
                         </div>
-                        <div className="grid grid-cols-3 gap-2">
-                            {photos.map((p) => {
-                                const rec = recFor.get(p.id);
-                                const recMeta = rec ? RECOMMENDATION_META[rec.recommendation] : null;
-                                return (
-                                <div key={p.id} className="group relative">
-                                    <button
-                                        onClick={() => setSelectedId(p.id)}
-                                        className={`td-press w-full overflow-hidden rounded-md border-2 transition-all duration-200 hover:border-zinc-500 ${selectedId === p.id ? 'border-amber-500' : 'border-transparent'} ${p.selection_state === 'culled' ? 'opacity-60 grayscale' : ''}`}
-                                    >
-                                        {p.url ? (
-                                            <img src={p.url} alt={p.filename} className="aspect-square w-full object-cover" loading="lazy" />
-                                        ) : (
-                                            <div className="flex aspect-square w-full items-center justify-center bg-zinc-800 text-xs text-zinc-300">no img</div>
-                                        )}
-                                    </button>
-                                    {recMeta && (
-                                        <span
-                                            data-testid={`rec-badge-${p.id}`}
-                                            onClick={() => setSelectedId(p.id)}
-                                            role="button"
-                                            tabIndex={0}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter' || e.key === ' ') setSelectedId(p.id);
-                                            }}
-                                            className={`absolute left-1 bottom-1 cursor-pointer rounded px-1 text-xs font-bold tracking-wide ${recMeta.badge}`}
-                                            title={`Agent recommendation: ${recMeta.label} (${confidencePct(rec?.confidence ?? 0)})`}
-                                        >
-                                            {recMeta.label}
+                        <div
+                            data-testid="culling-keyboard-nav"
+                            role="group"
+                            tabIndex={0}
+                            aria-label="Photo culling grid. Use left and right arrow keys to change the selected photo. Press K to keep, R to review, or X to reject."
+                            onKeyDown={handleCullingKeyboard}
+                            className="rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900"
+                        >
+                            {!cullingLoading && photos.length > 0 && (
+                                <div className="mb-3 space-y-2 rounded-lg border border-zinc-700/80 bg-zinc-950/40 p-2">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <span className="text-xs font-semibold text-zinc-400" aria-live="polite">
+                                            {cullIds.length} selected
                                         </span>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            <button
+                                                type="button"
+                                                data-testid="culling-select-all"
+                                                onClick={() => setCullIds(photos.map((photo) => photo.id))}
+                                                disabled={busy !== null}
+                                                className="td-press rounded-md border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs font-semibold text-zinc-200 hover:border-zinc-500 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+                                            >
+                                                Select all
+                                            </button>
+                                            <button
+                                                type="button"
+                                                data-testid="culling-deselect-all"
+                                                onClick={() => setCullIds([])}
+                                                disabled={busy !== null || cullIds.length === 0}
+                                                className="td-press rounded-md border border-zinc-700 px-2 py-1 text-xs font-semibold text-zinc-400 hover:border-zinc-500 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+                                            >
+                                                Deselect all
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {canPhotographerAct && (
+                                        <div className="flex flex-wrap items-center gap-2 border-t border-zinc-700/70 pt-2" data-testid="culling-batch-actions">
+                                            <span className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+                                                Apply to {cullIds.length} selected
+                                            </span>
+                                            {(['keep', 'review', 'reject'] as CullingChoice[]).map((choice) => (
+                                                <button
+                                                    key={choice}
+                                                    type="button"
+                                                    data-testid={`culling-batch-${choice}`}
+                                                    aria-label={`Apply ${choice} to ${cullIds.length} selected photos`}
+                                                    onClick={() => void applyBatchCullingDecision(choice)}
+                                                    disabled={busy !== null || cullIds.length === 0}
+                                                    className={`td-press rounded-md border px-2.5 py-1 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                                                        choice === 'keep'
+                                                            ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/15'
+                                                            : choice === 'reject'
+                                                                ? 'border-rose-500/40 bg-rose-500/10 text-rose-600 hover:bg-rose-500/15'
+                                                                : 'border-amber-400/40 bg-amber-400/10 text-amber-500 hover:bg-amber-400/20'
+                                                    }`}
+                                                >
+                                                    {busy === `batch-cull-${choice}` ? 'Applying…' : choice.charAt(0).toUpperCase() + choice.slice(1)}
+                                                </button>
+                                            ))}
+                                        </div>
                                     )}
-                                    {p.selection_state === 'culled' && (
-                                        <span className="absolute left-1 top-1 rounded bg-rose-600 px-1 text-xs font-bold text-white">CULL</span>
-                                    )}
-                                    <label className="absolute right-1 top-1 flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded bg-black/50 text-zinc-100">
-                                        <input
-                                            type="checkbox"
-                                            aria-label={`Select ${p.filename} for culling`}
-                                            checked={cullIds.includes(p.id)}
-                                            onChange={() => toggleCull(p.id)}
-                                            className="td-select h-5 w-5"
-                                        />
-                                    </label>
+                                    <p className="text-xs text-zinc-500">
+                                        Use ←/→ to navigate · K keep · R review · X reject
+                                    </p>
                                 </div>
-                                );
-                            })}
+                            )}
+                            <div
+                                className="grid grid-cols-3 gap-2"
+                                aria-busy={cullingLoading}
+                                aria-label={cullingLoading ? 'Loading photos' : 'Photo thumbnails'}
+                            >
+                                {cullingLoading ? (
+                                    Array.from({ length: 8 }, (_, index) => {
+                                        const photo = photos[index];
+                                        return (
+                                            <div
+                                                key={`culling-skeleton-${index}`}
+                                                data-testid="culling-photo-skeleton"
+                                                className="group relative"
+                                                aria-hidden={photo ? undefined : true}
+                                            >
+                                                <div className="aspect-square w-full animate-pulse rounded-md bg-zinc-800/60" />
+                                                {photo && (
+                                                    <label className="absolute right-1 top-1 flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded bg-black/50 text-zinc-100">
+                                                        <input
+                                                            type="checkbox"
+                                                            aria-label={`Select ${photo.filename} for culling`}
+                                                            checked={cullIds.includes(photo.id)}
+                                                            onChange={() => toggleCull(photo.id)}
+                                                            className="td-select h-5 w-5"
+                                                        />
+                                                    </label>
+                                                )}
+                                            </div>
+                                        );
+                                    })
+                                ) : photos.length === 0 ? (
+                                    <div
+                                        className="col-span-3 rounded-lg border border-dashed border-zinc-700 bg-zinc-950/40 px-4 py-8 text-center"
+                                        data-testid="photos-empty-state"
+                                        role="status"
+                                    >
+                                        <svg className="mx-auto h-10 w-10 text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16.5V7.75A2.75 2.75 0 0 1 6.75 5h10.5A2.75 2.75 0 0 1 20 7.75v8.5A2.75 2.75 0 0 1 17.25 19H6.75A2.75 2.75 0 0 1 4 16.25v.25Z" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 16 4.25-4.25a1.5 1.5 0 0 1 2.121 0L13 13.879l1.129-1.129a1.5 1.5 0 0 1 2.121 0L20 16.5M15.5 9.5h.01" />
+                                        </svg>
+                                        <h4 className="mt-3 text-sm font-semibold text-zinc-100">No photos yet</h4>
+                                        <p className="mx-auto mt-1 max-w-xs text-xs leading-relaxed text-zinc-400">
+                                            Upload the original frames to start culling this project.
+                                        </p>
+                                        {permissions.can_upload && (
+                                            <button
+                                                type="button"
+                                                data-testid="photos-empty-upload"
+                                                onClick={() => uploadRef.current?.click()}
+                                                disabled={busy !== null}
+                                                className="td-press mt-4 inline-flex items-center gap-1.5 rounded-md bg-zinc-800 px-3 py-2 text-xs font-semibold text-zinc-100 transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40"
+                                            >
+                                                <span aria-hidden="true">+</span> Upload photos
+                                            </button>
+                                        )}
+                                    </div>
+                                ) : photos.map((p) => {
+                                    const rec = recFor.get(p.id);
+                                    const recMeta = rec ? RECOMMENDATION_META[rec.recommendation] : null;
+                                    return (
+                                    <div key={p.id} className="group relative">
+                                        <button
+                                            onClick={() => setSelectedId(p.id)}
+                                            className={`td-press w-full overflow-hidden rounded-md border-2 transition-all duration-200 hover:border-zinc-500 ${selectedId === p.id ? 'border-amber-500' : 'border-transparent'} ${p.selection_state === 'culled' ? 'opacity-60 grayscale' : ''}`}
+                                        >
+                                            {p.url ? (
+                                                <img src={p.url} alt={p.filename} className="aspect-square w-full object-cover" loading="lazy" />
+                                            ) : (
+                                                <div className="flex aspect-square w-full items-center justify-center bg-zinc-800 text-xs text-zinc-300">no img</div>
+                                            )}
+                                        </button>
+                                        {recMeta && (
+                                            <span
+                                                data-testid={`rec-badge-${p.id}`}
+                                                onClick={() => setSelectedId(p.id)}
+                                                role="button"
+                                                tabIndex={0}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' || e.key === ' ') setSelectedId(p.id);
+                                                }}
+                                                className={`absolute left-1 bottom-1 cursor-pointer rounded px-1 text-xs font-bold tracking-wide ${recMeta.badge}`}
+                                                title={`Agent recommendation: ${recMeta.label} (${confidencePct(rec?.confidence ?? 0)})`}
+                                            >
+                                                {recMeta.label}
+                                            </span>
+                                        )}
+                                        {p.selection_state === 'culled' && (
+                                            <span className="absolute left-1 top-1 rounded bg-rose-600 px-1 text-xs font-bold text-white">CULL</span>
+                                        )}
+                                        <label className="absolute right-1 top-1 flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded bg-black/50 text-zinc-100">
+                                            <input
+                                                type="checkbox"
+                                                aria-label={`Select ${p.filename} for culling`}
+                                                checked={cullIds.includes(p.id)}
+                                                onChange={() => toggleCull(p.id)}
+                                                className="td-select h-5 w-5"
+                                            />
+                                        </label>
+                                    </div>
+                                    );
+                                })}
+                            </div>
                         </div>
                     </section>
 
@@ -1971,6 +2344,29 @@ export default function Workspace({
                                     <div className="flex h-64 items-center justify-center rounded-lg bg-zinc-900 text-sm text-zinc-500">No preview</div>
                                 )}
                                 <PhotoExifGrid photo={selected} inspected={eager.get(selected.id)} />
+                                <div className="mt-3 flex flex-wrap items-center gap-2">
+                                    <button
+                                        type="button"
+                                        data-testid="culling-inspect-1-1"
+                                        onClick={() => openLightbox()}
+                                        className="td-press rounded-md border border-amber-400/50 bg-amber-400/10 px-3 py-1.5 text-xs font-semibold text-amber-500 transition hover:bg-amber-400/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:opacity-40"
+                                    >
+                                        Inspect 1:1
+                                    </button>
+                                    {comparisonPhoto && (
+                                        <button
+                                            type="button"
+                                            data-testid="culling-compare"
+                                            onClick={() => openLightbox(true)}
+                                            className="td-press rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                                        >
+                                            Compare
+                                        </button>
+                                    )}
+                                    <span className="text-xs text-zinc-500">Original image · ESC closes inspector</span>
+                                </div>
+
+                                {cullingLoading && <CullingCenterSkeleton />}
 
                                 {analysisError && (
                                     <div
@@ -1991,7 +2387,7 @@ export default function Workspace({
                                 )}
 
                                 {/* ============ Sprint 3 — context-aware culling card ============ */}
-                                {selectedRec && (
+                                {selectedRec && !cullingLoading && (
                                     <div
                                         data-testid="culling-card"
                                         className="mt-4 rounded-xl border border-zinc-800 bg-zinc-950/60 p-4"
@@ -2224,6 +2620,8 @@ export default function Workspace({
                                     </div>
                                 )}
                             </>
+                        ) : cullingLoading ? (
+                            <CullingCenterSkeleton />
                         ) : (
                             <div className="flex h-64 items-center justify-center rounded-lg bg-zinc-950/40 text-sm text-zinc-500">
                                 No photo selected.
@@ -2596,6 +2994,16 @@ export default function Workspace({
                         </div>
                     </section>
                 </div>
+
+                {lightboxOpen && selected && (
+                    <CullingLightbox
+                        selected={selected}
+                        comparisonPhoto={comparisonPhoto}
+                        compareMode={compareMode}
+                        onClose={closeLightbox}
+                        onToggleCompare={() => setCompareMode((mode) => !mode)}
+                    />
+                )}
 
                 {/* ============ BOTTOM: WebMCP diagnostics panel ============ */}
                 <div className="td-fade-up td-delay-4 mt-6 rounded-xl border border-zinc-800 bg-zinc-900/60 shadow-sm">

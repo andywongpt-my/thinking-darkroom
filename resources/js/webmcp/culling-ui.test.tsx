@@ -72,7 +72,13 @@ vi.mock('@/Layouts/AuthenticatedLayout', () => ({
 
 const workspaceModule = await import('@/Pages/Workspace');
 const WorkspacePage = workspaceModule.default as React.FC;
-const { isPhotoAnalysisRequired, canHeartbeatPresence, requestWorkspacePresence } = workspaceModule;
+const {
+    isPhotoAnalysisRequired,
+    canHeartbeatPresence,
+    requestWorkspacePresence,
+    cullingNavigationTarget,
+    isCullingKeyboardInput,
+} = workspaceModule;
 
 /* ------------------------------------------------------------- webmcp fixture */
 
@@ -562,5 +568,65 @@ describe('Sprint 3 — Workspace culling UI + registry certification', () => {
             heartbeatSpy.mockRestore();
             getSpy.mockRestore();
         }
+    });
+
+    it('25. exposes arrow navigation semantics and ignores editable controls', () => {
+        expect(cullingNavigationTarget([101, 102], 101, 'next')).toBe(102);
+        expect(cullingNavigationTarget([101, 102], 101, 'previous')).toBe(102);
+        expect(cullingNavigationTarget([101, 102], 102, 'next')).toBe(101);
+        expect(cullingNavigationTarget([], 101, 'next')).toBeNull();
+        expect(isCullingKeyboardInput({ tagName: 'INPUT' })).toBe(true);
+        expect(isCullingKeyboardInput({ tagName: 'TEXTAREA' })).toBe(true);
+        expect(isCullingKeyboardInput({ tagName: 'BUTTON' })).toBe(false);
+    });
+
+    it('26. renders bulk culling controls, keyboard guidance, and duplicate compare entry point', () => {
+        const html = mount(baseProps(), { culling: CULLING_CONTEXT, analysis: PHOTO_ANALYSIS_101 });
+        expect(html).toContain('data-testid="culling-keyboard-nav"');
+        expect(html).toContain('Use ←/→ to navigate');
+        expect(html).toContain('Select all');
+        expect(html).toContain('Deselect all');
+        expect(html.replace(/<!-- -->/g, '')).toContain('Apply to 0 selected');
+        expect(html).toContain('Inspect 1:1');
+        expect(html).toContain('Compare');
+    });
+
+    it('27. renders a permission-aware empty photo upload state', () => {
+        const photographerHtml = mount(baseProps({ photos: [] }), { culling: CULLING_CONTEXT });
+        expect(photographerHtml).toContain('data-testid="photos-empty-state"');
+        expect(photographerHtml).toContain('No photos yet');
+        expect(photographerHtml).toContain('Upload photos');
+
+        const viewerHtml = mount(baseProps({
+            photos: [],
+            permissions: { can_upload: false, can_photographer_act: false, can_execute: false },
+        }), { culling: CULLING_CONTEXT });
+        expect(viewerHtml).toContain('No photos yet');
+        expect(viewerHtml).not.toContain('data-testid="photos-empty-upload"');
+    });
+
+    it('28. renders photo and center skeletons while culling context is loading', () => {
+        const html = mount(baseProps(), { culling: null });
+        expect((html.match(/data-testid="culling-photo-skeleton"/g) ?? [])).toHaveLength(8);
+        expect(html).toContain('data-testid="culling-center-skeleton"');
+        expect(html).toContain('animate-pulse');
+    });
+
+    it('29. renders the 1:1 lightbox and duplicate 2-up originals', () => {
+        const html = renderToString(createElement(workspaceModule.CullingLightbox, {
+            selected: PHOTOS[0],
+            comparisonPhoto: PHOTOS[1],
+            compareMode: true,
+            onClose: vi.fn(),
+            onToggleCompare: vi.fn(),
+        }));
+
+        expect(html).toContain('data-testid="culling-lightbox"');
+        expect(html).toContain('data-testid="culling-compare-view"');
+        expect(html).toContain('/storage/p/02.jpg');
+        expect(html).toContain('/storage/p/04.jpg');
+        expect(html).toContain(PHOTOS[0].filename);
+        expect(html).toContain(PHOTOS[1].filename);
+        expect(html).toContain('fixed inset-0');
     });
 });
