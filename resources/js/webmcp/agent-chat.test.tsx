@@ -6,6 +6,7 @@ import AgentChatPanel, {
     createClientMessageId,
     getOrCreateDraftClientMessageId,
     mergeConversationMessages,
+    olderMessagesPath,
     requestAgentTurn,
     unreadMessageCount,
 } from '@/Components/AgentChatPanel';
@@ -165,5 +166,47 @@ describe('Agent conversation surface', () => {
         } finally {
             vi.unstubAllGlobals();
         }
+    });
+
+    it('builds the before-cursor history URL for load-older (U-7)', () => {
+        expect(olderMessagesPath(7, 3)).toBe(
+            '/projects/7/agent-conversation/messages?before=3&limit=50',
+        );
+        expect(olderMessagesPath(7, 3, 25)).toBe(
+            '/projects/7/agent-conversation/messages?before=3&limit=25',
+        );
+    });
+
+    it('renders the load-older control and live character counter', () => {
+        const withOlder = renderToString(
+            <AgentChatPanel
+                projectId={7}
+                currentUser={{ id: 1, name: 'Maya', is_agent: false }}
+                canSend={true}
+                initialConversation={{ ...conversation, has_older: true }}
+                presence={presence}
+                initiallyOpen={true}
+            />,
+        );
+
+        expect(withOlder).toContain('data-testid="agent-chat-load-older"');
+        expect(withOlder).toContain('Load earlier messages');
+        expect(withOlder).toContain('data-testid="agent-chat-char-count"');
+        // renderToString inserts comment separators between text nodes.
+        expect(withOlder).toContain('0<!-- -->/<!-- -->2000');
+        expect(withOlder).not.toContain('Showing the latest 50 messages');
+
+        const withoutOlder = renderToString(
+            <AgentChatPanel
+                projectId={7}
+                currentUser={{ id: 1, name: 'Maya', is_agent: false }}
+                canSend={true}
+                initialConversation={conversation}
+                presence={presence}
+                initiallyOpen={true}
+            />,
+        );
+
+        expect(withoutOlder).not.toContain('data-testid="agent-chat-load-older"');
     });
 });

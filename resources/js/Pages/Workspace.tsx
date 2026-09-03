@@ -1552,18 +1552,8 @@ export default function Workspace({
         setLocalActivity((a) => [full, ...a].slice(0, 80));
     };
 
-    const normalizeProposal = (
-        p: WorkspaceProposal | ProposalPayload['proposal'],
-    ): WorkspaceProposal => {
-        const created_by =
-            typeof p.created_by === 'number'
-                ? String(p.created_by)
-                : (p.created_by ?? null);
-        return { ...p, created_by };
-    };
-
     const prependProposal = (p: ProposalPayload['proposal']) => {
-        setLocalProposals((cur) => [normalizeProposal(p), ...cur]);
+        setLocalProposals((cur) => [p as WorkspaceProposal, ...cur]);
     };
 
     const runProposeCull = async () => {
@@ -1790,7 +1780,7 @@ export default function Workspace({
             const j = await resp.json().catch(() => null);
             if (resp.ok && j?.superseding_draft) {
                 setLocalProposals((ps) => [
-                    normalizeProposal(j.superseding_draft),
+                    j.superseding_draft as WorkspaceProposal,
                     ...ps.map((p) => (p.id === proposal.id ? { ...p, status: 'modified' } : p)),
                 ]);
                 addActivity({ tool_name: 'photographer_modify', authority: 'HUMAN', result_status: 'completed', output_summary: { proposal_id: proposal.id, superseded_by: j.superseding_draft.id, adjustments } });

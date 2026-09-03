@@ -149,7 +149,8 @@ export interface ProposalPayload {
         type: string;
         status: string;
         summary: string | null;
-        created_by: number | null;
+        // Creator display name since C10 (server sends creator?->name).
+        created_by: string | null;
         created_at: string;
         reviewed_at: string | null;
         executed_at: string | null;
@@ -444,10 +445,11 @@ export const webmcpApi = {
         return post<AgentPresence>(projectApiPaths.presenceHeartbeat(projectId), {});
     },
 
-    getAgentConversation(projectId: number, afterId?: number, limit?: number) {
+    getAgentConversation(projectId: number, afterId?: number, limit?: number, beforeId?: number) {
         const params = new URLSearchParams();
         if (afterId !== undefined) params.set('after', String(afterId));
         if (limit !== undefined) params.set('limit', String(limit));
+        if (beforeId !== undefined) params.set('before', String(beforeId));
         const query = params.toString();
 
         return get<AgentConversation>(

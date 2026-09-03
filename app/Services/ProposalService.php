@@ -129,7 +129,7 @@ class ProposalService
                     });
             }
 
-            return $locked->fresh(['items.photo']);
+            return $locked->fresh(['items.photo', 'creator:id,name']);
         });
     }
 
@@ -167,7 +167,7 @@ class ProposalService
                     });
             }
 
-            return $locked->fresh(['items.photo']);
+            return $locked->fresh(['items.photo', 'creator:id,name']);
         });
     }
 
@@ -195,7 +195,7 @@ class ProposalService
 
             $this->resetRetouchMarkers($locked);
 
-            return $locked->fresh(['items.photo']);
+            return $locked->fresh(['items.photo', 'creator:id,name']);
         });
     }
 
@@ -348,7 +348,7 @@ class ProposalService
                 'reviewed_by' => $locked->reviewed_by ?? $actor->id,
             ])->save();
 
-            return $locked->fresh(['items.photo']);
+            return $locked->fresh(['items.photo', 'creator:id,name']);
         });
     }
 
@@ -438,7 +438,7 @@ class ProposalService
                 'note' => "Reverted execution of {$locked->type} proposal #{$locked->id} — {$restoredCount} photo state(s) restored".($note ? " — {$note}" : ''),
             ]);
 
-            return ['proposal' => $locked->fresh(['items.photo']), 'photos_restored' => $photosRestored];
+            return ['proposal' => $locked->fresh(['items.photo', 'creator:id,name']), 'photos_restored' => $photosRestored];
         });
     }
 

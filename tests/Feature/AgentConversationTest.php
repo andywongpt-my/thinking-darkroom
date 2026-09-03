@@ -169,4 +169,38 @@ class AgentConversationTest extends TestCase
                 ->where('conversation.project_id', $this->project->id)
                 ->has('conversation.messages', 2));
     }
+
+    /** U-7: the before-cursor fetches an older page with a truthful has_older. */
+    public function test_before_cursor_pages_older_history_with_truthful_has_older(): void
+    {
+        $ids = [];
+        for ($i = 1; $i <= 3; $i++) {
+            $ids[] = $this->actingAs($this->photographer)
+                ->postJson(route('agent-conversation.store', $this->project), ['body' => "Message {$i}"])
+                ->assertCreated()
+                ->json('message.id');
+        }
+
+        // Newest page (default) shows only the last message… well, the last
+        // two are enough to prove bounded history. Fetch older than message 3.
+        $this->actingAs($this->photographer)
+            ->getJson(route('agent-conversation.index', [$this->project, 'before' => $ids[2], 'limit' => 1]))
+            ->assertOk()
+            ->assertJsonCount(1, 'messages')
+            ->assertJsonPath('messages.0.body', 'Message 2')
+            ->assertJsonPath('has_older', true);
+
+        // Exhausting history reports has_older=false.
+        $this->actingAs($this->photographer)
+            ->getJson(route('agent-conversation.index', [$this->project, 'before' => $ids[0], 'limit' => 5]))
+            ->assertOk()
+            ->assertJsonCount(0, 'messages')
+            ->assertJsonPath('has_older', false);
+
+        // Cursor validation stays bounded.
+        $this->actingAs($this->photographer)
+            ->getJson(route('agent-conversation.index', [$this->project, 'before' => 'nope']))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('before');
+    }
 }

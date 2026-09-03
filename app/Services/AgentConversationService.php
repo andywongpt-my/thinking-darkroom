@@ -19,12 +19,26 @@ class AgentConversationService
      *
      * @return array{project_id: int, trust_boundary: string, messages: array<int, array<string, mixed>>, latest_id: int|null, has_older: bool}
      */
-    public function forProject(Project $project, ?int $afterId = null, int $limit = self::DEFAULT_LIMIT): array
+    public function forProject(Project $project, ?int $afterId = null, int $limit = self::DEFAULT_LIMIT, ?int $beforeId = null): array
     {
         $limit = max(1, min($limit, self::MAX_LIMIT));
         $base = $project->agentConversationMessages()->with('author:id,name');
 
-        if ($afterId !== null) {
+        if ($beforeId !== null) {
+            // History paging (U-7): the `before` cursor fetches the next older
+            // page ending just below the cursor, oldest-first for merging.
+            $messages = (clone $base)
+                ->where('id', '<', $beforeId)
+                ->orderByDesc('id')
+                ->limit($limit)
+                ->get()
+                ->reverse()
+                ->values();
+            $hasOlder = $messages->isNotEmpty()
+                && $project->agentConversationMessages()
+                    ->where('id', '<', $messages->first()->id)
+                    ->exists();
+        } elseif ($afterId !== null) {
             $messages = (clone $base)
                 ->where('id', '>', $afterId)
                 ->orderBy('id')

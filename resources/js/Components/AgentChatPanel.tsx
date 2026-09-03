@@ -137,6 +137,12 @@ function conversationPath(projectId: number): string {
     return `/projects/${projectId}/agent-conversation/messages`;
 }
 
+export function olderMessagesPath(projectId: number, beforeId: number, limit = 50): string {
+    return `/projects/${projectId}/agent-conversation/messages?before=${beforeId}&limit=${limit}`;
+}
+
+export const COMPOSER_MAX_LENGTH = 2000;
+
 function readLastReadId(projectId: number, fallback: number | null): number | null {
     if (typeof window === 'undefined') return fallback;
 
@@ -225,11 +231,14 @@ export default function AgentChatPanel({
     const [liveAnnouncement, setLiveAnnouncement] = useState('');
     const [agentTurnState, setAgentTurnState] = useState<'idle' | 'reviewing'>('idle');
     const [agentTurnNotice, setAgentTurnNotice] = useState<string | null>(null);
+    const [hasOlder, setHasOlder] = useState(initialConversation.has_older);
+    const [loadingOlder, setLoadingOlder] = useState(false);
     const latestId = useRef<number | null>(initialConversation.latest_id);
     const lastMessageId = useRef<number | null>(initialConversation.latest_id);
     const draftMessageIdRef = useRef<string | null>(null);
     const sendInFlightRef = useRef(false);
     const refreshInFlightRef = useRef(false);
+    const loadingOlderRef = useRef(false);
     const logRef = useRef<HTMLDivElement>(null);
     const mountedProjectId = useRef(projectId);
 
@@ -288,6 +297,8 @@ export default function AgentChatPanel({
         setLiveAnnouncement('');
         setAgentTurnState('idle');
         setAgentTurnNotice(null);
+        setHasOlder(initialConversation.has_older);
+        setLoadingOlder(false);
         latestId.current = initialConversation.latest_id;
         lastMessageId.current = initialConversation.latest_id;
         draftMessageIdRef.current = null;
@@ -325,6 +336,47 @@ export default function AgentChatPanel({
 
         return () => window.clearInterval(interval);
     }, [open, refresh]);
+
+    const loadOlder = useCallback(async (): Promise<void> => {
+        if (loadingOlderRef.current || messages.length === 0) return;
+
+        loadingOlderRef.current = true;
+        setLoadingOlder(true);
+        try {
+            const oldestId = messages[0].id;
+            const response = await axios.get<AgentConversation>(
+                olderMessagesPath(projectId, oldestId),
+            );
+            const older = response.data.messages;
+            if (older.length > 0) {
+                // Prepend without scrolling: the log's existing content stays
+                // anchored, and new rows extend upward (U-7).
+                setMessages((current) => mergeConversationMessages(current, older));
+            }
+            setHasOlder(response.data.has_older);
+            setError(null);
+        } catch (caught) {
+            setError(`Loading history failed: ${requestError(caught)}`);
+        } finally {
+            loadingOlderRef.current = false;
+            setLoadingOlder(false);
+        }
+    }, [projectId, messages]);
+
+    // U-8: Escape closes the drawer so keyboard users are not trapped in the
+    // dialog; the launcher keeps focus afterwards.
+    useEffect(() => {
+        if (!open) return;
+
+        const handleKeyDown = (event: globalThis.KeyboardEvent): void => {
+            if (event.key === 'Escape') {
+                setOpen(false);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [open]);
 
     const invokeAgentTurn = useCallback(async (triggerId: number): Promise<void> => {
         setAgentTurnState('reviewing');
@@ -434,10 +486,18 @@ export default function AgentChatPanel({
                         </div>
                     </header>
 
-                    {initialConversation.has_older && (
-                        <p className="border-b border-zinc-800/70 bg-zinc-950/40 px-4 py-2 text-center text-xs text-zinc-500">
-                            Showing the latest 50 messages.
-                        </p>
+                    {hasOlder && (
+                        <div className="border-b border-zinc-800/70 bg-zinc-950/40 px-4 py-2 text-center">
+                            <button
+                                type="button"
+                                onClick={() => void loadOlder()}
+                                disabled={loadingOlder}
+                                data-testid="agent-chat-load-older"
+                                className="td-press rounded-md px-2 py-1 text-xs font-semibold text-amber-400 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                                {loadingOlder ? 'Loading…' : 'Load earlier messages'}
+                            </button>
+                        </div>
                     )}
 
                     <div
@@ -472,7 +532,7 @@ export default function AgentChatPanel({
                                             <div className="mb-1 flex items-center gap-1.5 text-xs text-zinc-500">
                                                 <span className="font-semibold">{message.author.name}</span>
                                                 {fromAgent && (
-                                                    <span className="rounded bg-violet-500/15 px-1.5 py-0.5 font-bold text-violet-700">
+                                                    <span className="rounded bg-violet-500/15 px-1.5 py-0.5 font-bold text-violet-300">
                                                         AGENT
                                                     </span>
                                                 )}
@@ -497,7 +557,7 @@ export default function AgentChatPanel({
                     </div>
 
                     {error && (
-                        <p role="alert" className="td-fade-in border-t border-rose-500/30 bg-rose-500/10 px-4 py-2 text-xs text-rose-600">
+                        <p role="alert" className="td-fade-in border-t border-rose-500/30 bg-rose-500/10 px-4 py-2 text-xs text-rose-400">
                             {error}
                         </p>
                     )}
@@ -512,7 +572,7 @@ export default function AgentChatPanel({
                                 <textarea
                                     id="agent-conversation-message"
                                     value={draft}
-                                    maxLength={2000}
+                                    maxLength={COMPOSER_MAX_LENGTH}
                                     rows={2}
                                     onChange={(event) => setDraft(event.target.value)}
                                     onKeyDown={handleComposerKeyDown}
@@ -525,10 +585,17 @@ export default function AgentChatPanel({
                                     <p className="text-xs text-zinc-400">
                                         Enter to send · Shift+Enter for a new line
                                     </p>
+                                    <p
+                                        aria-live="off"
+                                        data-testid="agent-chat-char-count"
+                                        className={`text-xs tabular-nums ${draft.length >= COMPOSER_MAX_LENGTH ? 'text-rose-400' : 'text-zinc-500'}`}
+                                    >
+                                        {draft.length}/{COMPOSER_MAX_LENGTH}
+                                    </p>
                                     <button
                                         type="submit"
                                         disabled={sending || draft.trim().length === 0}
-                                        className="rounded-lg bg-amber-400 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
+                                        className="rounded-lg bg-amber-400 px-3 py-1.5 text-xs font-semibold text-zinc-950 hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
                                     >
                                         {sending ? 'Sending…' : 'Send'}
                                     </button>

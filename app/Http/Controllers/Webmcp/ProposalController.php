@@ -388,7 +388,11 @@ class ProposalController extends Controller
                 'type' => $proposal->type,
                 'status' => $proposal->status,
                 'summary' => $proposal->summary,
-                'created_by' => $proposal->created_by,
+                // Creator display name (C10): the page payload uses
+                // creator?->name, so tool responses must match instead of
+                // leaking a raw numeric user id into the UI.
+                'created_by' => $proposal->creator?->name
+                    ?? (string) $proposal->created_by,
                 'created_at' => $proposal->created_at?->toISOString(),
                 'reviewed_at' => $proposal->reviewed_at?->toISOString(),
                 'executed_at' => $proposal->executed_at?->toISOString(),
