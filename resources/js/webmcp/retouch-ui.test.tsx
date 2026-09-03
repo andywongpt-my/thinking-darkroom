@@ -796,4 +796,31 @@ describe('Sprint 4 — Workspace retouch / QA / creative-memory UI + registry ce
         expect(res.data?.created_findings).toHaveLength(1);
         expect(res.data?.created_findings[0].category).toBe('warmth_consistency');
     });
+
+    it('30. consistency review is disabled with an honest hint when nothing is selected', () => {
+        const noSelection = PHOTOS.map((p) => ({ ...p, selection_state: 'unreviewed' as const }));
+        const html = mount({ ...baseProps(), photos: noSelection });
+        expect(html).toContain('No selected photos in scope');
+        expect(html).not.toContain('Reviewing…');
+        // The disabled button must still be rendered (not removed) with the
+        // empty-scope guard applied — presence + disabled attribute pair.
+        expect(html).toMatch(/Run Consistency Review/);
+        expect(html).toContain('disabled');
+    });
+
+    it('31. approve-proposal banner surfaces the newest pending proposal for the photographer', () => {
+        const html = mount(baseProps());
+        expect(html).toContain('data-testid="approve-proposal-banner"');
+        expect(html).toContain('is waiting for your approval');
+        expect(html).toContain('502');
+        expect(html).toContain('Approve proposal');
+    });
+
+    it('32. no approve banner while the agent account is signed in (photographer-only authority)', () => {
+        const html = mount(baseProps({
+            request: { user: { id: 9, name: 'Darkroom Agent', is_agent: true } },
+            permissions: { can_upload: true, can_photographer_act: false, can_execute: false },
+        }));
+        expect(html).not.toContain('data-testid="approve-proposal-banner"');
+    });
 });

@@ -19,6 +19,12 @@ interface AgentChatPanelProps {
     initiallyOpen?: boolean;
     /** U-4/U-5: parent-requested open pulse (e.g. presence strip click). */
     openSignal?: number;
+    /**
+     * Demo-chain: fired after an agent turn completes (success, skip, or
+     * failure) so the parent can reload page props — a cull-intent turn may
+     * have created a pending proposal the photographer must see.
+     */
+    onAgentTurnComplete?: () => void;
 }
 
 export function mergeConversationMessages(
@@ -219,6 +225,7 @@ export default function AgentChatPanel({
     presence,
     initiallyOpen = false,
     openSignal = 0,
+    onAgentTurnComplete,
 }: AgentChatPanelProps) {
     const [open, setOpen] = useState(initiallyOpen);
     const [messages, setMessages] = useState<AgentConversationMessage[]>(
@@ -405,8 +412,9 @@ export default function AgentChatPanel({
         } finally {
             await refresh();
             setAgentTurnState('idle');
+            onAgentTurnComplete?.();
         }
-    }, [projectId, refresh]);
+    }, [projectId, refresh, onAgentTurnComplete]);
 
     const send = async (event?: FormEvent): Promise<void> => {
         event?.preventDefault();

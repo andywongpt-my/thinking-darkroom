@@ -58,6 +58,22 @@ class ConsistencyQaService
         }
         $photos = $query->get();
 
+        if ($photos->isEmpty()) {
+            // An empty scope has nothing to check; creating an informational
+            // "no inconsistencies" finding would be noise. Report honestly
+            // without persisting anything.
+            return [
+                'project_id' => $project->id,
+                'scope' => $scope,
+                'focus' => $focus,
+                'has_brief' => false,
+                'photos_checked' => 0,
+                'observations_used' => 0,
+                'empty_scope' => true,
+                'created_findings' => [],
+            ];
+        }
+
         $focus = $focus !== [] ? $focus : [
             'exposure_consistency',
             'warmth_consistency',

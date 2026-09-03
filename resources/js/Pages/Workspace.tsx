@@ -1231,6 +1231,13 @@ export default function Workspace({
     );
 
     const selected = photos.find((p) => p.id === selectedId) ?? null;
+    const selectedCount = photos.filter((p) => p.selection_state === 'selected').length;
+    // Demo-chain: newest pending proposal, surfaced as a banner so the
+    // approve action is one click away after an agent turn.
+    const newestPendingProposal = useMemo(
+        () => localProposals.filter((p) => p.status === 'pending_review').sort((a, b) => b.id - a.id)[0] ?? null,
+        [localProposals],
+    );
     const deleteTarget = photos.find((p) => p.id === deletePhotoId) ?? null;
     const rejectTarget = localProposals.find((p) => p.id === rejectTargetId) ?? null;
     const executeTarget = localProposals.find((p) => p.id === executeTargetId) ?? null;
@@ -1658,6 +1665,7 @@ export default function Workspace({
         if (res.ok && res.data) {
             addActivity({ tool_name: 'run_consistency_review', authority: 'ANALYZE', result_status: 'completed', output_summary: { findings: res.data.created_findings.length } });
             setNotify({ kind: 'ok', text: `Consistency review done: ${res.data.created_findings.length} finding(s).` });
+            router.reload({ only: ['photos', 'proposals', 'retouchCard', 'activity', 'decisions', 'qaFindings', 'creativeMemories'] });
         } else {
             setNotify({ kind: 'err', text: `run_consistency_review failed: ${res.error}` });
         }
@@ -2229,6 +2237,7 @@ export default function Workspace({
                     initialConversation={conversation}
                     presence={agentPresence}
                     openSignal={chatOpenSignal}
+                    onAgentTurnComplete={() => router.reload({ only: ['photos', 'proposals', 'retouchCard', 'activity', 'decisions', 'qaFindings', 'creativeMemories'] })}
                 />
 
                 <WorkspaceConfirmDialog
@@ -3129,6 +3138,23 @@ export default function Workspace({
                         {/* Agent proposal controls */}
                         <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 shadow-sm">
                             <h3 className="mb-2 text-sm font-semibold text-zinc-100">Agent Proposal</h3>
+                            {canPhotographerAct && newestPendingProposal !== null && (
+                                <div
+                                    className="mb-3 flex items-center justify-between gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2"
+                                    data-testid="approve-proposal-banner"
+                                >
+                                    <p className="text-xs font-medium text-emerald-300">
+                                        {TYPE_LABEL[newestPendingProposal.type] ?? newestPendingProposal.type} proposal #{newestPendingProposal.id} is waiting for your approval.
+                                    </p>
+                                    <button
+                                        onClick={() => humanApprove(newestPendingProposal)}
+                                        disabled={busy !== null}
+                                        className="td-press shrink-0 rounded bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-zinc-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
+                                    >
+                                        {busy === 'approve' ? 'Approving…' : 'Approve proposal'}
+                                    </button>
+                                </div>
+                            )}
                             <div className="space-y-2">
                                 {isAgent && (
                                     <>
@@ -3203,11 +3229,15 @@ export default function Workspace({
                                 )}
                                 <button
                                     onClick={runReview}
-                                    disabled={busy !== null || !isAgent}
+                                    disabled={busy !== null || !isAgent || selectedCount === 0}
                                     className="td-press flex w-full items-center justify-center gap-2 rounded-md bg-zinc-700 px-3 py-2 text-xs font-semibold text-zinc-100 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+                                    title={selectedCount === 0 ? 'No selected photos in scope — keep photos first' : undefined}
                                 >
                                     {busy === 'review' ? (<><span className="td-spinner" aria-hidden="true" /> Reviewing…</>) : 'Run Consistency Review'}
                                 </button>
+                                {isAgent && selectedCount === 0 && (
+                                    <p className="text-xs text-zinc-400">No selected photos in scope — keep photos first to run a consistency review.</p>
+                                )}
                                 {!isAgent && (
                                     <p className="text-xs text-zinc-400">
                                         {canPhotographerAct ? 'You are signed in as photographer.' : 'Viewer access is read-only.'}

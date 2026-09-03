@@ -1086,6 +1086,26 @@ class RetouchConsistencyQaTest extends TestCase
         );
     }
 
+    public function test_empty_selected_scope_reports_honestly_without_finding(): void
+    {
+        // An empty scope has nothing to check: no findings may be created
+        // (the "1 open / 0 photo(s) in scope" regression), and the summary
+        // must say so explicitly.
+        [$photographer, $agent, $project] = $this->makeWorld();
+        $this->seedSelectedSetWithDerivatives($project, 0.6);
+        $project->photos()->update(['selection_state' => Domain::SELECTION_UNREVIEWED]);
+
+        $response = $this->actingAs($agent)
+            ->postJson(route('api.webmcp.qa.review', [$project->id]), ['scope' => 'selected'])
+            ->assertCreated();
+
+        $summary = $response->json();
+        $this->assertTrue((bool) $summary['empty_scope']);
+        $this->assertSame(0, $summary['photos_checked']);
+        $this->assertSame([], $summary['created_findings']);
+        $this->assertDatabaseMissing('qa_findings', ['project_id' => $project->id]);
+    }
+
     public function test_same_set_different_brief_changes_qa_result(): void
     {
         // THE QA counterfactual hard gate: same derivatives, same set —
