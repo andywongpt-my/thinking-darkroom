@@ -321,11 +321,14 @@ class WorkspacePageController extends Controller
 
         // Executed values: the persisted derivative adjustments (source of
         // truth for what actually ran), with the item result as fallback.
+        // B3: reverted derivatives no longer count as executed — the truth
+        // card must not show executed values for a reverted execution.
         $derivative = $originalPath
             ? PhotoDerivative::where('photo_id', $item->photo_id)
                 ->where('project_id', $project->id)
                 ->where('type', Domain::DERIVATIVE_APPROVED_RENDER)
                 ->where('proposal_id', $proposal->id)
+                ->whereNull('reverted_at')
                 ->first()
             : null;
 

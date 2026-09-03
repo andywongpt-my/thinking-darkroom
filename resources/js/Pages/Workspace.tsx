@@ -1151,6 +1151,8 @@ export default function Workspace({
     const [dismissQaTargetId, setDismissQaTargetId] = useState<number | null>(null);
     // A7: proposal whose photographer approval is being revoked.
     const [cancelTargetId, setCancelTargetId] = useState<number | null>(null);
+    // B3: executed proposal being reverted.
+    const [revertTargetId, setRevertTargetId] = useState<number | null>(null);
     const [localProposals, setLocalProposals] = useState<WorkspaceProposal[]>(proposals);
     const [localActivity, setLocalActivity] = useState<ActivityEntry[]>(activity);
     const [eagerVersion, setEagerVersion] = useState(0);
@@ -1228,6 +1230,7 @@ export default function Workspace({
     const rejectTarget = localProposals.find((p) => p.id === rejectTargetId) ?? null;
     const executeTarget = localProposals.find((p) => p.id === executeTargetId) ?? null;
     const cancelTarget = localProposals.find((p) => p.id === cancelTargetId) ?? null;
+    const revertTarget = localProposals.find((p) => p.id === revertTargetId) ?? null;
     const dismissQaTarget = qaFindings.find((f) => f.id === dismissQaTargetId) ?? null;
 
     const closeDeletePhoto = () => {
@@ -1877,6 +1880,45 @@ export default function Workspace({
         }
     };
 
+    /** B3: mark an executed retouch proposal reverted and restore photo states. */
+    const humanRevertExecution = async (proposal: WorkspaceProposal) => {
+        setBusy('revert');
+        try {
+            const resp = await fetch(route('proposals.revert', [project.id, proposal.id]), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content ?? '',
+                },
+                body: JSON.stringify({ note: 'Photographer reverted the execution.' }),
+            });
+            const j = await resp.json().catch(() => null);
+            if (resp.ok && j?.proposal) {
+                setLocalProposals((ps) => ps.map((p) => (p.id === proposal.id ? { ...p, status: j.proposal.status ?? p.status } : p)));
+                addActivity({
+                    tool_name: 'photographer_revert_execution',
+                    authority: 'HUMAN',
+                    result_status: 'completed',
+                    output_summary: { proposal_id: proposal.id, photos_restored: j.photos_restored ?? [] },
+                });
+                setNotify({ kind: 'ok', text: `Execution reverted. ${j.photos_restored?.length ?? 0} photo state(s) restored; the preview bytes are kept for history.` });
+                void refreshState();
+            } else {
+                setNotify({ kind: 'err', text: `Revert failed: ${j?.error ?? resp.statusText}` });
+            }
+        } finally {
+            setBusy(null);
+        }
+    };
+
+    const confirmRevertExecution = () => {
+        const target = localProposals.find((proposal) => proposal.id === revertTargetId) ?? null;
+        if (!runAfterConfirmation(target, true, (proposal) => { void humanRevertExecution(proposal); })) {
+            setRevertTargetId(null);
+        }
+    };
+
     const confirmQaDismiss = () => {
         const target = qaFindings.find((finding) => finding.id === dismissQaTargetId) ?? null;
         if (!runAfterConfirmation(target, true, (finding) => { void respondQaFinding(finding, 'dismiss'); })) {
@@ -2181,6 +2223,21 @@ export default function Workspace({
                         if (busy !== 'cancel') setCancelTargetId(null);
                     }}
                     onConfirm={confirmCancelApproval}
+                />
+
+                <WorkspaceConfirmDialog
+                    show={revertTarget !== null}
+                    title="Revert execution?"
+                    description={revertTarget ? `Mark proposal #${revertTarget.id} as reverted? Each affected photo's retouch state returns to its pre-execution value; the original files were never modified and preview bytes stay for history.` : ''}
+                    processing={busy === 'revert'}
+                    confirmTestId="workspace-confirm-revert"
+                    eyebrow="REVERT GATE"
+                    confirmLabel="Revert execution"
+                    cancelLabel="Keep executed"
+                    onClose={() => {
+                        if (busy !== 'revert') setRevertTargetId(null);
+                    }}
+                    onConfirm={confirmRevertExecution}
                 />
 
                 <div className="grid grid-cols-1 gap-5 lg:grid-cols-[240px_1fr_320px]">
@@ -3112,6 +3169,19 @@ export default function Workspace({
                                                         title="Return this approved proposal to pending review before execution"
                                                     >
                                                         Cancel approval
+                                                    </button>
+                                                )}
+
+                                                {/* B3: only the photographer can revert an executed retouch plan. */}
+                                                {canPhotographerAct && p.status === 'executed' && (p.type === 'retouch' || p.type === 'batch_retouch') && (
+                                                    <button
+                                                        onClick={() => setRevertTargetId(p.id)}
+                                                        data-testid={`proposal-revert-${p.id}`}
+                                                        disabled={busy !== null}
+                                                        className="td-press mt-2 w-full rounded-md border border-zinc-700 px-2 py-1.5 text-xs font-semibold text-zinc-300 transition hover:border-amber-500/60 hover:text-amber-400 disabled:cursor-not-allowed disabled:opacity-40"
+                                                        title="Mark this execution reverted and restore each photo's pre-execution retouch state; preview bytes stay for history"
+                                                    >
+                                                        {busy === 'revert' ? (<><span className="td-spinner" aria-hidden="true" /> Reverting…</>) : 'Revert execution'}
                                                     </button>
                                                 )}
                                             </li>

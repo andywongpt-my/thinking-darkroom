@@ -243,6 +243,8 @@ class ProposalApplicator
                         'storage_path' => $media->recordPath($stored),
                         'adjustments' => $adjustments->toArray(),
                         'proposal_id' => $proposal->id,
+                        'prior_photo_state' => $existing->prior_photo_state ?? $photo->retouch_state,
+                        'reverted_at' => null, // a re-execution un-reverts the row
                     ])->save();
                 } catch (Throwable $e) {
                     // Compensating delete (AGY M-2): the update path writes new
@@ -273,6 +275,8 @@ class ProposalApplicator
                     'storage_path' => $storagePath,
                     'adjustments' => $adjustments->toArray(),
                     'proposal_id' => $proposal->id,
+                    'prior_photo_state' => $existing->prior_photo_state ?? $photo->retouch_state,
+                    'reverted_at' => null, // a re-execution un-reverts the row
                 ])->save();
             } catch (Throwable $e) {
                 // Compensating delete (AGY M-2): unlike the same-path overwrite,
@@ -296,6 +300,9 @@ class ProposalApplicator
                 'adjustments' => $adjustments->toArray(),
                 'provenance' => $rendered['provenance'],
                 'created_by' => $proposal->created_by,
+                // B3: archive the pre-execution retouch marker so a
+                // photographer revert restores exactly this state.
+                'prior_photo_state' => $photo->retouch_state,
             ]);
         } catch (Throwable $e) {
             // Compensating delete: never orphan stored derivative bytes

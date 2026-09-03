@@ -72,6 +72,35 @@ class PhotographerReviewController extends Controller
         ])]);
     }
 
+    /**
+     * B3 — revert an executed retouch proposal (photographer-only). Marks the
+     * produced derivatives reverted and restores each photo's archived
+     * pre-execution retouch state. Bytes are kept for history.
+     */
+    public function revert(Request $request, Project $project, Proposal $proposal): JsonResponse
+    {
+        $this->authorizePhotographer($request, $project, $proposal);
+
+        $validated = $request->validate(['note' => ['sometimes', 'nullable', 'string', 'max:2000']]);
+
+        try {
+            $result = $this->proposals->revertExecution(
+                $proposal,
+                $request->user(),
+                $validated['note'] ?? null,
+            );
+        } catch (\LogicException $e) {
+            return response()->json(['error' => $e->getMessage()], 409);
+        }
+
+        return response()->json([
+            'proposal' => $result['proposal']->only([
+                'id', 'project_id', 'type', 'status', 'summary', 'reviewed_at', 'executed_at',
+            ]),
+            'photos_restored' => $result['photos_restored'],
+        ]);
+    }
+
     public function modify(Request $request, Project $project, Proposal $proposal): JsonResponse
     {
         $this->authorizePhotographer($request, $project, $proposal);

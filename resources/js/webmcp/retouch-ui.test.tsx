@@ -523,6 +523,18 @@ describe('Sprint 4 — Workspace retouch / QA / creative-memory UI + registry ce
         expect(text(agentHtml)).not.toContain('You are signed in as photographer');
     });
 
+    it('9b. (B3) executed retouch proposals expose a photographer-only Revert gate', () => {
+        const photographer = mount(baseProps());
+        expect(photographer).toContain('data-testid="proposal-revert-501"');
+        expect(photographer).toContain('Revert execution');
+
+        const agent = mount(baseProps({
+            request: { user: { id: 2, name: 'Agent', is_agent: true } },
+            permissions: { can_upload: false, can_photographer_act: false, can_execute: true },
+        }));
+        expect(agent).not.toContain('data-testid="proposal-revert-501"');
+    });
+
     it('10. renders the Approve UI for a pending retouch proposal', () => {
         const html = mount(baseProps());
         expect(text(html)).toContain('Approve');

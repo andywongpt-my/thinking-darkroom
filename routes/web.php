@@ -60,6 +60,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('proposals.cancel');
     Route::post('/projects/{project}/proposals/{proposal}/reject', [PhotographerReviewController::class, 'reject'])
         ->name('proposals.reject');
+    Route::post('/projects/{project}/proposals/{proposal}/revert', [PhotographerReviewController::class, 'revert'])
+        ->name('proposals.revert');
     Route::post('/projects/{project}/proposals/{proposal}/modify', [PhotographerReviewController::class, 'modify'])
         ->name('proposals.modify');
 

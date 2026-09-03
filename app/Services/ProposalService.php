@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Domain\Domain;
 use App\Models\Photo;
+use App\Models\PhotoDerivative;
 use App\Models\PhotographerDecision;
 use App\Models\Project;
 use App\Models\Proposal;
@@ -352,6 +353,94 @@ class ProposalService
     }
 
     /* ---------------------------------- helpers ---------------------------------- */
+
+    /**
+     * B3 — revert an executed retouch proposal (photographer-only).
+     *
+     * The derivative BYTES are never deleted (history + billable storage
+     * integrity); the row is stamped reverted_at so executed-value surfaces
+     * stop reading it, and each affected photo's retouch_state is restored
+     * from the derivative's archived prior_photo_state (falling back to
+     * RETOUCH_NONE for legacy rows executed before the archive column).
+     * Cull/QA proposals have nothing to revert — 409 via LogicException.
+     *
+     * @return array{proposal: Proposal, photos_restored: list<int>}
+     */
+    public function revertExecution(Proposal $proposal, User $photographer, ?string $note = null): array
+    {
+        if (! in_array($proposal->type, [Domain::TYPE_RETOUCH, Domain::TYPE_BATCH_RETOUCH], true)) {
+            throw new \LogicException('Only retouch executions can be reverted.');
+        }
+
+        return DB::transaction(function () use ($proposal, $photographer, $note) {
+            $locked = Proposal::whereKey($proposal->id)->lockForUpdate()->firstOrFail();
+
+            if ($locked->status !== Domain::STATE_EXECUTED) {
+                throw new \LogicException("Cannot revert a proposal in state [{$locked->status}] — only executed proposals can be reverted.");
+            }
+
+            // B3 idempotency: a proposal already carries its revert record in
+            // the payload (status stays executed for the history ledger).
+            if (data_get($locked->payload, 'revert.reverted_at') !== null) {
+                throw new \LogicException('This execution has already been reverted.');
+            }
+
+            $revertedAt = now();
+            $photosRestored = [];
+
+            // Only the derivatives THIS execution produced (proposal_id is
+            // stamped by renderDerivative on every path). Skip rows already
+            // reverted by a prior revert — idempotent double-revert on the
+            // row level; the proposal-level CAS below makes double-revert 409.
+            $locked->items()
+                ->whereNotNull('photo_id')
+                ->get()
+                ->each(function (ProposalItem $item) use ($locked, $revertedAt, &$photosRestored) {
+                    PhotoDerivative::where('photo_id', $item->photo_id)
+                        ->where('proposal_id', $locked->id)
+                        ->get()
+                        ->each(function (PhotoDerivative $derivative) use ($revertedAt, &$photosRestored) {
+                            if ($derivative->reverted_at === null) {
+                                $derivative->forceFill(['reverted_at' => $revertedAt])->save();
+                            }
+
+                            $photo = $derivative->photo;
+                            if ($photo === null || in_array($photo->id, $photosRestored, true)) {
+                                return;
+                            }
+
+                            // Restore the archived pre-execution marker; legacy
+                            // rows (executed before the archive column) fall
+                            // back to none — the only honest guess available.
+                            $photo->forceFill([
+                                'retouch_state' => $derivative->prior_photo_state ?? Domain::RETOUCH_NONE,
+                            ])->saveQuietly();
+
+                            $photosRestored[] = $photo->id;
+                        });
+                });
+
+            $locked->forceFill(['payload' => array_merge((array) ($locked->payload ?? []), [
+                'revert' => [
+                    'reverted_at' => $revertedAt->toISOString(),
+                    'reverted_by' => $photographer->id,
+                    'photos_restored' => $photosRestored,
+                    'note' => $note,
+                ],
+            ])])->save();
+
+            $restoredCount = count($photosRestored);
+            PhotographerDecision::create([
+                'project_id' => $locked->project_id,
+                'proposal_id' => $locked->id,
+                'photographer_id' => $photographer->id,
+                'decision' => 'revert_execution',
+                'note' => "Reverted execution of {$locked->type} proposal #{$locked->id} — {$restoredCount} photo state(s) restored".($note ? " — {$note}" : ''),
+            ]);
+
+            return ['proposal' => $locked->fresh(['items.photo']), 'photos_restored' => $photosRestored];
+        });
+    }
 
     /**
      * Lock the proposal row and re-verify reviewability INSIDE the caller's

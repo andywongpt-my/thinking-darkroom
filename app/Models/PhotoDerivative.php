@@ -14,6 +14,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *  - adjustments is the exact validated, normalized set used to render.
  *  - provenance honestly names the renderer that produced the file.
  *  - one derivative per (photo, type) — repeated execution never duplicates.
+ *  - reverted_at stamps a photographer revert (B3); the bytes stay, but the
+ *    row no longer feeds executed-value surfaces. prior_photo_state archives
+ *    the photo's retouch_state at execution time so revert restores it.
  */
 class PhotoDerivative extends Model
 {
@@ -28,10 +31,13 @@ class PhotoDerivative extends Model
         'adjustments',
         'provenance',
         'created_by',
+        'reverted_at',
+        'prior_photo_state',
     ];
 
     protected $casts = [
         'adjustments' => 'array',
+        'reverted_at' => 'datetime',
     ];
 
     public function photo(): BelongsTo

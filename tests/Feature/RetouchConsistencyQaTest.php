@@ -883,6 +883,127 @@ class RetouchConsistencyQaTest extends TestCase
         $this->assertSame($first->id, PhotoDerivative::where('photo_id', $photo->id)->sole()->id);
     }
 
+    /* ------------------------------------------------------------------ */
+    /*  5b. B3 — executed-proposal revert (photographer-only) */
+    /* ------------------------------------------------------------------ */
+
+    public function test_photographer_can_revert_an_executed_retouch_proposal(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+        $proposal = $this->makeRetouchProposal([$photographer, $agent, $project], $agent);
+        $photo = $project->photos()->first();
+        $this->putRealJpeg($photo);
+
+        $this->approveAndExecute([$photographer, $agent, $project], $proposal);
+
+        $photo->refresh();
+        $this->assertSame(Domain::RETOUCH_APPLIED, $photo->retouch_state);
+        $derivative = PhotoDerivative::where('photo_id', $photo->id)->sole();
+        $this->assertNull($derivative->reverted_at);
+        // Execution archived the pre-execution marker: approval had already
+        // raised it to `approved` before the applicator ran (B3 design).
+        $this->assertSame(Domain::RETOUCH_APPROVED, $derivative->prior_photo_state);
+
+        $this->actingAs($photographer)
+            ->postJson(route('proposals.revert', [$project->id, $proposal->id]), ['note' => 'not the look I want'])
+            ->assertOk()
+            ->assertJsonPath('photos_restored.0', $photo->id);
+
+        $photo->refresh();
+        $this->assertSame(Domain::RETOUCH_APPROVED, $photo->retouch_state, 'prior (approved) state restored');
+        $derivative->refresh();
+        $this->assertNotNull($derivative->reverted_at, 'derivative stamped reverted');
+        // The derivative BYTES are kept — revert never deletes history.
+        $this->assertTrue(Storage::disk('public')->exists($derivative->storage_path));
+
+        $this->assertDatabaseHas('photographer_decisions', [
+            'proposal_id' => $proposal->id,
+            'photographer_id' => $photographer->id,
+            'decision' => 'revert_execution',
+        ]);
+        // The proposal payload records the revert for the UI/audit surfaces.
+        $this->assertSame($photographer->id, data_get($proposal->fresh()->payload, 'revert.reverted_by'));
+    }
+
+    public function test_revert_of_an_already_reverted_proposal_conflicts(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+        $proposal = $this->makeRetouchProposal([$photographer, $agent, $project], $agent);
+        $photo = $project->photos()->first();
+        $this->putRealJpeg($photo);
+        $this->approveAndExecute([$photographer, $agent, $project], $proposal);
+
+        $this->actingAs($photographer)
+            ->postJson(route('proposals.revert', [$project->id, $proposal->id]))
+            ->assertOk();
+
+        $this->actingAs($photographer)
+            ->postJson(route('proposals.revert', [$project->id, $proposal->id]))
+            ->assertStatus(409);
+    }
+
+    public function test_agent_cannot_revert_an_executed_proposal(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+        $proposal = $this->makeRetouchProposal([$photographer, $agent, $project], $agent);
+        $photo = $project->photos()->first();
+        $this->putRealJpeg($photo);
+        $this->approveAndExecute([$photographer, $agent, $project], $proposal);
+
+        $this->actingAs($agent)
+            ->postJson(route('proposals.revert', [$project->id, $proposal->id]))
+            ->assertForbidden();
+
+        $photo->refresh();
+        $this->assertSame(Domain::RETOUCH_APPLIED, $photo->retouch_state);
+    }
+
+    public function test_cull_proposals_cannot_be_reverted(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+        $photo = $project->photos()->first();
+        $proposal = $this->service->createProposal(
+            $project,
+            $agent,
+            Domain::TYPE_CULL,
+            [['photo_id' => $photo->id, 'action' => 'cull']],
+        );
+        $this->service->approve($proposal, $photographer);
+        $this->service->execute($proposal, $agent, fn ($p) => app(ProposalApplicator::class)->apply($p));
+        $this->assertSame(Domain::STATE_EXECUTED, $proposal->fresh()->status);
+
+        $this->actingAs($photographer)
+            ->postJson(route('proposals.revert', [$project->id, $proposal->id]))
+            ->assertStatus(409)
+            ->assertJsonPath('error', 'Only retouch executions can be reverted.');
+    }
+
+    public function test_reverted_derivative_is_excluded_from_the_retouch_truth_card(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+        $proposal = $this->makeRetouchProposal([$photographer, $agent, $project], $agent);
+        $photo = $project->photos()->first();
+        $this->putRealJpeg($photo);
+        $this->approveAndExecute([$photographer, $agent, $project], $proposal);
+
+        // Before revert the truth card shows the executed adjustments.
+        $before = $this->actingAs($photographer)
+            ->getJson(route('workspace.retouch-card', [$project->id, $photo->id]))
+            ->assertOk()
+            ->json();
+        $this->assertNotNull(data_get($before, 'retouch_card.derivative.url'));
+
+        $this->actingAs($photographer)
+            ->postJson(route('proposals.revert', [$project->id, $proposal->id]))
+            ->assertOk();
+
+        // After revert the executed derivative no longer feeds the card.
+        $after = $this->actingAs($photographer)
+            ->getJson(route('workspace.retouch-card', [$project->id, $photo->id]))
+            ->assertOk();
+        $this->assertNull(data_get(json_decode($after->getContent(), true), 'retouch_card.derivative.url'));
+    }
+
     public function test_execution_is_audited(): void
     {
         [$photographer, $agent, $project] = $this->makeWorld();
