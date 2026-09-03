@@ -281,11 +281,7 @@ class AgentTurnService
         /** @var list<array<string, mixed>> $rejects */
         $rejects = array_values(array_filter(
             (array) ($recommendations['recommendations'] ?? []),
-            fn (array $r) => in_array(
-                $r['recommendation'] ?? null,
-                [Domain::CULL_RECOMMEND_REJECT_CANDIDATE, Domain::CULL_RECOMMEND_REVIEW],
-                true,
-            )
+            fn (array $r) => ($r['recommendation'] ?? null) === Domain::CULL_RECOMMEND_REJECT_CANDIDATE
                 && ($r['photo']['selection_state'] ?? null) !== Domain::SELECTION_CULLED,
         ));
 
