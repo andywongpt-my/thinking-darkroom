@@ -32,6 +32,7 @@ class AgentTurnService
         private readonly CreativeRoomService $creative,
         private readonly ToolCallAuditService $audit,
         private readonly ProposalService $proposalService,
+        private readonly AgentLlmService $llm,
         private readonly Request $request,
     ) {}
 
@@ -106,6 +107,7 @@ class AgentTurnService
         $proposalId = null;
         if ($intent['keepers'] || $intent['cull']) {
             $recommendations = $this->culling->recommendForProject($project);
+
             if ($intent['cull'] && $summary['photos'] > 0) {
                 $proposalId = $this->createCullProposalFromRecommendations(
                     $project,
@@ -114,9 +116,21 @@ class AgentTurnService
                     $intent['direction_query'],
                 );
             }
-            $reply = $this->composeKeeperReply($summary, $recommendations, $intent, $proposalId);
+
+            // LLM reasoning first: grounded in the same persisted evidence,
+            // able to answer "why" and compare frames across the set. The
+            // deterministic composer stays as the contract-preserving
+            // fallback when the LLM is disabled or unreachable.
+            $reply = $this->llm->reply($project, (string) $trigger->body, $summary, $intent['direction_query']);
+
+            if ($reply === null) {
+                $reply = $this->composeKeeperReply($summary, $recommendations, $intent, $proposalId);
+            } elseif ($proposalId !== null) {
+                $reply .= "\nA cull proposal (#".$proposalId.') is waiting for your approval in the Proposals panel.';
+            }
         } else {
-            $reply = $this->composeReply($summary);
+            $reply = $this->llm->reply($project, (string) $trigger->body, $summary, $intent['direction_query'])
+                ?? $this->composeReply($summary);
         }
 
         $persisted = $this->conversation->send(

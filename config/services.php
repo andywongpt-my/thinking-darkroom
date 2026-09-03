@@ -35,4 +35,25 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Agent LLM (grounded conversation reasoning)
+    |--------------------------------------------------------------------------
+    |
+    | Provider-agnostic OpenAI-compatible endpoint used by AgentLlmService to
+    | reason over persisted photo evidence during agent turns. Any provider
+    | works (OpenRouter free tier by default, Groq, Google AI Studio, …).
+    | Leaving AGENT_LLM_API_KEY empty disables LLM reasoning entirely and the
+    | deterministic composer answers instead — the app never blocks on the
+    | model being present.
+    |
+    */
+
+    'agent_llm' => [
+        'base_url' => env('AGENT_LLM_BASE_URL', 'https://openrouter.ai/api/v1'),
+        'key' => env('AGENT_LLM_API_KEY'),
+        'model' => env('AGENT_LLM_MODEL'),
+        'timeout' => (int) env('AGENT_LLM_TIMEOUT', 20),
+    ],
+
 ];
