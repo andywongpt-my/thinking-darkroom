@@ -70,6 +70,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('creative.concepts.reject');
     Route::post('/projects/{project}/creative/concepts/{concept}/adopt', [CreativeRoomReviewController::class, 'adopt'])
         ->name('creative.concepts.adopt');
+    Route::post('/projects/{project}/creative/concepts/{concept}/revise', [CreativeRoomReviewController::class, 'revise'])
+        ->name('creative.concepts.revise');
+    Route::post('/projects/{project}/creative/concepts/{concept}/reopen', [CreativeRoomReviewController::class, 'reopen'])
+        ->name('creative.concepts.reopen');
     Route::post('/projects/{project}/creative/brainstorm', [CreativeRoomReviewController::class, 'openBrainstorm'])
         ->name('creative.brainstorm.open');
 

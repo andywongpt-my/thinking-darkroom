@@ -207,6 +207,9 @@ export default function CreativeRoom() {
     const [brainstormOpen, setBrainstormOpen] = useState(false);
     const [mergeSelection, setMergeSelection] = useState<number[]>([]);
     const [decisionNotes, setDecisionNotes] = useState<Record<number, string>>({});
+    const [reviseTarget, setReviseTarget] = useState<ConceptPayload | null>(null);
+    const [reviseTitle, setReviseTitle] = useState('');
+    const [reviseSummary, setReviseSummary] = useState('');
     const [busy, setBusy] = useState<string | null>(null);
     const [notify, setNotify] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
     const notifyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -307,6 +310,52 @@ export default function CreativeRoom() {
         } else {
             setNotify({ kind: 'err', text: `Adopt failed: ${res.error}` });
         }
+    };
+
+    /** A8: propose a revised child concept; lineage preserved, parent untouched. */
+    const doRevise = async (concept: ConceptPayload) => {
+        const title = reviseTitle.trim();
+        if (!title) {
+            setNotify({ kind: 'err', text: 'A revision needs a title.' });
+            return;
+        }
+        setBusy(`revise-${concept.id}`);
+        const res = await webmcpApi.reviseConcept(project.id, concept.id, {
+            title,
+            ...(reviseSummary.trim() ? { summary: reviseSummary.trim() } : {}),
+            content: concept.content ?? {},
+        });
+        setBusy(null);
+        if (res.ok && res.data) {
+            setReviseTarget(null);
+            setReviseTitle('');
+            setReviseSummary('');
+            await refreshList();
+            setNotify({ kind: 'ok', text: `Revision proposed: "${res.data.concept.title}". The original direction is preserved.` });
+        } else {
+            setNotify({ kind: 'err', text: `Revise failed: ${res.error}` });
+        }
+    };
+
+    /** A8: return a rejected concept to the review ladder. */
+    const doReopen = async (concept: ConceptPayload) => {
+        setBusy(`reopen-${concept.id}`);
+        const res = await webmcpApi.reopenConcept(project.id, concept.id, decisionNotes[concept.id]);
+        setBusy(null);
+        if (res.ok && res.data) {
+            setDecisionNotes((notes) => ({ ...notes, [concept.id]: '' }));
+            setConcepts((cs) => cs.map((c) => (c.id === concept.id ? res.data!.concept : c)));
+            setNotify({ kind: 'ok', text: `"${concept.title}" reopened for review.` });
+        } else {
+            setNotify({ kind: 'err', text: `Reopen failed: ${res.error}` });
+        }
+    };
+
+    /** A8: open the inline revise form seeded from the parent concept. */
+    const openReviseForm = (concept: ConceptPayload) => {
+        setReviseTarget(concept);
+        setReviseTitle(`${concept.title} (revision)`);
+        setReviseSummary(concept.summary ?? '');
     };
 
     const doMerge = async () => {
@@ -611,6 +660,35 @@ export default function CreativeRoom() {
                                                     {c.creator_is_agent ? '🤖 agent' : '👤 photographer'} · {fmtTime(c.created_at ?? null)}
                                                 </p>
 
+                                                {/* A8: terminal concepts are no longer frozen — the
+                                                    photographer can revise an adopted direction (child
+                                                    concept, lineage preserved) or reopen a rejected one. */}
+                                                {can_review && isAdopted && (
+                                                    <div className="mt-3 border-t border-zinc-800/70 pt-2.5">
+                                                        <button
+                                                            onClick={() => openReviseForm(c)}
+                                                            data-testid={`concept-revise-${c.id}`}
+                                                            disabled={busy !== null}
+                                                            className="rounded border border-sky-500/40 px-2 py-1 text-xs font-semibold text-sky-600 hover:bg-sky-500/10 disabled:opacity-40"
+                                                            title="Propose a revised direction derived from this one — the adopted direction stays until you adopt the revision."
+                                                        >
+                                                            Revise direction
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                {can_review && c.status === 'rejected' && (
+                                                    <div className="mt-3 border-t border-zinc-800/70 pt-2.5">
+                                                        <button
+                                                            onClick={() => void doReopen(c)}
+                                                            data-testid={`concept-reopen-${c.id}`}
+                                                            disabled={busy !== null}
+                                                            className="rounded border border-amber-500/40 px-2 py-1 text-xs font-semibold text-amber-500 hover:bg-amber-500/10 disabled:opacity-40"
+                                                        >
+                                                            Reopen for review
+                                                        </button>
+                                                    </div>
+                                                )}
+
                                                 {/* Human actions — photographer only, never agent, never terminal state */}
                                                 {can_review && !isTerminal && (
                                                     <div className="mt-3 border-t border-zinc-800/70 pt-2.5">
@@ -665,6 +743,60 @@ export default function CreativeRoom() {
                                             </article>
                                         );
                                     })}
+                                </div>
+                            )}
+
+                            {/* A8: inline revise form — a revision is a NEW child concept;
+                                the parent (even adopted) is never mutated in place. */}
+                            {can_review && reviseTarget && (
+                                <div className="mt-4 rounded-xl border border-sky-500/40 bg-zinc-900/60 p-4" data-testid="concept-revise-form">
+                                    <h4 className="text-sm font-semibold text-zinc-50">
+                                        Revise direction — from "{reviseTarget.title}"
+                                    </h4>
+                                    <p className="mt-1 text-xs text-zinc-500">
+                                        Creates a new proposed concept derived from this one. The current
+                                        direction stays adopted until you adopt the revision.
+                                    </p>
+                                    <label className="mt-3 block text-xs font-semibold text-zinc-300" htmlFor="concept-revise-title">
+                                        Title
+                                        <input
+                                            id="concept-revise-title"
+                                            data-testid="concept-revise-title"
+                                            type="text"
+                                            value={reviseTitle}
+                                            onChange={(e) => setReviseTitle(e.target.value)}
+                                            maxLength={255}
+                                            className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-950/40 p-2 text-xs text-zinc-100 focus:border-zinc-600 focus:outline-none"
+                                        />
+                                    </label>
+                                    <label className="mt-2 block text-xs font-semibold text-zinc-300" htmlFor="concept-revise-summary">
+                                        Summary (optional)
+                                        <textarea
+                                            id="concept-revise-summary"
+                                            data-testid="concept-revise-summary"
+                                            value={reviseSummary}
+                                            onChange={(e) => setReviseSummary(e.target.value)}
+                                            rows={2}
+                                            maxLength={2000}
+                                            className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-950/40 p-2 text-xs text-zinc-100 focus:border-zinc-600 focus:outline-none"
+                                        />
+                                    </label>
+                                    <div className="mt-3 flex gap-2">
+                                        <button
+                                            onClick={() => void doRevise(reviseTarget)}
+                                            disabled={busy !== null || !reviseTitle.trim()}
+                                            className="rounded bg-sky-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-sky-500 disabled:opacity-40"
+                                        >
+                                            Propose revision
+                                        </button>
+                                        <button
+                                            onClick={() => setReviseTarget(null)}
+                                            disabled={busy !== null}
+                                            className="rounded border border-zinc-700 px-2.5 py-1 text-xs font-semibold text-zinc-300 hover:bg-zinc-800 disabled:opacity-40"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                         </section>

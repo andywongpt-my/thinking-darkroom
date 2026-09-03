@@ -669,6 +669,22 @@ export const webmcpApi = {
         );
     },
 
+    /** HUMAN-ONLY: photographer proposes a revised child concept (A8). */
+    reviseConcept(projectId: number, conceptId: number, input: ConceptInput) {
+        return post<{ concept: ConceptPayload }>(
+            `/projects/${projectId}/creative/concepts/${conceptId}/revise`,
+            input,
+        );
+    },
+
+    /** HUMAN-ONLY: photographer reopens a rejected concept (A8). */
+    reopenConcept(projectId: number, conceptId: number, note?: string) {
+        return post<{ concept: ConceptPayload }>(
+            `/projects/${projectId}/creative/concepts/${conceptId}/reopen`,
+            note ? { note } : {},
+        );
+    },
+
     diagnostics(projectId: number) {
         return get<DiagnosticsResponse>(
             `/webmcp-diagnostics/projects/${projectId}/tools`,

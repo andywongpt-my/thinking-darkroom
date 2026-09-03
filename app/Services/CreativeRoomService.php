@@ -283,6 +283,37 @@ class CreativeRoomService
     }
 
     /**
+     * HUMAN-ONLY. Photographer reopens a rejected concept for renewed review.
+     * History is preserved: the decision trail records the reopen. Only
+     * rejected concepts may be reopened — adopted/superseded/merged/proposed
+     * states are not reopenable.
+     */
+    public function reopenRejectedConcept(
+        Project $project,
+        User $photographer,
+        CreativeConcept $concept,
+        ?string $note = null,
+    ): CreativeConcept {
+        $this->assertHumanPhotographer($photographer, 'reopen', $project);
+        $this->assertSameProject($concept, $project);
+
+        if ($concept->status !== Domain::CONCEPT_STATUS_REJECTED) {
+            throw new \LogicException('Only a rejected concept can be reopened.');
+        }
+
+        $concept->forceFill(['status' => Domain::CONCEPT_STATUS_PROPOSED])->save();
+
+        $this->recordDecision(
+            $project,
+            $photographer,
+            'reopen_concept',
+            "Reopened rejected concept #{$concept->id} ({$concept->title})".($note ? " — {$note}" : ''),
+        );
+
+        return $concept->fresh();
+    }
+
+    /**
      * HUMAN-ONLY. Photographer marks a concept as the one they are actively
      * exploring. A purely navigational marker — does not adopt.
      */

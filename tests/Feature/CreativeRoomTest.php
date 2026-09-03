@@ -218,6 +218,108 @@ class CreativeRoomTest extends TestCase
         ]);
     }
 
+    /** A8: a photographer can reopen a rejected concept for renewed review. */
+    public function test_photographer_can_reopen_a_rejected_concept(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+        $rejected = $this->proposeOne($project, $agent, 'Too Cold A Palette');
+
+        $this->actingAs($photographer)
+            ->postJson(route('creative.concepts.reject', [$project, $rejected]), ['note' => 'palette drift'])
+            ->assertOk();
+        $this->assertSame(Domain::CONCEPT_STATUS_REJECTED, $rejected->fresh()->status);
+
+        $this->actingAs($photographer)
+            ->postJson(route('creative.concepts.reopen', [$project, $rejected]), ['note' => 'client changed the brief'])
+            ->assertOk()
+            ->assertJsonPath('concept.status', Domain::CONCEPT_STATUS_PROPOSED);
+
+        $this->assertSame(Domain::CONCEPT_STATUS_PROPOSED, $rejected->fresh()->status);
+        $this->assertDatabaseHas('photographer_decisions', [
+            'project_id' => $project->id,
+            'photographer_id' => $photographer->id,
+            'decision' => 'reopen_concept',
+        ]);
+    }
+
+    /** A8: only rejected concepts can be reopened; other states are 409. */
+    public function test_reopen_rejects_concepts_that_are_not_rejected(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+        $proposed = $this->proposeOne($project, $agent);
+
+        $this->actingAs($photographer)
+            ->postJson(route('creative.concepts.reopen', [$project, $proposed]))
+            ->assertStatus(409);
+        $this->assertSame(Domain::CONCEPT_STATUS_PROPOSED, $proposed->fresh()->status);
+    }
+
+    /** A8: an agent account can never revise or reopen — hard authority boundary. */
+    public function test_agent_cannot_revise_or_reopen_concepts(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+        $concept = $this->proposeOne($project, $agent);
+
+        $this->actingAs($agent)
+            ->postJson(route('creative.concepts.revise', [$project, $concept]), [
+                'title' => 'Agent Revision',
+                'content' => ['mood' => ['bright']],
+            ])
+            ->assertStatus(403);
+
+        $this->actingAs($agent)
+            ->postJson(route('creative.concepts.reopen', [$project, $concept]))
+            ->assertStatus(403);
+
+        $this->assertSame(Domain::CONCEPT_STATUS_PROPOSED, $concept->fresh()->status);
+    }
+
+    /** A8: revise creates a proposed CHILD concept; the parent is untouched. */
+    public function test_photographer_revise_creates_child_concept_with_lineage(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+        $adopted = $this->proposeOne($project, $agent, 'Golden Hour');
+
+        $this->actingAs($photographer)
+            ->postJson(route('creative.concepts.adopt', [$project, $adopted]))
+            ->assertOk();
+
+        $this->actingAs($photographer)
+            ->postJson(route('creative.concepts.revise', [$project, $adopted]), [
+                'title' => 'Golden Hour (revision)',
+                'summary' => 'Push the warmth further without losing texture.',
+                'content' => ['mood' => ['quiet', 'warmer']],
+                'items' => [['dimension' => 'mood', 'label' => 'warmer', 'value' => 'amber dusk']],
+            ])
+            ->assertStatus(201)
+            ->assertJsonPath('concept.status', Domain::CONCEPT_STATUS_PROPOSED)
+            ->assertJsonPath('concept.parent_concept_id', $adopted->id);
+
+        $child = CreativeConcept::query()->where('parent_concept_id', $adopted->id)->firstOrFail();
+        $this->assertSame(Domain::CONCEPT_STATUS_PROPOSED, $child->status);
+        $this->assertSame('Golden Hour (revision)', $child->title);
+        // The adopted parent stays adopted — revision is PROPOSE, never auto-adopt.
+        $this->assertSame(Domain::CONCEPT_STATUS_ADOPTED, $adopted->fresh()->status);
+        $this->assertSame($adopted->id, $project->currentCreativeDirection()->id);
+    }
+
+    /** A8: revising a concept from another project is 404. */
+    public function test_revise_rejects_cross_project_concepts(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+        $otherOwner = User::factory()->create();
+        $otherProject = Project::factory()->create(['owner_id' => $otherOwner->id]);
+        $otherProject->members()->syncWithoutDetaching([$otherOwner->id => ['role' => Domain::ROLE_OWNER]]);
+        $foreign = $this->proposeOne($otherProject, $otherOwner);
+
+        $this->actingAs($photographer)
+            ->postJson(route('creative.concepts.revise', [$project, $foreign]), [
+                'title' => 'Hijack',
+                'content' => ['mood' => ['bright']],
+            ])
+            ->assertStatus(404);
+    }
+
     /* ------------------------------------------------------------------ */
     /*  4–7. Authority: account-level agent, project-role agent, viewer */
     /* ------------------------------------------------------------------ */

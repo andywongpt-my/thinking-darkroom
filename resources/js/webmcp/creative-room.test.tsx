@@ -304,6 +304,35 @@ describe('Sprint 2 — Creative Room page (Task 10)', () => {
         expect(html).toContain('ADOPTED BY PHOTOGRAPHER');
     });
 
+    it('3b. (A8) an adopted concept offers Revise direction; a rejected one offers Reopen', () => {
+        const photographer = mountPage({
+            request: { user: { id: 1, name: 'Maya', is_agent: false } },
+            concepts: [
+                concept({ id: 12, title: 'Golden Hour Edit', status: 'adopted' }),
+                concept({ id: 13, title: 'Neon Night', status: 'rejected' }),
+            ],
+            adopted_concept_id: 12,
+        });
+
+        expect(photographer).toContain('data-testid="concept-revise-12"');
+        expect(photographer).toContain('Revise direction');
+        expect(photographer).toContain('data-testid="concept-reopen-13"');
+        expect(photographer).toContain('Reopen for review');
+
+        const agent = mountPage({
+            request: { user: { id: 2, name: 'Agent', is_agent: true, presence_eligible: true } },
+            my_role: 'agent',
+            can_review: false,
+            concepts: [
+                concept({ id: 12, title: 'Golden Hour Edit', status: 'adopted' }),
+                concept({ id: 13, title: 'Neon Night', status: 'rejected' }),
+            ],
+            adopted_concept_id: 12,
+        });
+        expect(agent).not.toContain('data-testid="concept-revise-12"');
+        expect(agent).not.toContain('data-testid="concept-reopen-13"');
+    });
+
     it('4. renders a rejected concept in a rejected state', () => {
         const html = mountPage({
             concepts: [concept({ id: 13, title: 'Neon Night', status: 'rejected' })],

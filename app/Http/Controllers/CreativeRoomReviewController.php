@@ -105,6 +105,61 @@ class CreativeRoomReviewController extends Controller
         return response()->json(['concept' => $this->payload($concept, $project)]);
     }
 
+    /**
+     * REVISE — photographer proposes a revised child of an existing concept
+     * (lineage preserved via parent_concept_id). Reuses the same service path
+     * the agent-side revise tool uses; the photographer variant is a
+     * HUMAN-ONLY web route and never appears in the WebMCP catalog.
+     */
+    public function revise(Request $request, Project $project, CreativeConcept $concept): JsonResponse
+    {
+        $this->authorizePhotographer($request, $project, $concept, 'revise');
+
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'summary' => ['sometimes', 'string', 'max:2000'],
+            'content' => ['required', 'array'],
+            'items' => ['sometimes', 'array'],
+        ]);
+
+        try {
+            $child = $this->creative->proposeConceptRevision(
+                $project,
+                $request->user(),
+                $concept,
+                $validated['title'],
+                $validated['summary'] ?? null,
+                $validated['content'],
+                $validated['items'] ?? null,
+            );
+        } catch (\LogicException $e) {
+            return response()->json(['error' => $e->getMessage()], 409);
+        }
+
+        return response()->json(['concept' => $this->payload($child, $project)], 201);
+    }
+
+    /** REOPEN — return a rejected concept to the review ladder. */
+    public function reopen(Request $request, Project $project, CreativeConcept $concept): JsonResponse
+    {
+        $this->authorizePhotographer($request, $project, $concept, 'reopen');
+
+        $validated = $request->validate(['note' => ['sometimes', 'string', 'max:2000']]);
+
+        try {
+            $concept = $this->creative->reopenRejectedConcept(
+                $project,
+                $request->user(),
+                $concept,
+                $validated['note'] ?? null,
+            );
+        } catch (\LogicException $e) {
+            return response()->json(['error' => $e->getMessage()], 409);
+        }
+
+        return response()->json(['concept' => $this->payload($concept, $project)]);
+    }
+
     /** Brainstorm input is photographer-authored; agent accounts cannot write it. */
     private function authorizePhotographerForBrainstorm(Request $request, Project $project): void
     {
