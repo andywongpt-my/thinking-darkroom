@@ -127,6 +127,9 @@ class CreativeRoomPageController extends Controller
             'webmcp' => [
                 'available' => true,
             ],
+            // C15: the dynamic apply_approved_plan tool must reconcile with the
+            // real proposal lifecycle, not a permanently-null stub.
+            'eligible_proposal_id' => $project->executableProposals()->orderBy('id')->value('id'),
         ]);
     }
 }

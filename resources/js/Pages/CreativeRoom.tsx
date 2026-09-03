@@ -52,6 +52,7 @@ interface PageProps extends Record<string, unknown> {
         can_chat?: boolean;
     };
     webmcp: { available: boolean };
+    eligible_proposal_id?: number | null;
 }
 
 /* ------------------------------------------------------------- constants */
@@ -196,7 +197,12 @@ export default function CreativeRoom() {
     /* --------------------------- WebMCP registry --------------------------- */
     // Sprint 2 tools ride on the same certified registry lifecycle as Sprint 1
     // (base registration + dynamic apply_approved_plan reconciliation).
-    const [eligibleProposalId] = useState<number | null>(null);
+    // C15: the eligible proposal id comes from the server (approved+unexecuted
+    // lifecycle), so the dynamic tool registers/unregisters truthfully here.
+    const pageEligibleProposalId = typeof page.props.eligible_proposal_id === 'number'
+        ? page.props.eligible_proposal_id
+        : null;
+    const [eligibleProposalId] = useState<number | null>(pageEligibleProposalId);
     const { registry, snapshot } = useWebmcpRegistry(project.id, eligibleProposalId);
 
     /* ------------------------------- state -------------------------------- */

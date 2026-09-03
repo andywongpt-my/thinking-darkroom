@@ -57,10 +57,10 @@ export default function DeleteUserForm({
                 </h2>
 
                 <p className="mt-1 text-sm text-zinc-300">
-                    Once your account is deleted, all of its resources and data
-                    will be permanently deleted. Before deleting your account,
-                    please download any data or information that you wish to
-                    retain.
+                    Once your account is deleted, your projects and their photos,
+                    proposals, and decision history will be permanently deleted.
+                    There is no data export at this time — copy out anything you
+                    want to keep before deleting your account.
                 </p>
             </header>
 

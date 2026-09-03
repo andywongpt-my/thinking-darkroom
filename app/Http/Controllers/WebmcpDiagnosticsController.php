@@ -18,6 +18,13 @@ class WebmcpDiagnosticsController extends Controller
     {
         $this->authorize('view', $project);
 
+        // C12: this is a development/integration diagnostics surface. Human
+        // members get the workspace UI; the raw tool-registry JSON is for
+        // agent accounts (and local/CI smoke), not for photographers.
+        if (! $request->user()->isAgent()) {
+            abort(404);
+        }
+
         return response()->json([
             'project_id' => $project->id,
             'webmcp_available' => true,

@@ -88,6 +88,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('creative-memory.index');
     Route::post('/projects/{project}/creative-memories', [CreativeMemoryController::class, 'store'])
         ->name('creative-memory.store');
+    Route::delete('/projects/{project}/creative-memories/{memory}', [CreativeMemoryController::class, 'destroy'])
+        ->name('creative-memory.destroy');
+    Route::patch('/projects/{project}/creative-memories/{memory}', [CreativeMemoryController::class, 'update'])
+        ->name('creative-memory.update');
 
     // Sprint 4 — HUMAN-ONLY QA actions (acknowledge / dismiss a finding).
     // The agent may analyze and explain; only the photographer decides what

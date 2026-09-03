@@ -4,7 +4,7 @@ import Dropdown from '@/Components/Dropdown';
 import Modal from '@/Components/Modal';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import type { PageProps } from '@/types';
-import { FormEventHandler, useEffect, useRef, useState } from 'react';
+import { FormEventHandler, useEffect, useMemo, useRef, useState } from 'react';
 
 interface DashboardProject {
     id: number;
@@ -797,6 +797,26 @@ export default function Dashboard({ projects, can_create_project, project_meta, 
     const hasProjects = projects.length > 0;
     const canCreateProject = can_create_project === true;
 
+    // A17: client-side search/filter — the payload is already fully client-side.
+    const [searchDraft, setSearchDraft] = useState('');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'archived'>('all');
+    const visibleProjects = useMemo(() => {
+        const q = searchDraft.trim().toLowerCase();
+        return projects.filter((p) => {
+            if (statusFilter === 'active' && p.status !== 'active') {
+                return false;
+            }
+            if (statusFilter === 'archived' && p.status !== 'archived') {
+                return false;
+            }
+            if (q === '') {
+                return true;
+            }
+            return p.name.toLowerCase().includes(q)
+                || (p.description ?? '').toLowerCase().includes(q);
+        });
+    }, [projects, searchDraft, statusFilter]);
+
     return (
         <AuthenticatedLayout
             header={
@@ -825,17 +845,50 @@ export default function Dashboard({ projects, can_create_project, project_meta, 
                         <div className="grid gap-6 lg:grid-cols-3">
                             {/* Project film strips — 2/3 width, primary surface */}
                             <div className="lg:col-span-2">
-                                <h2 className="td-fade-in mb-3 text-sm font-semibold text-zinc-200">Projects</h2>
-                                <div className="grid gap-5 md:grid-cols-2">
-                                    {projects.map((p) => (
-                                        <FilmProjectCard
-                                            key={p.id}
-                                            p={p}
-                                            meta={project_meta?.[p.id]}
-                                            canManage={project_meta?.[p.id]?.can_manage === true}
+                                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                                    <h2 className="text-sm font-semibold text-zinc-200">Projects</h2>
+                                    <div className="flex items-center gap-2" data-testid="dashboard-project-filter">
+                                        <input
+                                            type="search"
+                                            value={searchDraft}
+                                            onChange={(e) => setSearchDraft(e.target.value)}
+                                            placeholder="Search projects…"
+                                            aria-label="Search projects"
+                                            data-testid="dashboard-project-search"
+                                            className="w-40 rounded border border-zinc-700 bg-zinc-950/60 px-2 py-1 text-xs text-zinc-100 placeholder:text-zinc-500 focus:border-amber-400/60 focus:outline-none"
                                         />
-                                    ))}
+                                        <div className="flex overflow-hidden rounded border border-zinc-700 text-xs">
+                                            {(['all', 'active', 'archived'] as const).map((f) => (
+                                                <button
+                                                    key={statusFilter === f ? 'on' : 'off'}
+                                                    type="button"
+                                                    onClick={() => setStatusFilter(f)}
+                                                    aria-pressed={statusFilter === f}
+                                                    className={`px-2 py-1 font-semibold transition ${statusFilter === f ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-400 hover:bg-zinc-800/60'}`}
+                                                    data-testid={`dashboard-project-filter-${f}`}
+                                                >
+                                                    {f[0].toUpperCase() + f.slice(1)}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
                                 </div>
+                                {visibleProjects.length === 0 ? (
+                                    <p className="rounded-lg border border-zinc-800/70 bg-zinc-900/40 px-4 py-6 text-center text-xs text-zinc-400" data-testid="dashboard-no-match">
+                                        No projects match your search.
+                                    </p>
+                                ) : (
+                                    <div className="grid gap-5 md:grid-cols-2">
+                                        {visibleProjects.map((p) => (
+                                            <FilmProjectCard
+                                                key={p.id}
+                                                p={p}
+                                                meta={project_meta?.[p.id]}
+                                                canManage={project_meta?.[p.id]?.can_manage === true}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Authority story — the reason this app exists */}
@@ -854,6 +907,11 @@ export default function Dashboard({ projects, can_create_project, project_meta, 
                                 Projects appear here as film strips. Create one from a photographer account,
                                 then invite an agent to propose: never to decide.
                             </p>
+                            {canCreateProject && (
+                                <div className="mt-6 flex justify-center">
+                                    <CreateProjectDialog />
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

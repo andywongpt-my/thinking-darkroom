@@ -1184,6 +1184,9 @@ export default function Workspace({
     const [qaFindings, setQaFindings] = useState<QaFindingRow[]>(pageQaFindings ?? []);
     // Persisted Creative Memory lessons (photographer decision history).
     const [memories, setMemories] = useState<CreativeMemoryRow[]>(pageCreativeMemories ?? []);
+    const [editingMemoryId, setEditingMemoryId] = useState<number | null>(null);
+    const [editingMemoryDraft, setEditingMemoryDraft] = useState('');
+    const [allMemoriesOpen, setAllMemoriesOpen] = useState(false);
     // Which retouch proposal's modify form is open.
     const [modifyOpenFor, setModifyOpenFor] = useState<number | null>(null);
 
@@ -1926,6 +1929,61 @@ export default function Workspace({
         }
     };
 
+    /** HUMAN-ONLY: edit a photographer-authored creative memory lesson inline. */
+    const editMemory = async (memoryId: number, lesson: string) => {
+        const text = lesson.trim();
+        if (text.length < 3) {
+            setNotify({ kind: 'err', text: 'A lesson needs at least 3 characters.' });
+            return;
+        }
+        setBusy(`memory-edit-${memoryId}`);
+        try {
+            const resp = await fetch(route('creative-memory.update', [project.id, memoryId]), {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content ?? '',
+                },
+                body: JSON.stringify({ lesson: text }),
+            });
+            const j = await resp.json().catch(() => null);
+            if (resp.ok && j?.memory) {
+                setMemories((ms) => ms.map((m) => (m.id === memoryId ? j.memory : m)));
+                addActivity({ tool_name: 'photographer_edit_memory', authority: 'HUMAN', result_status: 'completed', output_summary: { memory_id: memoryId } });
+                setNotify({ kind: 'ok', text: 'Lesson updated.' });
+            } else {
+                setNotify({ kind: 'err', text: `Update failed: ${j?.error ?? resp.statusText}` });
+            }
+        } finally {
+            setBusy(null);
+        }
+    };
+
+    /** HUMAN-ONLY: delete a photographer-authored creative memory lesson. */
+    const deleteMemory = async (memoryId: number) => {
+        setBusy(`memory-delete-${memoryId}`);
+        try {
+            const resp = await fetch(route('creative-memory.destroy', [project.id, memoryId]), {
+                method: 'DELETE',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': (document.querySelector('meta[name="csrf-token"]') as HTMLMetaElement | null)?.content ?? '',
+                },
+            });
+            if (resp.ok) {
+                setMemories((ms) => ms.filter((m) => m.id !== memoryId));
+                addActivity({ tool_name: 'photographer_delete_memory', authority: 'HUMAN', result_status: 'completed', output_summary: { memory_id: memoryId } });
+                setNotify({ kind: 'ok', text: 'Lesson removed from Creative Memory.' });
+            } else {
+                const j = await resp.json().catch(() => null);
+                setNotify({ kind: 'err', text: `Delete failed: ${j?.error ?? resp.statusText}` });
+            }
+        } finally {
+            setBusy(null);
+        }
+    };
+
     /** HUMAN-ONLY: persist a photographer-authored creative memory lesson. */
     const storeMemory = async (lesson: string) => {
         const text = lesson.trim();
@@ -1974,6 +2032,18 @@ export default function Workspace({
         }
         if (files.length > MAX_COUNT) {
             setNotify({ kind: 'err', text: `Upload failed: up to ${MAX_COUNT} photos per batch.` });
+            resetFileInput(uploadRef.current);
+            return;
+        }
+        // C7: server enforces the same 4.3MB AGGREGATE body budget — mirror it
+        // client-side so the user learns the total is over before uploading.
+        const MAX_TOTAL = 4_300_000;
+        const totalBytes = Array.from(files).reduce((sum, f) => sum + f.size, 0);
+        if (totalBytes > MAX_TOTAL) {
+            setNotify({
+                kind: 'err',
+                text: `Upload failed: this batch is ${(totalBytes / 1024 / 1024).toFixed(1)}MB — the total request budget is 4.3MB. Upload fewer or smaller files.`,
+            });
             resetFileInput(uploadRef.current);
             return;
         }
@@ -2947,7 +3017,71 @@ export default function Workspace({
                                 ) : (
                                     memories.map((m) => (
                                         <li key={m.id} className="rounded-md border border-zinc-800/70 bg-zinc-950/70 p-2 text-xs" data-testid={`memory-${m.id}`}>
-                                            <p className="text-zinc-200">“{m.lesson}”</p>
+                                            {editingMemoryId === m.id ? (
+                                                <div className="flex flex-col gap-1.5">
+                                                    <input
+                                                        type="text"
+                                                        value={editingMemoryDraft}
+                                                        onChange={(e) => setEditingMemoryDraft(e.target.value)}
+                                                        className="w-full rounded border border-amber-400/50 bg-zinc-950 px-2 py-1 text-xs text-zinc-100 focus:border-amber-400/70 focus:outline-none"
+                                                        aria-label="Edit lesson text"
+                                                        data-testid={`memory-edit-input-${m.id}`}
+                                                        autoFocus
+                                                    />
+                                                    <div className="flex gap-1.5">
+                                                        <button
+                                                            onClick={() => {
+                                                                void editMemory(m.id, editingMemoryDraft);
+                                                                setEditingMemoryId(null);
+                                                                setEditingMemoryDraft('');
+                                                            }}
+                                                            disabled={busy !== null}
+                                                            className="td-press rounded bg-zinc-800 px-2 py-0.5 text-xs font-semibold text-zinc-100 transition hover:bg-zinc-700 disabled:opacity-40"
+                                                            data-testid={`memory-edit-save-${m.id}`}
+                                                        >
+                                                            Save
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                setEditingMemoryId(null);
+                                                                setEditingMemoryDraft('');
+                                                            }}
+                                                            className="td-press rounded border border-zinc-700 px-2 py-0.5 text-xs font-semibold text-zinc-400 transition hover:bg-zinc-800/60"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <p className="text-zinc-200">“{m.lesson}”</p>
+                                                    {canPhotographerAct && (
+                                                        <div className="flex shrink-0 gap-1">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEditingMemoryId(m.id);
+                                                                    setEditingMemoryDraft(m.lesson);
+                                                                }}
+                                                                disabled={busy !== null}
+                                                                className="td-press rounded border border-zinc-700 px-1.5 py-0.5 text-xs font-semibold text-zinc-400 transition hover:bg-zinc-800/60 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+                                                                aria-label={`Edit lesson: ${m.lesson}`}
+                                                                data-testid={`memory-edit-${m.id}`}
+                                                            >
+                                                                Edit
+                                                            </button>
+                                                            <button
+                                                                onClick={() => void deleteMemory(m.id)}
+                                                                disabled={busy !== null}
+                                                                className="td-press rounded border border-zinc-700 px-1.5 py-0.5 text-xs font-semibold text-zinc-400 transition hover:bg-zinc-800/60 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+                                                                aria-label={`Delete lesson: ${m.lesson}`}
+                                                                data-testid={`memory-delete-${m.id}`}
+                                                            >
+                                                                {busy === `memory-delete-${m.id}` ? '…' : 'Delete'}
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
                                                 <p className="mt-0.5 text-xs text-zinc-400" title={fullTime(m.created_at)}>
                                                     {entityName(m.photographer) || 'photographer'} · {m.kind} · {fmtTime(m.created_at)}
                                                 </p>
@@ -2955,6 +3089,41 @@ export default function Workspace({
                                     ))
                                 )}
                             </ul>
+                            {memories.length >= 30 && (
+                                <p className="mt-2 text-xs text-zinc-400" data-testid="memory-truncated-note">
+                                    Showing the latest 30 lessons. Older lessons remain active context for future proposals.
+                                </p>
+                            )}
+                            {memories.length > 0 && (
+                                <button
+                                    onClick={async () => {
+                                        if (allMemoriesOpen) {
+                                            setAllMemoriesOpen(false);
+                                            return;
+                                        }
+                                        setBusy('memory-index');
+                                        try {
+                                            const resp = await fetch(route('creative-memory.index', project.id), {
+                                                headers: { 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' },
+                                            });
+                                            const j = await resp.json().catch(() => null);
+                                            if (resp.ok && Array.isArray(j?.memories)) {
+                                                setMemories(j.memories);
+                                                setAllMemoriesOpen(true);
+                                            } else {
+                                                setNotify({ kind: 'err', text: 'Could not load all lessons.' });
+                                            }
+                                        } finally {
+                                            setBusy(null);
+                                        }
+                                    }}
+                                    disabled={busy !== null}
+                                    className="td-press mt-2 rounded border border-zinc-700 px-2 py-0.5 text-xs font-semibold text-zinc-400 transition hover:bg-zinc-800/60 hover:text-zinc-200 disabled:opacity-40"
+                                    data-testid="memory-view-all"
+                                >
+                                    {busy === 'memory-index' ? 'Loading…' : allMemoriesOpen ? 'Collapse' : 'View all lessons'}
+                                </button>
+                            )}
                         </div>
                         {/* Agent proposal controls */}
                         <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 shadow-sm">
@@ -3235,6 +3404,8 @@ export default function Workspace({
                 )}
 
                 {/* ============ BOTTOM: WebMCP diagnostics panel ============ */}
+                {/* C12: development diagnostics — agent accounts only. */}
+                {isAgent && (
                 <div className="td-fade-up td-delay-4 mt-6 rounded-xl border border-zinc-800 bg-zinc-900/60 shadow-sm">
                     <button
                         onClick={() => setDiagOpen((o) => !o)}
@@ -3301,6 +3472,7 @@ export default function Workspace({
                         </div>
                     )}
                 </div>
+                )}
             </div>
         </AuthenticatedLayout>
     );

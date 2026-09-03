@@ -1282,6 +1282,94 @@ class RetouchConsistencyQaTest extends TestCase
         $this->assertSame(0, $project->creativeMemories()->count());
     }
 
+    public function test_photographer_can_edit_creative_memory(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+
+        $memoryId = $this->actingAs($photographer)
+            ->postJson(route('creative-memory.store', [$project->id]), ['lesson' => 'Less warm.'])
+            ->assertCreated()
+            ->json('memory.id');
+
+        $this->actingAs($photographer)
+            ->patchJson(route('creative-memory.update', [$project->id, $memoryId]), ['lesson' => 'Much less warm.'])
+            ->assertOk()
+            ->assertJsonPath('memory.lesson', 'Much less warm.');
+
+        $this->assertDatabaseHas('creative_memories', [
+            'id' => $memoryId,
+            'lesson' => 'Much less warm.',
+        ]);
+    }
+
+    public function test_agent_cannot_edit_or_delete_creative_memory(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+
+        $memoryId = $this->actingAs($photographer)
+            ->postJson(route('creative-memory.store', [$project->id]), ['lesson' => 'Keep grain.'])
+            ->assertCreated()
+            ->json('memory.id');
+
+        $this->actingAs($agent)
+            ->patchJson(route('creative-memory.update', [$project->id, $memoryId]), ['lesson' => 'agent edit'])
+            ->assertForbidden();
+
+        $this->actingAs($agent)
+            ->deleteJson(route('creative-memory.destroy', [$project->id, $memoryId]))
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('creative_memories', ['id' => $memoryId, 'lesson' => 'Keep grain.']);
+    }
+
+    public function test_photographer_can_delete_creative_memory(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+
+        $memoryId = $this->actingAs($photographer)
+            ->postJson(route('creative-memory.store', [$project->id]), ['lesson' => 'Less warm.'])
+            ->assertCreated()
+            ->json('memory.id');
+
+        $this->actingAs($photographer)
+            ->deleteJson(route('creative-memory.destroy', [$project->id, $memoryId]))
+            ->assertOk()
+            ->assertJsonPath('deleted', true);
+
+        $this->assertDatabaseMissing('creative_memories', ['id' => $memoryId]);
+    }
+
+    public function test_cross_project_memory_deletion_is_404(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+        [$otherPhotographer] = $this->makeWorld();
+
+        $memoryId = $this->actingAs($otherPhotographer)
+            ->postJson(route('creative-memory.store', [$otherPhotographer->projects()->first()->id ?? 1]), ['lesson' => 'Other project lesson.'])
+            ->assertCreated()
+            ->json('memory.id');
+
+        // Deleting another project's memory through this project's route must 404.
+        $this->actingAs($photographer)
+            ->deleteJson(route('creative-memory.destroy', [$project->id, $memoryId]))
+            ->assertNotFound();
+    }
+
+    public function test_diagnostics_tools_endpoint_is_hidden_from_humans(): void
+    {
+        // C12: the raw tool-registry diagnostics JSON is an agent/dev surface.
+        [$photographer, $agent, $project] = $this->makeWorld();
+
+        $this->actingAs($photographer)
+            ->getJson(route('webmcp.diagnostics.tools', [$project->id]))
+            ->assertNotFound();
+
+        $this->actingAs($agent)
+            ->getJson(route('webmcp.diagnostics.tools', [$project->id]))
+            ->assertOk()
+            ->assertJsonPath('project_id', $project->id);
+    }
+
     public function test_explicit_creative_memory_reduces_future_proposed_warmth(): void
     {
         // Product-level intent: an explicit photographer-authored Creative

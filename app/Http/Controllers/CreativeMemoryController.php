@@ -99,6 +99,45 @@ class CreativeMemoryController extends Controller
         ]);
     }
 
+    /** Update one creative memory lesson (photographer authority). */
+    public function update(Request $request, Project $project, CreativeMemory $memory): JsonResponse
+    {
+        $this->authorizePhotographer($request, $project);
+
+        if ($memory->project_id !== $project->id) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'lesson' => ['required', 'string', 'min:3', 'max:500'],
+        ]);
+
+        $memory->update(['lesson' => $validated['lesson']]);
+
+        return response()->json(['memory' => [
+            'id' => $memory->id,
+            'kind' => $memory->kind,
+            'lesson' => $memory->lesson,
+            'photographer' => $memory->photographer?->name,
+            'created_at' => $memory->created_at?->toISOString(),
+        ]]);
+    }
+
+    /** Delete one creative memory (photographer authority, hard agent boundary). */
+    public function destroy(Request $request, Project $project, CreativeMemory $memory): JsonResponse
+    {
+        $this->authorizePhotographer($request, $project);
+
+        // Cross-project guard: the memory row must belong to the route project.
+        if ($memory->project_id !== $project->id) {
+            abort(404);
+        }
+
+        $memory->delete();
+
+        return response()->json(['deleted' => true, 'memory_id' => $memory->id]);
+    }
+
     private function authorizePhotographer(Request $request, Project $project): void
     {
         $user = $request->user();
