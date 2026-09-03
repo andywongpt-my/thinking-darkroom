@@ -1160,6 +1160,8 @@ export default function Workspace({
     const [cullRationale, setCullRationale] = useState('Suggested cull (edge/soft focus).');
     const [busy, setBusy] = useState<string | null>(null);
     const [diagOpen, setDiagOpen] = useState(false);
+    // U-4/U-5: pulse that opens the agent chat drawer from the presence strip.
+    const [chatOpenSignal, setChatOpenSignal] = useState(0);
 
     /* ---------------- Sprint 4 — retouch / QA / creative memory state ---------------- */
 
@@ -2172,8 +2174,8 @@ export default function Workspace({
                     <div>
                         <p className={`text-sm font-semibold ${agentPresence.online ? 'text-emerald-600' : 'text-zinc-200'}`}>
                             {agentPresence.online
-                                ? 'Agent online · active in this workspace'
-                                : 'Agent offline · waiting for an agent'}
+                                ? 'Agent online · connected to this workspace'
+                                : 'Agent offline · messages still reach the thread'}
                         </p>
                         {agentPresence.online && activeAgentNames && (
                             <p className="mt-0.5 text-xs text-emerald-600">Active agent: {activeAgentNames}</p>
@@ -2182,6 +2184,14 @@ export default function Workspace({
                             <p className="mt-0.5 text-xs text-zinc-500" title={fullTime(lastActiveAt)}>Last active {fmtTime(lastActiveAt)}</p>
                         )}
                     </div>
+                    <button
+                        type="button"
+                        data-testid="agent-presence-open-chat"
+                        onClick={() => setChatOpenSignal((value) => value + 1)}
+                        className="td-press ml-auto shrink-0 rounded-md border border-zinc-700 px-2.5 py-1.5 text-xs font-semibold text-zinc-200 transition hover:border-zinc-500 hover:bg-zinc-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                    >
+                        Open chat
+                    </button>
                 </div>
 
                 {/* WebMCP availability banner */}
@@ -2218,6 +2228,7 @@ export default function Workspace({
                     canSend={permissions.can_chat ?? false}
                     initialConversation={conversation}
                     presence={agentPresence}
+                    openSignal={chatOpenSignal}
                 />
 
                 <WorkspaceConfirmDialog

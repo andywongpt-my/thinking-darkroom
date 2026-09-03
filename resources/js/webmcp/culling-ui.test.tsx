@@ -535,8 +535,9 @@ describe('Sprint 3 — Workspace culling UI + registry certification', () => {
 
         expect(html).toContain('data-testid="agent-presence-strip"');
         expect(html).toContain('Agent offline');
-        expect(html).toContain('waiting for an agent');
+        expect(html).toContain('messages still reach the thread');
         expect(html).toContain('Last active');
+        expect(html).toContain('data-testid="agent-presence-open-chat"');
     });
 
     it('22. renders the truthful online strip with the active agent display name', async () => {
@@ -550,7 +551,7 @@ describe('Sprint 3 — Workspace culling UI + registry certification', () => {
         }));
 
         expect(html).toContain('Agent online');
-        expect(html).toContain('active in this workspace');
+        expect(html).toContain('connected to this workspace');
         expect(html).toContain('Darkroom Agent');
         expect(html).not.toContain('darkroom@example.test');
     });

@@ -17,6 +17,8 @@ interface AgentChatPanelProps {
     initialConversation: AgentConversation;
     presence: AgentPresence;
     initiallyOpen?: boolean;
+    /** U-4/U-5: parent-requested open pulse (e.g. presence strip click). */
+    openSignal?: number;
 }
 
 export function mergeConversationMessages(
@@ -216,6 +218,7 @@ export default function AgentChatPanel({
     initialConversation,
     presence,
     initiallyOpen = false,
+    openSignal = 0,
 }: AgentChatPanelProps) {
     const [open, setOpen] = useState(initiallyOpen);
     const [messages, setMessages] = useState<AgentConversationMessage[]>(
@@ -377,6 +380,14 @@ export default function AgentChatPanel({
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [open]);
+
+    // U-4/U-5: a parent pulse (counter bump) opens the drawer so workspace
+    // affordances like the presence strip can route into the conversation.
+    useEffect(() => {
+        if (openSignal > 0) {
+            setOpen(true);
+        }
+    }, [openSignal, projectId]);
 
     const invokeAgentTurn = useCallback(async (triggerId: number): Promise<void> => {
         setAgentTurnState('reviewing');
