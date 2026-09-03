@@ -220,14 +220,13 @@ export default function AgentChatPanel({
     const [sending, setSending] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [lastReadId, setLastReadId] = useState<number | null>(() =>
-        readLastReadId(projectId, initiallyOpen ? initialConversation.latest_id : null),
+        readLastReadId(projectId, initialConversation.latest_id),
     );
     const [liveAnnouncement, setLiveAnnouncement] = useState('');
     const [agentTurnState, setAgentTurnState] = useState<'idle' | 'reviewing'>('idle');
     const [agentTurnNotice, setAgentTurnNotice] = useState<string | null>(null);
     const latestId = useRef<number | null>(initialConversation.latest_id);
     const lastMessageId = useRef<number | null>(initialConversation.latest_id);
-    const lastReadIdRef = useRef<number | null>(lastReadId);
     const draftMessageIdRef = useRef<string | null>(null);
     const sendInFlightRef = useRef(false);
     const refreshInFlightRef = useRef(false);
@@ -235,7 +234,6 @@ export default function AgentChatPanel({
     const mountedProjectId = useRef(projectId);
 
     const markAllRead = useCallback((value: number | null): void => {
-        lastReadIdRef.current = value;
         setLastReadId(value);
         persistLastReadId(projectId, value);
     }, [projectId]);
@@ -265,6 +263,12 @@ export default function AgentChatPanel({
     useEffect(() => {
         if (!open) return;
 
+        // Opening the drawer reveals the latest messages: the log mounts at
+        // scrollTop 0, so an explicit scroll is required even when nothing
+        // new arrived while the panel was closed.
+        logRef.current?.scrollTo({
+            top: logRef.current.scrollHeight,
+        });
         markAllRead(latestId.current);
         setLiveAnnouncement('');
     }, [open, markAllRead]);
@@ -273,7 +277,7 @@ export default function AgentChatPanel({
         if (mountedProjectId.current === projectId) return;
 
         mountedProjectId.current = projectId;
-        const nextLastReadId = readLastReadId(projectId, initiallyOpen ? initialConversation.latest_id : null);
+        const nextLastReadId = readLastReadId(projectId, initialConversation.latest_id);
         setOpen(initiallyOpen);
         setMessages(initialConversation.messages);
         setDraft('');
@@ -281,7 +285,6 @@ export default function AgentChatPanel({
         setSending(false);
         setError(null);
         setLastReadId(nextLastReadId);
-        lastReadIdRef.current = nextLastReadId;
         setLiveAnnouncement('');
         setAgentTurnState('idle');
         setAgentTurnNotice(null);

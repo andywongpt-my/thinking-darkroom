@@ -173,13 +173,17 @@ class AgentTurnService
         $softFrameCopy = $softFrames === 0
             ? 'No soft-focus frames were flagged.'
             : "I flagged {$softFrames} soft-focus frame(s) for review.";
+        // Only offer a cull proposal when there is something to cull.
+        $proposalPrompt = $softFrames > 0
+            ? " Want a cull proposal for the {$softFrames} softest frame(s)?"
+            : '';
 
         return "I reviewed the project: {$summary['photos']} photos, {$summary['observations']} observed, "
             ."{$summary['selected']} selected, {$summary['culled']} culled, and {$summary['unreviewed']} unreviewed. "
             ."Analysis provenance: {$summary['provenance']}. "
             ."There are {$summary['qa_open']} open QA finding(s) and {$summary['pending_proposals']} pending proposal(s). "
-            ."{$direction} {$softFrameCopy} No final selection changes were made; the photographer decides what to keep, review, or reject. "
-            ."Want a cull proposal for the {$softFrames} softest frame(s)?";
+            ."{$direction} {$softFrameCopy} No final selection changes were made; the photographer decides what to keep, review, or reject."
+            .$proposalPrompt;
     }
 
     /** @return array{message: null, skipped: string} */

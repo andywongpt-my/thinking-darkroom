@@ -91,8 +91,18 @@ class DashboardController extends Controller
             ? AgentPresence::query()
                 ->whereIn('user_id', $agents->pluck('id'))
                 ->whereIn('project_id', $projectIds)
-                ->max('last_seen_at')
+                ->orderByDesc('last_seen_at')
+                ->first()
             : null;
+
+        // Name the agent whose heartbeat is the most recent one, so the
+        // dashboard never pairs one agent's name with another agent's
+        // timestamp in multi-agent projects.
+        $agent = $lastSeenAt !== null
+            ? $agents->firstWhere('id', $lastSeenAt->user_id) ?? $agents->first()
+            : $agents->first();
+
+        $lastSeenAt = $lastSeenAt?->last_seen_at;
 
         $online = $lastSeenAt !== null
             && Carbon::parse($lastSeenAt)->greaterThan(now()->subSeconds(AgentPresenceService::ONLINE_TTL_SECONDS));

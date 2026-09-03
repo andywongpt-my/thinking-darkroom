@@ -212,6 +212,9 @@ class DashboardTest extends TestCase
 
             $this->assertTrue($page['props']['agent']['online']);
             $this->assertSame($checkedAt->toIso8601String(), $page['props']['agent']['last_seen_at']);
+            // The displayed agent name must belong to the most recent
+            // heartbeat, never to the first agent by id.
+            $this->assertSame($secondAgent->name, $page['props']['agent']['name']);
         } finally {
             CarbonImmutable::setTestNow();
         }

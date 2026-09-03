@@ -240,7 +240,9 @@ describe('Sprint 2 — Creative Room page (Task 10)', () => {
 
         expect(html).toContain('data-testid="agent-chat-launcher"');
         expect(html).toContain('Chat with agent');
-        expect(html).toContain('>1</span>');
+        // The launcher badge is an unread counter, not a message total: a
+        // cold visit whose history is already read shows no badge number.
+        expect(html).not.toContain('>1</span>');
     });
 
     it('C14 renders an optional explanation note only with human review controls', () => {
