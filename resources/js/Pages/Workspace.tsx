@@ -203,6 +203,12 @@ export function canHeartbeatPresence(user: { is_agent: boolean; presence_eligibl
     return user.is_agent === true && user.presence_eligible === true;
 }
 
+export function resetFileInput(input: { value: string } | null): void {
+    if (input !== null) {
+        input.value = '';
+    }
+}
+
 /** Use the write endpoint only for an eligible agent; everyone else reads. */
 export function requestWorkspacePresence(
     projectId: number,
@@ -1652,7 +1658,10 @@ export default function Workspace({
     };
 
     const doUpload = (files: FileList | null) => {
-        if (!files || files.length === 0) return;
+        if (!files || files.length === 0) {
+            resetFileInput(uploadRef.current);
+            return;
+        }
         // Client-side contract guard: Vercel hard-caps request bodies at 4.5MB,
         // so oversized selections must be rejected before the edge does (Sol P1).
         const MAX_PER_FILE = 4.3 * 1024 * 1024;
@@ -1660,10 +1669,12 @@ export default function Workspace({
         const oversized = Array.from(files).filter((f) => f.size > MAX_PER_FILE);
         if (oversized.length > 0) {
             setNotify({ kind: 'err', text: `Upload failed: ${oversized[0].name} is ${(oversized[0].size / 1024 / 1024).toFixed(1)}MB. Each file must be under 4.3MB on this deployment.` });
+            resetFileInput(uploadRef.current);
             return;
         }
         if (files.length > MAX_COUNT) {
             setNotify({ kind: 'err', text: `Upload failed: up to ${MAX_COUNT} photos per batch.` });
+            resetFileInput(uploadRef.current);
             return;
         }
         const form = new FormData();
@@ -1688,14 +1699,16 @@ export default function Workspace({
                     : null;
                 setNotify({ kind: 'err', text: first ? `Upload failed: ${first}` : 'Upload failed.' });
             },
+            onFinish: () => resetFileInput(uploadRef.current),
         });
+        resetFileInput(uploadRef.current);
     };
 
     const toggleCull = (id: number) => {
         setCullIds((c) => (c.includes(id) ? c.filter((x) => x !== id) : [...c, id]));
     };
 
-    const webmcpUnavailable = !(snapshot?.webmcpAvailable ?? false) && !(snapshot?.usingFallback ?? false);
+    const webmcpUnavailable = Boolean(snapshot && !snapshot.webmcpAvailable);
 
     return (
         <AuthenticatedLayout
@@ -1773,6 +1786,7 @@ export default function Workspace({
                 )}
 
                 <AgentChatPanel
+                    key={project.id}
                     projectId={project.id}
                     currentUser={request.user}
                     canSend={permissions.can_chat ?? false}

@@ -6,6 +6,7 @@ use App\Domain\Domain;
 use App\Models\AgentPresence;
 use App\Models\Project;
 use App\Models\User;
+use App\Services\AgentPresenceService;
 use App\Support\WebmcpToolCatalog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -14,9 +15,6 @@ use Inertia\Response;
 
 class DashboardController extends Controller
 {
-    /** Presence window — agent heartbeats older than this do not count as online. */
-    private const PRESENCE_WINDOW_MINUTES = 5;
-
     public function index(Request $request): Response
     {
         $user = $request->user();
@@ -78,23 +76,26 @@ class DashboardController extends Controller
 
         $projectIds = $user->projects()->select('projects.id')->pluck('projects.id');
 
-        $agent = User::query()
+        $agents = User::query()
             ->join('project_members', 'project_members.user_id', '=', 'users.id')
             ->whereIn('project_members.project_id', $projectIds)
             ->where('project_members.role', Domain::ROLE_AGENT)
+            ->where('users.is_agent', true)
             ->orderBy('users.id')
             ->select('users.id', 'users.name')
-            ->first();
+            ->distinct()
+            ->get();
+        $agent = $agents->first();
 
-        $lastSeenAt = $agent
+        $lastSeenAt = $agents->isNotEmpty()
             ? AgentPresence::query()
-                ->where('user_id', $agent->id)
+                ->whereIn('user_id', $agents->pluck('id'))
                 ->whereIn('project_id', $projectIds)
                 ->max('last_seen_at')
             : null;
 
         $online = $lastSeenAt !== null
-            && Carbon::parse($lastSeenAt)->greaterThan(now()->subMinutes(self::PRESENCE_WINDOW_MINUTES));
+            && Carbon::parse($lastSeenAt)->greaterThan(now()->subSeconds(AgentPresenceService::ONLINE_TTL_SECONDS));
 
         return Inertia::render('Dashboard', [
             'projects' => $projectPayloads,

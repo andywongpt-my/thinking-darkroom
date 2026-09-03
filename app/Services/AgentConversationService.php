@@ -47,7 +47,7 @@ class AgentConversationService
             'project_id' => $project->id,
             'trust_boundary' => 'untrusted_project_conversation',
             'messages' => $messages
-                ->map(fn (AgentConversationMessage $message): array => $this->messagePayload($message))
+                ->map(fn (AgentConversationMessage $message): array => $this->payloadFor($message))
                 ->values()
                 ->all(),
             'latest_id' => $messages->last()?->id,
@@ -111,14 +111,16 @@ class AgentConversationService
         $message->loadMissing('author:id,name');
 
         return [
-            'message' => $this->messagePayload($message),
+            'message' => $this->payloadFor($message),
             'deduplicated' => $deduplicated,
         ];
     }
 
     /** @return array<string, mixed> */
-    private function messagePayload(AgentConversationMessage $message): array
+    public function payloadFor(AgentConversationMessage $message): array
     {
+        $message->loadMissing('author:id,name');
+
         return [
             'id' => $message->id,
             'body' => $message->body,

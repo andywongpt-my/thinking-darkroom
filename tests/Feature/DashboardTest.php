@@ -10,6 +10,7 @@ use App\Models\Project;
 use App\Models\Proposal;
 use App\Models\ProposalItem;
 use App\Models\User;
+use Carbon\CarbonImmutable;
 use Database\Seeders\DatabaseSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -151,6 +152,69 @@ class DashboardTest extends TestCase
         );
 
         $this->assertFalse($page['props']['agent']['online']);
+    }
+
+    public function test_dashboard_uses_the_shared_ninety_second_presence_ttl(): void
+    {
+        $user = User::factory()->create();
+        $agent = User::factory()->agent()->create(['email' => 'ttl-agent@example.test']);
+        $project = Project::factory()->create(['owner_id' => $user->id]);
+        $project->members()->attach($user->id, ['role' => Domain::ROLE_OWNER]);
+        $project->members()->attach($agent->id, ['role' => Domain::ROLE_AGENT]);
+        $heartbeatAt = CarbonImmutable::parse('2026-08-30 12:00:00');
+
+        CarbonImmutable::setTestNow($heartbeatAt);
+        try {
+            AgentPresence::query()->create([
+                'project_id' => $project->id,
+                'user_id' => $agent->id,
+                'last_seen_at' => $heartbeatAt,
+            ]);
+
+            CarbonImmutable::setTestNow($heartbeatAt->addSeconds(91));
+            $page = $this->inertiaPage(
+                $this->actingAs($user)->get(route('dashboard'))->assertOk()->getContent(),
+            );
+
+            $this->assertFalse($page['props']['agent']['online']);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_dashboard_uses_the_most_recent_presence_across_all_agent_members(): void
+    {
+        $user = User::factory()->create();
+        $firstAgent = User::factory()->agent()->create(['email' => 'first-agent@example.test']);
+        $secondAgent = User::factory()->agent()->create(['email' => 'second-agent@example.test']);
+        $project = Project::factory()->create(['owner_id' => $user->id]);
+        $project->members()->attach($user->id, ['role' => Domain::ROLE_OWNER]);
+        $project->members()->attach($firstAgent->id, ['role' => Domain::ROLE_AGENT]);
+        $project->members()->attach($secondAgent->id, ['role' => Domain::ROLE_AGENT]);
+        $checkedAt = CarbonImmutable::parse('2026-08-30 12:00:00');
+
+        CarbonImmutable::setTestNow($checkedAt);
+        try {
+            AgentPresence::query()->create([
+                'project_id' => $project->id,
+                'user_id' => $firstAgent->id,
+                'last_seen_at' => $checkedAt->subSeconds(361),
+            ]);
+            AgentPresence::query()->create([
+                'project_id' => $project->id,
+                'user_id' => $secondAgent->id,
+                'last_seen_at' => $checkedAt,
+            ]);
+
+            $page = $this->inertiaPage(
+                $this->actingAs($user)->get(route('dashboard'))->assertOk()->getContent(),
+            );
+
+            $this->assertTrue($page['props']['agent']['online']);
+            $this->assertSame($checkedAt->toIso8601String(), $page['props']['agent']['last_seen_at']);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
     }
 
     public function test_machine_agent_dashboard_does_not_expose_project_creation(): void

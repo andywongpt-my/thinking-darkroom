@@ -350,7 +350,7 @@ export default function CreativeRoom() {
 
     /* ------------------------------ render -------------------------------- */
 
-    const webmcpUnavailable = !(snapshot?.webmcpAvailable ?? false) && !(snapshot?.usingFallback ?? false);
+    const webmcpUnavailable = Boolean(snapshot && !snapshot.webmcpAvailable);
 
     return (
         <AuthenticatedLayout
@@ -397,6 +397,7 @@ export default function CreativeRoom() {
                 )}
 
                 <AgentChatPanel
+                    key={project.id}
                     projectId={project.id}
                     currentUser={request.user}
                     canSend={permissions.can_chat ?? false}

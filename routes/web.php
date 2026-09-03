@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AgentConversationController;
+use App\Http\Controllers\AgentConversationTurnController;
 use App\Http\Controllers\CreativeMemoryController;
 use App\Http\Controllers\CreativeRoomPageController;
 use App\Http\Controllers\CreativeRoomReviewController;
@@ -44,6 +45,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/projects/{project}/agent-conversation/messages', [AgentConversationController::class, 'store'])
         ->middleware('throttle:30,1')
         ->name('agent-conversation.store');
+    Route::post('/projects/{project}/agent-conversation/turns', [AgentConversationTurnController::class, 'store'])
+        ->middleware('throttle:6,1')
+        ->name('agent-conversation.turn');
 
     // Sprint 2 — Creative Room (visual creative workspace page).
     Route::get('/projects/{project}/creative', [CreativeRoomPageController::class, 'show'])

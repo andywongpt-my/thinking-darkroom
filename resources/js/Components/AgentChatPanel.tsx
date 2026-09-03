@@ -23,6 +23,8 @@ export function mergeConversationMessages(
     current: AgentConversationMessage[],
     incoming: AgentConversationMessage[],
 ): AgentConversationMessage[] {
+    if (incoming.length === 0) return current;
+
     const byId = new Map<number, AgentConversationMessage>();
 
     for (const message of [...current, ...incoming]) {
@@ -32,8 +34,148 @@ export function mergeConversationMessages(
     return [...byId.values()].sort((left, right) => left.id - right.id);
 }
 
+export function unreadMessageCount(
+    messages: AgentConversationMessage[],
+    lastReadId: number | null,
+): number {
+    return messages.filter((message) => lastReadId === null || message.id > lastReadId).length;
+}
+
+export function createClientMessageId(): string {
+    const cryptoApi = globalThis.crypto;
+
+    try {
+        if (typeof cryptoApi?.randomUUID === 'function') {
+            return cryptoApi.randomUUID();
+        }
+    } catch {
+        // Fall through to the standards-compatible UUID generator below.
+    }
+
+    const bytes = new Uint8Array(16);
+    try {
+        if (typeof cryptoApi?.getRandomValues === 'function') {
+            cryptoApi.getRandomValues(bytes);
+        } else {
+            for (let index = 0; index < bytes.length; index += 1) {
+                bytes[index] = Math.floor(Math.random() * 256);
+            }
+        }
+    } catch {
+        for (let index = 0; index < bytes.length; index += 1) {
+            bytes[index] = Math.floor(Math.random() * 256);
+        }
+    }
+
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+export function getOrCreateDraftClientMessageId(holder: { current: string | null }): string {
+    if (holder.current === null) {
+        holder.current = createClientMessageId();
+    }
+
+    return holder.current;
+}
+
+export function agentChatLastReadStorageKey(projectId: number): string {
+    return `agent-chat:last-read-id:${projectId}`;
+}
+
+export interface AgentTurnResponse {
+    message: AgentConversationMessage | null;
+    skipped?: string;
+}
+
+export function requestAgentTurn(projectId: number, triggerId: number): Promise<AgentTurnResponse> {
+    return axios
+        .post<AgentTurnResponse>(`/projects/${projectId}/agent-conversation/turns`, {
+            trigger_id: triggerId,
+        })
+        .then((response) => response.data);
+}
+
+export function AgentTurnStatus({
+    state,
+    notice,
+}: {
+    state: 'idle' | 'reviewing';
+    notice: string | null;
+}) {
+    if (state === 'reviewing') {
+        return (
+            <p
+                role="status"
+                aria-live="polite"
+                data-testid="agent-turn-status"
+                className="mb-2 text-xs text-zinc-500"
+            >
+                Agent is reviewing the project…
+            </p>
+        );
+    }
+
+    if (notice === null) return null;
+
+    return (
+        <p
+            role="status"
+            aria-live="polite"
+            data-testid="agent-turn-status"
+            className="mb-2 text-xs text-zinc-500"
+        >
+            {notice}
+        </p>
+    );
+}
+
 function conversationPath(projectId: number): string {
     return `/projects/${projectId}/agent-conversation/messages`;
+}
+
+function readLastReadId(projectId: number, fallback: number | null): number | null {
+    if (typeof window === 'undefined') return fallback;
+
+    try {
+        const stored = window.localStorage.getItem(agentChatLastReadStorageKey(projectId));
+        if (stored === null) return fallback;
+
+        const parsed = Number(stored);
+        return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+    } catch {
+        return fallback;
+    }
+}
+
+function persistLastReadId(projectId: number, value: number | null): void {
+    if (typeof window === 'undefined') return;
+
+    try {
+        const key = agentChatLastReadStorageKey(projectId);
+        if (value === null) {
+            window.localStorage.removeItem(key);
+        } else {
+            window.localStorage.setItem(key, String(value));
+        }
+    } catch {
+        // Storage can be unavailable in privacy-restricted browser contexts.
+    }
+}
+
+function skippedTurnMessage(reason: string): string {
+    if (reason === 'no_agent_member') {
+        return 'No agent account is attached to this project yet.';
+    }
+
+    if (reason === 'non_human_trigger') {
+        return 'This message does not need another agent response.';
+    }
+
+    return `Agent turn skipped: ${reason.replaceAll('_', ' ')}.`;
 }
 
 function requestError(error: unknown): string {
@@ -77,25 +219,86 @@ export default function AgentChatPanel({
     const [refreshing, setRefreshing] = useState(false);
     const [sending, setSending] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [lastReadId, setLastReadId] = useState<number | null>(() =>
+        readLastReadId(projectId, initiallyOpen ? initialConversation.latest_id : null),
+    );
+    const [liveAnnouncement, setLiveAnnouncement] = useState('');
+    const [agentTurnState, setAgentTurnState] = useState<'idle' | 'reviewing'>('idle');
+    const [agentTurnNotice, setAgentTurnNotice] = useState<string | null>(null);
     const latestId = useRef<number | null>(initialConversation.latest_id);
+    const lastMessageId = useRef<number | null>(initialConversation.latest_id);
+    const lastReadIdRef = useRef<number | null>(lastReadId);
+    const draftMessageIdRef = useRef<string | null>(null);
+    const sendInFlightRef = useRef(false);
+    const refreshInFlightRef = useRef(false);
     const logRef = useRef<HTMLDivElement>(null);
+    const mountedProjectId = useRef(projectId);
+
+    const markAllRead = useCallback((value: number | null): void => {
+        lastReadIdRef.current = value;
+        setLastReadId(value);
+        persistLastReadId(projectId, value);
+    }, [projectId]);
 
     useEffect(() => {
-        latestId.current = messages.at(-1)?.id ?? null;
+        const nextLastMessage = messages.at(-1);
+        const nextLatestId = nextLastMessage?.id ?? null;
+        const hasNewLastMessage = nextLatestId !== lastMessageId.current;
+        latestId.current = nextLatestId;
 
-        if (open) {
-            logRef.current?.scrollTo({
-                top: logRef.current.scrollHeight,
-                behavior: 'smooth',
-            });
+        if (hasNewLastMessage) {
+            if (open) {
+                logRef.current?.scrollTo({
+                    top: logRef.current.scrollHeight,
+                    behavior: 'smooth',
+                });
+                markAllRead(nextLatestId);
+                setLiveAnnouncement('');
+            } else if (nextLastMessage !== undefined) {
+                setLiveAnnouncement(`New message from ${nextLastMessage.author.name}: ${nextLastMessage.body}`);
+            }
+
+            lastMessageId.current = nextLatestId;
         }
-    }, [messages, open]);
+    }, [messages, open, markAllRead]);
+
+    useEffect(() => {
+        if (!open) return;
+
+        markAllRead(latestId.current);
+        setLiveAnnouncement('');
+    }, [open, markAllRead]);
+
+    useEffect(() => {
+        if (mountedProjectId.current === projectId) return;
+
+        mountedProjectId.current = projectId;
+        const nextLastReadId = readLastReadId(projectId, initiallyOpen ? initialConversation.latest_id : null);
+        setOpen(initiallyOpen);
+        setMessages(initialConversation.messages);
+        setDraft('');
+        setRefreshing(false);
+        setSending(false);
+        setError(null);
+        setLastReadId(nextLastReadId);
+        lastReadIdRef.current = nextLastReadId;
+        setLiveAnnouncement('');
+        setAgentTurnState('idle');
+        setAgentTurnNotice(null);
+        latestId.current = initialConversation.latest_id;
+        lastMessageId.current = initialConversation.latest_id;
+        draftMessageIdRef.current = null;
+        sendInFlightRef.current = false;
+        refreshInFlightRef.current = false;
+    }, [projectId, initialConversation, initiallyOpen]);
 
     const refresh = useCallback(async (): Promise<void> => {
+        if (refreshInFlightRef.current) return;
         if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
             return;
         }
 
+        refreshInFlightRef.current = true;
         setRefreshing(true);
         try {
             const response = await axios.get<AgentConversation>(conversationPath(projectId), {
@@ -106,55 +309,92 @@ export default function AgentChatPanel({
         } catch (caught) {
             setError(`Conversation refresh failed: ${requestError(caught)}`);
         } finally {
+            refreshInFlightRef.current = false;
             setRefreshing(false);
         }
     }, [projectId]);
 
     useEffect(() => {
-        if (!open) return;
-
         void refresh();
         const interval = window.setInterval(() => {
             void refresh();
-        }, 8_000);
+        }, open ? 8_000 : 30_000);
 
         return () => window.clearInterval(interval);
     }, [open, refresh]);
+
+    const invokeAgentTurn = useCallback(async (triggerId: number): Promise<void> => {
+        setAgentTurnState('reviewing');
+        setAgentTurnNotice(null);
+
+        try {
+            const result = await requestAgentTurn(projectId, triggerId);
+            if (result.skipped) {
+                setAgentTurnNotice(skippedTurnMessage(result.skipped));
+            } else if (result.message) {
+                setMessages((current) => mergeConversationMessages(current, [result.message as AgentConversationMessage]));
+            }
+        } catch (caught) {
+            setAgentTurnNotice(`Agent review failed: ${requestError(caught)}`);
+        } finally {
+            await refresh();
+            setAgentTurnState('idle');
+        }
+    }, [projectId, refresh]);
 
     const send = async (event?: FormEvent): Promise<void> => {
         event?.preventDefault();
         const body = draft.trim();
 
-        if (!canSend || sending || body.length === 0) return;
+        if (!canSend || sending || sendInFlightRef.current || body.length === 0) return;
 
+        sendInFlightRef.current = true;
         setSending(true);
         setError(null);
+        const clientMessageId = getOrCreateDraftClientMessageId(draftMessageIdRef);
         try {
             const response = await axios.post<{
                 message: AgentConversationMessage;
                 deduplicated: boolean;
             }>(conversationPath(projectId), {
                 body,
-                client_message_id: globalThis.crypto.randomUUID(),
+                client_message_id: clientMessageId,
             });
             setMessages((current) => mergeConversationMessages(current, [response.data.message]));
             setDraft('');
+            draftMessageIdRef.current = null;
+
+            if (!currentUser.is_agent && response.data.message.author.kind !== 'agent') {
+                void invokeAgentTurn(response.data.message.id);
+            }
         } catch (caught) {
             setError(`Message was not sent: ${requestError(caught)}`);
         } finally {
+            sendInFlightRef.current = false;
             setSending(false);
         }
     };
 
     const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
-        if (event.key === 'Enter' && !event.shiftKey) {
+        if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
             event.preventDefault();
             void send();
         }
     };
 
+    const unreadCount = unreadMessageCount(messages, lastReadId);
+
     return (
         <>
+            <div
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+                data-testid="agent-chat-live-region"
+                className="sr-only"
+            >
+                {!open ? liveAnnouncement : ''}
+            </div>
             {open && (
                 <aside
                     id="agent-chat-panel"
@@ -260,6 +500,7 @@ export default function AgentChatPanel({
                     )}
 
                     <footer className="border-t border-zinc-800/70 bg-zinc-900/60 p-3">
+                        <AgentTurnStatus state={agentTurnState} notice={agentTurnNotice} />
                         {canSend ? (
                             <form onSubmit={(event) => void send(event)}>
                                 <label htmlFor="agent-conversation-message" className="sr-only">
@@ -310,7 +551,12 @@ export default function AgentChatPanel({
 
             <button
                 type="button"
-                onClick={() => setOpen((value) => !value)}
+                onClick={() => {
+                    if (!open) {
+                        markAllRead(latestId.current);
+                    }
+                    setOpen((value) => !value);
+                }}
                 aria-expanded={open}
                 aria-controls="agent-chat-panel"
                 data-testid="agent-chat-launcher"
@@ -321,9 +567,9 @@ export default function AgentChatPanel({
                     className={`h-2.5 w-2.5 rounded-full ${presence.online ? 'bg-emerald-400' : 'bg-zinc-600'}`}
                 />
                 Chat with agent
-                {messages.length > 0 && (
+                {unreadCount > 0 && (
                     <span className="rounded-full bg-zinc-900/15 px-1.5 py-0.5 text-xs">
-                        {messages.length}
+                        {unreadCount}
                     </span>
                 )}
             </button>

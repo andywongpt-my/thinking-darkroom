@@ -199,4 +199,12 @@ describe('Workspace audit regressions', () => {
             vi.useRealTimers();
         }
     });
+
+    it('clears the file input so the same photo can be selected again', () => {
+        const input = { value: 'selected-photo' };
+
+        WorkspacePage.resetFileInput(input);
+
+        expect(input.value).toBe('');
+    });
 });

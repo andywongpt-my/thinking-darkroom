@@ -1,6 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { renderToString } from 'react-dom/server';
-import AgentChatPanel, { mergeConversationMessages } from '@/Components/AgentChatPanel';
+import axios from 'axios';
+import AgentChatPanel, {
+    AgentTurnStatus,
+    createClientMessageId,
+    getOrCreateDraftClientMessageId,
+    mergeConversationMessages,
+    requestAgentTurn,
+    unreadMessageCount,
+} from '@/Components/AgentChatPanel';
 import type { AgentConversation, AgentPresence } from '@/webmcp/api';
 import { workspaceTools } from '@/webmcp/tools/workspace';
 
@@ -100,5 +108,62 @@ describe('Agent conversation surface', () => {
         expect(reply?.annotations?.readOnlyHint).toBe(false);
         expect(reply?.description).toContain('never approve, execute, alter photos');
         expect(reply?.inputSchema.required).toEqual(['body']);
+    });
+
+    it('returns the current array when a poll has no incoming messages', () => {
+        const current = [conversation.messages[0]];
+
+        expect(mergeConversationMessages(current, [])).toBe(current);
+    });
+
+    it('counts only messages newer than the project-specific last-read cursor', () => {
+        expect(unreadMessageCount(conversation.messages, 1)).toBe(1);
+        expect(unreadMessageCount(conversation.messages, 2)).toBe(0);
+        expect(unreadMessageCount(conversation.messages, null)).toBe(2);
+    });
+
+    it('keeps one client id for a draft until the send is confirmed', () => {
+        const holder: { current: string | null } = { current: null };
+        const first = getOrCreateDraftClientMessageId(holder);
+        const second = getOrCreateDraftClientMessageId(holder);
+
+        expect(second).toBe(first);
+        expect(first).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    });
+
+    it('uses the server turn endpoint and keeps the reviewing/recovery copy honest', async () => {
+        const post = vi.spyOn(axios, 'post').mockResolvedValue({
+            data: { message: conversation.messages[1] },
+        } as never);
+
+        try {
+            const result = await requestAgentTurn(7, 1);
+            expect(post).toHaveBeenCalledWith('/projects/7/agent-conversation/turns', { trigger_id: 1 });
+            expect(result.message?.author.kind).toBe('agent');
+
+            const pending = renderToString(<AgentTurnStatus state="reviewing" notice={null} />);
+            const skipped = renderToString(
+                <AgentTurnStatus state="idle" notice="No agent account is attached to this project yet." />,
+            );
+            expect(pending).toContain('Agent is reviewing the project…');
+            expect(skipped).toContain('No agent account is attached to this project yet.');
+        } finally {
+            post.mockRestore();
+        }
+    });
+
+    it('generates a valid UUID when randomUUID is unavailable', () => {
+        vi.stubGlobal('crypto', {
+            getRandomValues: (bytes: Uint8Array) => {
+                bytes.fill(0);
+                return bytes;
+            },
+        });
+
+        try {
+            expect(createClientMessageId()).toBe('00000000-0000-4000-8000-000000000000');
+        } finally {
+            vi.unstubAllGlobals();
+        }
     });
 });
