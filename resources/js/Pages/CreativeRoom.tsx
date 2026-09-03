@@ -6,6 +6,7 @@ import { useWebmcpRegistry } from '@/webmcp/use-webmcp';
 import { webmcpApi } from '@/webmcp/api';
 import { onConceptMutatingActivity } from '@/webmcp/events';
 import { autoDismissNotification } from '@/webmcp/notifications';
+import { localTime, relativeTime } from '@/webmcp/time';
 import type { AgentConversation, AgentPresence, ConceptPayload } from '@/webmcp/api';
 
 /* ------------------------------------------------------------------ types */
@@ -92,8 +93,11 @@ const CANVAS_KEYS: { key: string; label: string }[] = [
 ];
 
 function fmtTime(iso: string | null): string {
-    if (!iso) return 'not recorded';
-    return new Date(iso).toLocaleString();
+    return relativeTime(iso);
+}
+
+function fullTime(iso: string | null): string {
+    return localTime(iso);
 }
 
 function dimensionEntries(content: Record<string, unknown> | null | undefined): [string, string][] {
@@ -463,7 +467,7 @@ export default function CreativeRoom() {
                                         <p className="font-mono text-xs uppercase tracking-[0.16em] text-indigo-300">
                                             PREVIOUS THINKING · {brainstorm.photographer ?? 'PHOTOGRAPHER'}
                                         </p>
-                                        <time className="text-xs text-zinc-500" dateTime={brainstorm.created_at}>
+                                        <time className="text-xs text-zinc-500" dateTime={brainstorm.created_at} title={fullTime(brainstorm.created_at)}>
                                             {fmtTime(brainstorm.created_at)}
                                         </time>
                                     </div>
@@ -603,7 +607,7 @@ export default function CreativeRoom() {
                                                     </p>
                                                 )}
 
-                                                <p className="text-xs text-zinc-400">
+                                                <p className="text-xs text-zinc-400" title={fullTime(c.created_at ?? null)}>
                                                     {c.creator_is_agent ? '🤖 agent' : '👤 photographer'} · {fmtTime(c.created_at ?? null)}
                                                 </p>
 
@@ -720,7 +724,7 @@ export default function CreativeRoom() {
                                                         {a.authority}
                                                     </span>
                                                 </div>
-                                                <div className="mt-0.5 text-xs text-zinc-400">{fmtTime(a.created_at)} · {a.result_status}</div>
+                                                <div className="mt-0.5 text-xs text-zinc-400" title={fullTime(a.created_at)}>{fmtTime(a.created_at)} · {a.result_status}</div>
                                                 {a.output_summary && (
                                                     <pre className="mt-0.5 max-w-full overflow-x-auto rounded bg-zinc-950/40 p-1 text-xs leading-tight text-zinc-500">
                                                         {JSON.stringify(a.output_summary)}
@@ -736,7 +740,7 @@ export default function CreativeRoom() {
                         {brief && (
                             <section className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 shadow-sm">
                                 <h3 className="mb-1 text-sm font-semibold text-emerald-600">Structured Creative Brief</h3>
-                                <p className="text-xs text-emerald-400">
+                                <p className="text-xs text-emerald-400" title={fullTime(brief.adopted_at)}>
                                     {brief.creative_direction} · adopted {fmtTime(brief.adopted_at)}
                                 </p>
                                 <pre className="mt-2 max-h-56 overflow-auto rounded-lg bg-zinc-900/60 p-2 text-xs leading-relaxed text-zinc-200">

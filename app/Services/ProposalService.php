@@ -10,6 +10,7 @@ use App\Models\Proposal;
 use App\Models\ProposalItem;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Owns every state transition on proposals and the creative-authority rules
@@ -96,6 +97,12 @@ class ProposalService
             // both pass the pre-transaction check and produce contradictory
             // terminal decisions.
             $locked = $this->lockReviewable($proposal->id);
+
+            if ($locked->status === Domain::STATE_DRAFT && ! $locked->items()->exists()) {
+                throw ValidationException::withMessages([
+                    'proposal' => 'Cannot approve an empty draft proposal.',
+                ]);
+            }
 
             $locked->forceFill([
                 'status' => Domain::STATE_APPROVED,

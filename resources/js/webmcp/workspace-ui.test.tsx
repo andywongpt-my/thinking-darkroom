@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createElement, Fragment } from 'react';
 import { renderToString } from 'react-dom/server';
 import { autoDismissNotification } from '@/webmcp/notifications';
+import { localTime, relativeTime } from '@/webmcp/time';
 
 vi.mock('@inertiajs/react', () => ({
     Head: ({ children }: { children?: React.ReactNode }) => createElement(Fragment, null, children),
@@ -18,6 +19,7 @@ vi.mock('@/Components/Modal', () => ({
 
 const WorkspacePage = await import('@/Pages/Workspace');
 
+const { selectPhotoFrame } = WorkspacePage;
 describe('Workspace audit regressions', () => {
     it('M1 clears the reject busy state when the network request rejects', async () => {
         const busyStates: (string | null)[] = [];
@@ -206,5 +208,35 @@ describe('Workspace audit regressions', () => {
         WorkspacePage.resetFileInput(input);
 
         expect(input.value).toBe('');
+    });
+
+    it('uses relative timestamps with a full local tooltip value available separately', () => {
+        const now = Date.parse('2026-09-03T12:00:00.000Z');
+
+        expect(relativeTime('2026-09-03T11:58:00.000Z', now)).toBe('2 minutes ago');
+        expect(localTime('2026-09-03T12:00:00.000Z')).toContain('2026');
+    });
+
+    it('selects and scrolls a QA-linked frame without requiring a browser DOM during SSR', () => {
+        const globalRecord = globalThis as Record<string, unknown>;
+        const originalDocument = globalRecord.document;
+        const scrollIntoView = vi.fn();
+        const querySelector = vi.fn().mockReturnValue({ scrollIntoView });
+        const setSelectedId = vi.fn();
+
+        globalRecord.document = { querySelector };
+        try {
+            selectPhotoFrame(101, setSelectedId);
+        } finally {
+            if (originalDocument === undefined) {
+                delete globalRecord.document;
+            } else {
+                globalRecord.document = originalDocument;
+            }
+        }
+
+        expect(setSelectedId).toHaveBeenCalledWith(101);
+        expect(querySelector).toHaveBeenCalledWith('[data-testid="photo-tile-101"]');
+        expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
     });
 });

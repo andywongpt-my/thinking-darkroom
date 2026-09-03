@@ -8,6 +8,7 @@ import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useWebmcpRegistry } from '@/webmcp/use-webmcp';
 import { webmcpApi } from '@/webmcp/api';
 import { autoDismissNotification } from '@/webmcp/notifications';
+import { localTime, relativeTime } from '@/webmcp/time';
 import type {
     AgentConversation,
     AgentPresence,
@@ -29,6 +30,12 @@ interface WorkspacePhoto extends PhotoSummary {
     shutter_speed?: string | null;
     focal_length?: string | null;
     dimensions?: string | null;
+    exposure?: number | null;
+    contrast?: number | null;
+    analysis?: {
+        exposure?: number | null;
+        contrast?: number | null;
+    } | null;
 }
 
 interface WorkspaceBrief {
@@ -167,7 +174,7 @@ const TYPE_LABEL: Record<string, string> = {
 
 const STATE_LABEL: Record<string, string> = {
     draft: 'Draft',
-    pending_review: 'Pending review',
+    pending_review: 'Proposed',
     approved: 'Approved',
     modified: 'Modified',
     rejected: 'Rejected',
@@ -195,8 +202,11 @@ const DECISION_BADGE: Record<string, string> = {
 };
 
 function fmtTime(iso: string | null): string {
-    if (!iso) return 'not recorded';
-    return new Date(iso).toLocaleString();
+    return relativeTime(iso);
+}
+
+function fullTime(iso: string | null): string {
+    return localTime(iso);
 }
 
 /** The server supplies this eligibility bit from both agent boundaries. */
@@ -417,7 +427,7 @@ export function DecisionLedger({ decisions }: { decisions: WorkspaceDecision[] }
                                         </span>
                                         <span className="truncate text-xs text-zinc-300">{entry.photographer ?? 'photographer'}</span>
                                     </div>
-                                    <time className="shrink-0 text-xs text-zinc-500" dateTime={entry.decided_at}>
+                                    <time className="shrink-0 text-xs text-zinc-500" dateTime={entry.decided_at} title={fullTime(entry.decided_at)}>
                                         {fmtTime(entry.decided_at)}
                                     </time>
                                 </div>
@@ -631,6 +641,27 @@ export const RETOUCH_ADJUSTMENT_LABELS: Record<(typeof RETOUCH_ADJUSTMENT_KEYS)[
     highlight_recovery: 'Highlight recovery',
     shadow_lift: 'Shadow lift',
 };
+
+export const ADJUSTMENT_MIN = -1;
+export const ADJUSTMENT_MAX = 1;
+
+export interface RetouchProposalDraft {
+    exposure: number;
+    contrast: number;
+}
+
+/** Seed the lightweight agent retouch form from available photo analysis values. */
+export function retouchDraftForPhoto(photo: Partial<WorkspacePhoto> | null | undefined): RetouchProposalDraft {
+    const valueInRange = (value: number | null | undefined, fallback: number): number => {
+        if (value === null || value === undefined || !Number.isFinite(value)) return fallback;
+        return Math.min(ADJUSTMENT_MAX, Math.max(ADJUSTMENT_MIN, value));
+    };
+
+    return {
+        exposure: valueInRange(photo?.analysis?.exposure ?? photo?.exposure, 0.3),
+        contrast: valueInRange(photo?.analysis?.contrast ?? photo?.contrast, 0.05),
+    };
+}
 
 /**
  * Render-safe projection for a "named entity" field that may arrive as a
@@ -1054,6 +1085,22 @@ export function isCullingKeyboardInput(
     return tagName === 'INPUT' || tagName === 'TEXTAREA' || target?.isContentEditable === true;
 }
 
+/** Scroll a linked QA frame into view without assuming a browser during SSR. */
+export function scrollToPhotoTile(photoId: number): void {
+    if (typeof document === 'undefined') return;
+
+    const tile = document.querySelector(`[data-testid="photo-tile-${photoId}"]`);
+    if (tile && typeof tile.scrollIntoView === 'function') {
+        tile.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+}
+
+/** Select a QA-linked frame and bring its grid tile into the photographer's view. */
+export function selectPhotoFrame(photoId: number, setSelectedId: (id: number) => void): void {
+    setSelectedId(photoId);
+    scrollToPhotoTile(photoId);
+}
+
 export default function Workspace({
     initialCulling: initialCullingProp,
     initialAnalysis = null,
@@ -1096,6 +1143,7 @@ export default function Workspace({
         .join(', ');
 
     const [selectedId, setSelectedId] = useState<number | null>(photos[0]?.id ?? null);
+    const [retouchDraft, setRetouchDraft] = useState<RetouchProposalDraft>(() => retouchDraftForPhoto(photos[0]));
     const [deletePhotoId, setDeletePhotoId] = useState<number | null>(null);
     const [deletingPhoto, setDeletingPhoto] = useState(false);
     const [rejectTargetId, setRejectTargetId] = useState<number | null>(null);
@@ -1105,8 +1153,9 @@ export default function Workspace({
     const [cancelTargetId, setCancelTargetId] = useState<number | null>(null);
     const [localProposals, setLocalProposals] = useState<WorkspaceProposal[]>(proposals);
     const [localActivity, setLocalActivity] = useState<ActivityEntry[]>(activity);
-    const [references, setReferences] = useState<unknown[]>([]);
+    const [eagerVersion, setEagerVersion] = useState(0);
     const [cullIds, setCullIds] = useState<number[]>([]);
+    const [cullRationale, setCullRationale] = useState('Suggested cull (edge/soft focus).');
     const [busy, setBusy] = useState<string | null>(null);
     const [diagOpen, setDiagOpen] = useState(false);
 
@@ -1249,6 +1298,8 @@ export default function Workspace({
     const [analysisRefresh, setAnalysisRefresh] = useState(0);
     // photographer decisions recorded this session (photo_id → decision payload).
     const [myDecisions, setMyDecisions] = useState<Record<number, PhotographerDecisionPayload['decision']>>({});
+    const [cullingNote, setCullingNote] = useState('');
+    const [cullingNoteOpen, setCullingNoteOpen] = useState(false);
     const [overrideNote, setOverrideNote] = useState('');
     const [overrideOpen, setOverrideOpen] = useState(false);
     const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -1425,6 +1476,8 @@ export default function Workspace({
                 },
             });
             setNotify({ kind: 'ok', text: `Decision recorded: ${decision.toUpperCase()}${res.data.decision.override ? ' (override)' : ''}.` });
+            setCullingNote('');
+            setCullingNoteOpen(false);
             return res.data;
         }
         setNotify({ kind: 'err', text: `Decision failed: ${res.error}` });
@@ -1464,7 +1517,7 @@ export default function Workspace({
             webmcpApi.inspectPhoto(project.id, p.id).then((res) => {
                 if (!live || !res.ok || !res.data) return;
                 eager.set(p.id, res.data.photo);
-                setReferences((r) => [...r]);
+                setEagerVersion((version) => version + 1);
             });
         });
         return () => {
@@ -1472,6 +1525,13 @@ export default function Workspace({
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [project.id, photos.length]);
+
+    useEffect(() => {
+        const current = photos.find((photo) => photo.id === selectedId);
+        setRetouchDraft(retouchDraftForPhoto(
+            current ? mergeInspectedPhoto(current, eager.get(current.id)) : null,
+        ));
+    }, [eagerVersion, selectedId, photos, eager]);
 
     const addActivity = (entry: Partial<ActivityEntry>) => {
         const full: ActivityEntry = {
@@ -1505,10 +1565,11 @@ export default function Workspace({
             setNotify({ kind: 'err', text: 'Select at least one photo (click a photo, then tick the checkbox).' });
             return;
         }
+        const rationale = cullRationale.trim() || 'Suggested cull (edge/soft focus).';
         setBusy('cull');
         const res = await webmcpApi.proposeCull(
             project.id,
-            cullIds.map((pid) => ({ photo_id: pid, action: 'cull', rationale: 'Suggested cull (edge/soft focus).' })),
+            cullIds.map((pid) => ({ photo_id: pid, action: 'cull', rationale })),
             `Cull ${cullIds.length} frame(s) suggested by the agent.`,
         );
         setBusy(null);
@@ -1526,10 +1587,22 @@ export default function Workspace({
     const runRetouchPlan = async () => {
         const target = selected || photos[0];
         if (!target) return;
+        const draft = retouchDraft;
+        if (
+            !Number.isFinite(draft.exposure)
+            || draft.exposure < ADJUSTMENT_MIN
+            || draft.exposure > ADJUSTMENT_MAX
+            || !Number.isFinite(draft.contrast)
+            || draft.contrast < ADJUSTMENT_MIN
+            || draft.contrast > ADJUSTMENT_MAX
+        ) {
+            setNotify({ kind: 'err', text: 'Exposure and contrast must be numbers between -1 and 1.' });
+            return;
+        }
         setBusy('retouch');
         const res = await webmcpApi.proposeRetouchPlan(
             project.id,
-            [{ photo_id: target.id, action: 'exposure', params: { exposure: +0.3, contrast: 0.05 }, rationale: 'Balanced exposure pass.' }],
+            [{ photo_id: target.id, action: 'exposure', params: { exposure: draft.exposure, contrast: draft.contrast }, rationale: 'Balanced exposure pass.' }],
             'Proposed exposure retouch for preview.',
         );
         setBusy(null);
@@ -2004,7 +2077,7 @@ export default function Workspace({
                             <p className="mt-0.5 text-xs text-emerald-600">Active agent: {activeAgentNames}</p>
                         )}
                         {!agentPresence.online && lastActiveAt && (
-                            <p className="mt-0.5 text-xs text-zinc-500">Last active {fmtTime(lastActiveAt)}</p>
+                            <p className="mt-0.5 text-xs text-zinc-500" title={fullTime(lastActiveAt)}>Last active {fmtTime(lastActiveAt)}</p>
                         )}
                     </div>
                 </div>
@@ -2261,7 +2334,7 @@ export default function Workspace({
                                     const rec = recFor.get(p.id);
                                     const recMeta = rec ? RECOMMENDATION_META[rec.recommendation] : null;
                                     return (
-                                    <div key={p.id} className="group relative">
+                                    <div key={p.id} className="group relative" data-testid={`photo-tile-${p.id}`}>
                                         <button
                                             onClick={() => setSelectedId(p.id)}
                                             className={`td-press w-full overflow-hidden rounded-md border-2 transition-all duration-200 hover:border-zinc-500 ${selectedId === p.id ? 'border-amber-500' : 'border-transparent'} ${p.selection_state === 'culled' ? 'opacity-60 grayscale' : ''}`}
@@ -2508,7 +2581,7 @@ export default function Workspace({
                                                         return (
                                                             <button
                                                                 key={choice}
-                                                                onClick={() => void recordCullingDecision(selected.id, choice)}
+                                                                onClick={() => void recordCullingDecision(selected.id, choice, cullingNote.trim() || undefined)}
                                                                 disabled={busy !== null}
                                                                 className={`rounded-md px-3 py-1.5 text-xs font-semibold transition disabled:opacity-40 ${
                                                                     active
@@ -2533,6 +2606,33 @@ export default function Workspace({
                                                         Override
                                                     </button>
                                                 </div>
+                                                {!overrideOpen && (
+                                                    <details
+                                                        className="mt-2 rounded-lg border border-zinc-700/80"
+                                                        data-testid="culling-note-details"
+                                                        open={cullingNoteOpen}
+                                                        onToggle={(event) => setCullingNoteOpen((event.currentTarget as HTMLDetailsElement).open)}
+                                                    >
+                                                        <summary className="cursor-pointer px-2.5 py-1.5 text-xs font-medium text-zinc-400 hover:text-zinc-200">
+                                                            Add note
+                                                        </summary>
+                                                        <div className="border-t border-zinc-700/80 p-2.5">
+                                                            <label htmlFor="culling-decision-note" className="text-xs font-medium text-zinc-300">
+                                                                Note for the decision (optional)
+                                                            </label>
+                                                            <input
+                                                                id="culling-decision-note"
+                                                                data-testid="culling-decision-note"
+                                                                type="text"
+                                                                maxLength={2000}
+                                                                value={cullingNote}
+                                                                onChange={(e) => setCullingNote(e.target.value)}
+                                                                placeholder="Why does this frame stay, need review, or leave the set?"
+                                                                className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-950/40 px-2 py-1.5 text-xs text-zinc-100 focus:border-amber-400/60 focus:outline-none"
+                                                            />
+                                                        </div>
+                                                    </details>
+                                                )}
                                                 {overrideOpen && (
                                                     <div className="mt-2 rounded-lg border border-indigo-500/30 bg-zinc-900/60 p-2.5">
                                                         <label htmlFor="override-note" className="text-xs font-medium text-zinc-300">
@@ -2722,6 +2822,16 @@ export default function Workspace({
                                                 <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${f.status === 'open' ? 'bg-amber-400/10 text-amber-500' : f.status === 'acknowledged' ? 'bg-sky-500/15 text-sky-500' : 'bg-zinc-800 text-zinc-300'}`} data-testid={`qa-status-${f.id}`}>
                                                     {f.status}
                                                 </span>
+                                                {f.photo_id !== null && (
+                                                    <button
+                                                        type="button"
+                                                        data-testid={`qa-locate-frame-${f.id}`}
+                                                        onClick={() => selectPhotoFrame(f.photo_id!, setSelectedId)}
+                                                        className="rounded border border-amber-400/40 px-2 py-0.5 text-xs font-semibold text-amber-500 hover:bg-amber-400/10"
+                                                    >
+                                                        Locate frame
+                                                    </button>
+                                                )}
                                                 {canPhotographerAct && f.status === 'open' && (
                                                     <div className="flex gap-1.5">
                                                         <button
@@ -2781,9 +2891,9 @@ export default function Workspace({
                                     memories.map((m) => (
                                         <li key={m.id} className="rounded-md border border-zinc-800/70 bg-zinc-950/70 p-2 text-xs" data-testid={`memory-${m.id}`}>
                                             <p className="text-zinc-200">“{m.lesson}”</p>
-                                            <p className="mt-0.5 text-xs text-zinc-400">
-                                                {entityName(m.photographer) || 'photographer'} · {m.kind} · {fmtTime(m.created_at)}
-                                            </p>
+                                                <p className="mt-0.5 text-xs text-zinc-400" title={fullTime(m.created_at)}>
+                                                    {entityName(m.photographer) || 'photographer'} · {m.kind} · {fmtTime(m.created_at)}
+                                                </p>
                                         </li>
                                     ))
                                 )}
@@ -2793,6 +2903,52 @@ export default function Workspace({
                         <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 shadow-sm">
                             <h3 className="mb-2 text-sm font-semibold text-zinc-100">Agent Proposal</h3>
                             <div className="space-y-2">
+                                {isAgent && (
+                                    <>
+                                        <label className="block text-xs text-zinc-400" htmlFor="cull-rationale">
+                                            Cull rationale
+                                            <input
+                                                id="cull-rationale"
+                                                data-testid="cull-rationale"
+                                                type="text"
+                                                value={cullRationale}
+                                                onChange={(e) => setCullRationale(e.target.value)}
+                                                className="mt-1 w-full rounded border border-zinc-700 bg-zinc-950/40 px-2 py-1.5 text-xs text-zinc-100 focus:border-amber-400/60 focus:outline-none"
+                                            />
+                                        </label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <label className="text-xs text-zinc-400" htmlFor="retouch-exposure">
+                                                Exposure
+                                                <input
+                                                    id="retouch-exposure"
+                                                    data-testid="retouch-exposure"
+                                                    type="number"
+                                                    min={ADJUSTMENT_MIN}
+                                                    max={ADJUSTMENT_MAX}
+                                                    step="0.01"
+                                                    value={retouchDraft.exposure}
+                                                    onChange={(e) => setRetouchDraft((draft) => ({ ...draft, exposure: Number(e.target.value) }))}
+                                                    className="mt-1 w-full rounded border border-zinc-700 bg-zinc-950/40 px-2 py-1.5 text-xs text-zinc-100 focus:border-amber-400/60 focus:outline-none"
+                                                />
+                                            </label>
+                                            <label className="text-xs text-zinc-400" htmlFor="retouch-contrast">
+                                                Contrast
+                                                <input
+                                                    id="retouch-contrast"
+                                                    data-testid="retouch-contrast"
+                                                    type="number"
+                                                    min={ADJUSTMENT_MIN}
+                                                    max={ADJUSTMENT_MAX}
+                                                    step="0.01"
+                                                    value={retouchDraft.contrast}
+                                                    onChange={(e) => setRetouchDraft((draft) => ({ ...draft, contrast: Number(e.target.value) }))}
+                                                    className="mt-1 w-full rounded border border-zinc-700 bg-zinc-950/40 px-2 py-1.5 text-xs text-zinc-100 focus:border-amber-400/60 focus:outline-none"
+                                                />
+                                            </label>
+                                        </div>
+                                        <p className="text-xs text-zinc-500">Adjustment values range from -1 to 1.</p>
+                                    </>
+                                )}
                                 <button
                                     onClick={runProposeCull}
                                     disabled={busy !== null || !isAgent}
@@ -2850,7 +3006,7 @@ export default function Workspace({
                                                     </span>
                                                 </div>
                                                 {p.summary && <p className="mt-1 text-xs text-zinc-500">{p.summary}</p>}
-                                                <div className="mt-1 text-xs text-zinc-400">
+                                                <div className="mt-1 text-xs text-zinc-400" title={fullTime(p.created_at)}>
                                                     {p.items.length === 0 && p.status === 'draft'
                                                         ? '0 item(s): awaiting agent generation'
                                                         : `${p.items.length} item(s)`}
@@ -2871,7 +3027,10 @@ export default function Workspace({
                                                 )}
 
                                                 {/* Reviewer != agent: approve/reject/modify are photographer-only. */}
-                                                {canPhotographerAct && (p.status === 'pending_review' || p.status === 'draft') && (
+                                                {canPhotographerAct
+                                                    && (p.status === 'pending_review' || p.status === 'draft')
+                                                    && !(p.status === 'draft' && p.items.length === 0)
+                                                    && (
                                                     <div className="mt-2">
                                                         <div className="flex gap-2">
                                                             <button
@@ -2982,7 +3141,7 @@ export default function Workspace({
                                                     <code className="rounded bg-zinc-900 px-1 text-xs font-semibold text-zinc-100">{a.tool_name}</code>
                                                     <span className={`rounded-full px-1.5 text-xs font-bold ${AUTHORITY_COLOR[a.authority] ?? 'bg-zinc-900 text-zinc-300'}`}>{a.authority}</span>
                                                 </div>
-                                                <div className="mt-0.5 text-xs text-zinc-400">{fmtTime(a.created_at)} · {a.result_status}</div>
+                                                <div className="mt-0.5 text-xs text-zinc-400" title={fullTime(a.created_at)}>{fmtTime(a.created_at)} · {a.result_status}</div>
                                                 {a.output_summary && (
                                                     <pre className="mt-1 max-w-full overflow-x-auto rounded bg-zinc-950/40 p-1 text-xs leading-tight text-zinc-500">{JSON.stringify(a.output_summary)}</pre>
                                                 )}
@@ -3057,7 +3216,7 @@ export default function Workspace({
                                                 <span className={`rounded-full px-1.5 py-0.5 text-xs font-bold ${AUTHORITY_COLOR[t.authority] ?? ''}`}>{t.authority}</span>
                                             </td>
                                             <td className="py-1.5 pr-2 text-zinc-500">{t.dynamic ? '●' : '—'}</td>
-                                            <td className="py-1.5 pr-2 text-zinc-400">{fmtTime(t.registeredAt)}</td>
+                                            <td className="py-1.5 pr-2 text-zinc-400" title={fullTime(t.registeredAt)}>{fmtTime(t.registeredAt)}</td>
                                             <td className="py-1.5 text-zinc-500">{snapshot?.webmcpAvailable ? 'registered' : 'fallback only'}</td>
                                         </tr>
                                     ))}

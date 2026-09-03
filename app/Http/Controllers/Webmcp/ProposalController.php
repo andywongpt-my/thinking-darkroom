@@ -60,14 +60,26 @@ class ProposalController extends Controller
         $this->authorize('propose', $project);
         $itemRules = $this->itemRulesFor($type);
 
-        $validated = $request->validate([
+        $rules = [
             'summary' => ['nullable', 'string', 'max:2000'],
             'items' => ['required', 'array', 'min:1', 'max:500'],
             'items.*.photo_id' => ['sometimes', 'integer', 'exists:photos,id'],
             'items.*.action' => ['required', 'string', 'max:64'],
             'items.*.rationale' => ['sometimes', 'string', 'max:2000'],
             'items.*.params' => ['sometimes', 'array'],
-        ]);
+        ];
+
+        if (in_array($type, [Domain::TYPE_RETOUCH, Domain::TYPE_BATCH_RETOUCH], true)) {
+            foreach (Domain::RETOUCH_ADJUSTMENTS as $adjustment) {
+                $rules["items.*.params.{$adjustment}"] = [
+                    'sometimes',
+                    'numeric',
+                    'between:'.Domain::ADJUSTMENT_MIN.','.Domain::ADJUSTMENT_MAX,
+                ];
+            }
+        }
+
+        $validated = $request->validate($rules);
 
         // Cross-check every referenced photo belongs to this project.
         $photoIds = collect($validated['items'])->pluck('photo_id')->filter();

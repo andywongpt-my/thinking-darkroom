@@ -335,17 +335,15 @@ class ProjectManagementTest extends TestCase
         $this->assertFalse($media->exists($derivative['path']));
     }
 
-    public function test_root_redirects_member_to_their_newest_project(): void
+    public function test_root_redirects_to_dashboard_for_every_authenticated_user(): void
     {
         $user = User::factory()->create();
-        $oldProject = Project::factory()->create(['owner_id' => $user->id]);
-        $newProject = Project::factory()->create(['owner_id' => $user->id]);
-        $oldProject->members()->attach($user->id, ['role' => Domain::ROLE_OWNER]);
-        $newProject->members()->attach($user->id, ['role' => Domain::ROLE_OWNER]);
+        $project = Project::factory()->create(['owner_id' => $user->id]);
+        $project->members()->attach($user->id, ['role' => Domain::ROLE_OWNER]);
 
         $this->actingAs($user)
             ->get(route('root'))
-            ->assertRedirect(route('workspace.show', $newProject));
+            ->assertRedirect(route('dashboard'));
     }
 
     public function test_root_redirects_non_member_to_dashboard(): void

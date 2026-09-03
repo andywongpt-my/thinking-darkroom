@@ -126,6 +126,29 @@ class ProposalAuthorityTest extends TestCase
         $this->assertSame(Domain::SELECTION_UNREVIEWED, $photo->selection_state);
     }
 
+    /** Empty drafts cannot enter the approval lifecycle. */
+    public function test_photographer_cannot_approve_empty_draft(): void
+    {
+        [$photographer, $agent, $project] = $this->makeWorld();
+        $draft = $this->service->createProposal(
+            $project,
+            $agent,
+            Domain::TYPE_CULL,
+            [],
+            'Waiting for agent generation.',
+            null,
+            Domain::STATE_DRAFT,
+        );
+
+        $this->actingAs($photographer)
+            ->postJson(route('proposals.approve', [$project, $draft]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['proposal']);
+
+        $this->assertSame(Domain::STATE_DRAFT, $draft->fresh()->status);
+        $this->assertDatabaseCount('photographer_decisions', 0);
+    }
+
     /** A rejected proposal cannot execute. */
     public function test_rejected_proposal_cannot_execute(): void
     {

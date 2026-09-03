@@ -400,6 +400,24 @@ describe('Sprint 3 — Workspace culling UI + registry certification', () => {
         expect(html).toContain('Keep');
     });
 
+    it('12b. links a QA finding to its photo tile', () => {
+        const html = mount(baseProps({
+            qaFindings: [{
+                id: 91,
+                severity: 'medium',
+                category: 'warmth_consistency',
+                message: 'Warmth drifts above the set expectation.',
+                photo_id: 101,
+                status: 'open',
+                details: null,
+            }],
+        }), { culling: CULLING_CONTEXT, analysis: PHOTO_ANALYSIS_101 });
+
+        expect(html).toContain('data-testid="qa-locate-frame-91"');
+        expect(html).toContain('Locate frame');
+        expect(html).toContain('data-testid="photo-tile-101"');
+    });
+
     it('13. NO human-action WebMCP tool exists (photographer decide is UI-only)', async () => {
         const ctx = (globalThis as unknown as { document: { modelContext: FakeContext } }).document.modelContext;
         const { cullingReadTools } = await import('@/webmcp/tools/culling');

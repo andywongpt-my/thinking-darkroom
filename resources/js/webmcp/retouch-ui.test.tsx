@@ -82,6 +82,7 @@ vi.mock('@/Layouts/AuthenticatedLayout', () => ({
 
 const WorkspaceModule = await import('@/Pages/Workspace');
 const WorkspacePage = WorkspaceModule.default as React.FC;
+const { retouchDraftForPhoto } = WorkspaceModule;
 
 /* ------------------------------------------------------------- webmcp fixture */
 
@@ -526,6 +527,34 @@ describe('Sprint 4 — Workspace retouch / QA / creative-memory UI + registry ce
         const html = mount(baseProps());
         expect(text(html)).toContain('Approve');
         expect(html).toContain('Propose Retouch Plan'); // agent proposal surface exists
+    });
+
+    it('10b. hides review actions for an empty draft proposal', () => {
+        const html = mount(baseProps({
+            proposals: [{
+                ...RETOUCH_PENDING_PROPOSAL,
+                id: 503,
+                type: 'cull',
+                status: 'draft',
+                items: [],
+            }],
+        }));
+
+        expect(html).toContain('0 item(s): awaiting agent generation');
+        expect(html).not.toMatch(/>\s*Approve\s*</);
+        expect(html).not.toMatch(/>\s*Reject\s*</);
+    });
+
+    it('10c. exposes editable agent proposal inputs and uses bounded photo values', () => {
+        const html = mount(baseProps({
+            request: { user: { id: 2, name: 'Agent', is_agent: true } },
+            permissions: { can_upload: false, can_photographer_act: false, can_execute: true },
+        }));
+        expect(html).toContain('data-testid="cull-rationale"');
+        expect(html).toContain('data-testid="retouch-exposure"');
+        expect(html).toContain('data-testid="retouch-contrast"');
+        expect(retouchDraftForPhoto({ analysis: { exposure: 0.8, contrast: -0.4 } })).toEqual({ exposure: 0.8, contrast: -0.4 });
+        expect(retouchDraftForPhoto({ exposure: 2, contrast: -2 })).toEqual({ exposure: 1, contrast: -1 });
     });
 
     it('11. renders the Reject UI for a pending retouch proposal', () => {
