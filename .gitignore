@@ -51,3 +51,9 @@ Thumbs.db
 /scripts/
 .vercel
 .env*
+
+# Hermes audit artifacts (local only)
+/.hermes-audits
+/OBS-DEMO-SCRIPT.md
+/repro-execute-500.php
+/skills-lock.json
