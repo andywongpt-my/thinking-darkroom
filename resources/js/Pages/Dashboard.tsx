@@ -807,11 +807,12 @@ export default function Dashboard({ projects, can_create_project, project_meta, 
                             Your darkroom: the agent develops, you keep the final cut.
                         </p>
                     </div>
+                    {/* Right cluster: status stamp sits left of the primary CTA so the button hugs the page edge */}
                     <div className="flex flex-wrap items-center gap-4">
-                        {canCreateProject && <CreateProjectDialog />}
                         <p className="font-mono text-xs uppercase tracking-[0.2em] text-zinc-600" suppressHydrationWarning>
                             {now ? `SAFELIGHT ON · ${new Date(now).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}` : 'SAFELIGHT ON'}
                         </p>
+                        {canCreateProject && <CreateProjectDialog />}
                     </div>
                 </div>
             }
