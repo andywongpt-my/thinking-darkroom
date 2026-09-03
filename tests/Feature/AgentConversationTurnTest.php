@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Services\AgentTurnService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
+use Ramsey\Uuid\Uuid;
 use Tests\TestCase;
 
 class AgentConversationTurnTest extends TestCase
@@ -50,11 +51,17 @@ class AgentConversationTurnTest extends TestCase
             ->assertJsonPath('message.author.id', $this->agent->id)
             ->assertJsonPath('message.author.kind', AgentConversationMessage::AUTHOR_AGENT)
             ->assertJsonPath('message.author.name', 'Darkroom Agent')
-            ->assertJsonPath('message.client_message_id', 'agent-turn:'.$triggerId)
+            ->assertJsonPath('message.client_message_id', $this->expectedTurnKey($triggerId))
             ->assertJsonMissingPath('skipped');
 
         $this->assertStringContainsString('I reviewed the project: 2 photos', $response->json('message.body'));
         $this->assertStringContainsString('the photographer decides', $response->json('message.body'));
+
+        $this->assertMatchesRegularExpression(
+            '/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/',
+            (string) $response->json('message.client_message_id'),
+            'The turn idempotency key must be a valid UUIDv5 (Postgres uuid column).'
+        );
 
         $audit = AgentToolCall::query()
             ->where('project_id', $this->project->id)
@@ -87,7 +94,7 @@ class AgentConversationTurnTest extends TestCase
             1,
             AgentConversationMessage::query()
                 ->where('project_id', $this->project->id)
-                ->where('client_message_id', 'agent-turn:'.$triggerId)
+                ->where('client_message_id', $this->expectedTurnKey($triggerId))
                 ->count(),
         );
     }
@@ -148,8 +155,20 @@ class AgentConversationTurnTest extends TestCase
             ->assertForbidden();
 
         $this->assertDatabaseMissing('agent_conversation_messages', [
-            'client_message_id' => 'agent-turn:'.$triggerId,
+            'client_message_id' => $this->expectedTurnKey($triggerId),
         ]);
+    }
+
+    /**
+     * Mirrors the service's deterministic UUIDv5 idempotency key so tests can
+     * assert the exact value without knowing the namespace constant.
+     */
+    private function expectedTurnKey(int $triggerId): string
+    {
+        return Uuid::uuid5(
+            '0f6e2a8e-9c3d-4f7a-9e1b-2c5d4e6f7a8b',
+            'agent-turn:'.$this->project->id.':'.$triggerId,
+        )->toString();
     }
 
     private function createHumanTrigger(): int

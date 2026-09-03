@@ -9,6 +9,7 @@ use App\Models\Project;
 use App\Services\Culling\ContextAwareCullingService;
 use App\Services\Qa\ConsistencyQaService;
 use Illuminate\Http\Request;
+use Ramsey\Uuid\Uuid;
 
 /**
  * Runs the synchronous, deterministic response path for a human conversation
@@ -17,6 +18,12 @@ use Illuminate\Http\Request;
  */
 class AgentTurnService
 {
+    /**
+     * Private namespace for deterministic UUIDv5 idempotency keys. Generated
+     * once per deploy surface; never exposed outside this service.
+     */
+    private const TURN_IDEMPOTENCY_NAMESPACE = '0f6e2a8e-9c3d-4f7a-9e1b-2c5d4e6f7a8b';
+
     public function __construct(
         private readonly AgentConversationService $conversation,
         private readonly ContextAwareCullingService $culling,
@@ -45,7 +52,15 @@ class AgentTurnService
             return $this->skipped('non_human_trigger');
         }
 
-        $clientMessageId = 'agent-turn:'.$trigger->id;
+        // The idempotency key must be a valid UUID: the column is a Postgres
+        // uuid type and any non-UUID literal makes the dedup lookup fail with
+        // SQLSTATE 22P02 before a reply can be persisted. A name-based UUIDv5
+        // keeps the key deterministic per trigger, so a browser retry resolves
+        // to the same reply on both SQLite (tests) and Neon Postgres (prod).
+        $clientMessageId = Uuid::uuid5(
+            self::TURN_IDEMPOTENCY_NAMESPACE,
+            'agent-turn:'.$project->id.':'.$trigger->id,
+        )->toString();
         $existingReply = $project->agentConversationMessages()
             ->where('author_kind', AgentConversationMessage::AUTHOR_AGENT)
             ->where('client_message_id', $clientMessageId)
