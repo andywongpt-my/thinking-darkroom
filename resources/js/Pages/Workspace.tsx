@@ -2199,8 +2199,10 @@ export default function Workspace({
                         </Link>
                         <h2 className="truncate text-xl font-semibold leading-tight text-zinc-100">{project.name}</h2>
                     </div>
-                    <CreativeRoomLink projectId={project.id} />
-                    <ReportLink projectId={project.id} />
+                    <div className="flex shrink-0 items-center gap-2">
+                        <CreativeRoomLink projectId={project.id} />
+                        <ReportLink projectId={project.id} />
+                    </div>
                 </div>
             }
         >
