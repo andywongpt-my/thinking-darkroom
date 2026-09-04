@@ -84,6 +84,7 @@ export default function AgentActivityFeed({
 
     return (
         <section
+            id="agent-activity-view"
             data-testid="agent-activity-feed"
             aria-label="Agent activity"
             className="flex min-h-64 flex-1 flex-col overflow-hidden bg-zinc-950/60"

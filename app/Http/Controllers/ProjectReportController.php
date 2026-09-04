@@ -6,6 +6,7 @@ use App\Domain\Domain;
 use App\Models\PhotoDerivative;
 use App\Models\Project;
 use App\Services\Media\MediaStore;
+use App\Services\Reports\ZipWriter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response;
 use Inertia\Inertia;
@@ -28,6 +29,13 @@ use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
  */
 class ProjectReportController extends Controller
 {
+    private MediaStore $media;
+
+    public function __construct()
+    {
+        $this->media = app(MediaStore::class);
+    }
+
     public function show(Request $request, Project $project): InertiaResponse
     {
         $this->authorizeMember($request, $project);
@@ -49,6 +57,43 @@ class ProjectReportController extends Controller
             'Content-Type' => 'text/markdown; charset=UTF-8',
             'Content-Disposition' => 'inline; filename="'.$filename.'"',
             'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
+    /**
+     * GET /projects/{project}/report/deliverables.zip — packaged handoff of
+     * every ACTIVE agent-executed derivative plus a SESSION-REPORT.md copy
+     * of the same audit trail the page renders. Human-only like the rest of
+     * the report surface.
+     */
+    public function deliverablesZip(Request $request, Project $project): SymfonyResponse
+    {
+        $this->authorizeMember($request, $project);
+
+        $payload = $this->payload($project);
+        $zip = new ZipWriter;
+
+        // Derivatives only — reverted rows are archived experiments, not handoff.
+        foreach ($payload['derivatives'] as $d) {
+            if ($d['reverted_at'] !== null || $d['url'] === null || $d['storage_read_path'] === null) {
+                continue;
+            }
+            $bytes = $this->media->read($d['storage_read_path']);
+            $extension = strtolower(pathinfo((string) $d['storage_read_path'], PATHINFO_EXTENSION)) ?: 'jpg';
+            $safeName = preg_replace('/[^A-Za-z0-9._-]+/', '_', (string) $d['filename']);
+            $zip->add("derivatives/{$safeName}-{$d['id']}.{$extension}", $bytes);
+        }
+
+        // The report travels with the deliverables.
+        $zip->add('SESSION-REPORT.md', $this->toMarkdown($payload));
+
+        $slug = preg_replace('/[^a-z0-9]+/', '-', strtolower($project->name));
+        $filename = 'deliverables-'.trim((string) $slug, '-').'-'.$project->id.'.zip';
+
+        return Response::make($zip->toBytes(), 200, [
+            'Content-Type' => 'application/zip',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+            'Content-Length' => (string) strlen($zip->toBytes()),
         ]);
     }
 
@@ -148,6 +193,9 @@ class ProjectReportController extends Controller
                 'filename' => $d->photo?->filename,
                 'source_url' => MediaStore::publicUrl($d->photo?->path),
                 'url' => MediaStore::publicUrl($d->storage_path),
+                // Raw storage path for server-side reads (zip packaging).
+                // read() handles both local-disk paths and trusted Blob URLs.
+                'storage_read_path' => $d->storage_path,
                 'adjustments' => $d->adjustments ?? [],
                 'provenance' => $d->provenance,
                 'reverted_at' => $d->reverted_at?->toISOString(),

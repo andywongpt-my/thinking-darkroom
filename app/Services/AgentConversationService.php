@@ -79,7 +79,9 @@ class AgentConversationService
                 ->all(),
             'latest_id' => $messages->last()?->id,
             'has_older' => $hasOlder,
-            'awaiting_reply_since' => $latestHumanMessage?->created_at?->toISOString(),
+            'awaiting_reply_since' => $unreadForAgent > 0
+                ? $latestHumanMessage?->created_at?->toISOString()
+                : null,
             'unread_for_agent' => $unreadForAgent,
         ];
     }

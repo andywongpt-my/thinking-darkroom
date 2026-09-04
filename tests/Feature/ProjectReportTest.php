@@ -11,6 +11,7 @@ use App\Models\Proposal;
 use App\Models\QaFinding;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -183,6 +184,100 @@ class ProjectReportTest extends TestCase
         $this->assertStringContainsString('_No proposals were made in this session._', $markdown);
         $this->assertStringContainsString('_No decisions recorded._', $markdown);
         $this->assertStringContainsString('_No derivatives were executed in this session._', $markdown);
+    }
+
+    public function test_deliverables_zip_packages_active_derivatives_with_report(): void
+    {
+        [$owner, $project] = $this->makeProjectWithOwner();
+        $this->seedExecutedSession($project, $owner);
+
+        $response = $this->actingAs($owner)
+            ->get(route('projects.report.deliverables-zip', $project));
+
+        $response->assertOk();
+        $this->assertSame('application/zip', $response->headers->get('Content-Type'));
+        $this->assertSame('attachment', substr((string) $response->headers->get('Content-Disposition'), 0, 11));
+
+        $bytes = $response->getContent();
+        $this->assertSame("PK\x03\x04", substr((string) $bytes, 0, 4));
+
+        // Parse the archive with PharData (the strongest available oracle —
+        // php-zip is absent on this host) and verify entries byte-for-byte.
+        $tmp = tempnam(sys_get_temp_dir(), 'dlv');
+        file_put_contents($tmp, $bytes);
+        $phar = new \PharData($tmp);
+        $names = [];
+        foreach (new \RecursiveIteratorIterator($phar) as $file) {
+            /** @var \PharFileInfo $file */
+            $names[] = $file->getFilename();
+        }
+
+        // One active derivative + SESSION-REPORT.md; the reverted row excluded.
+        $derivativeEntries = array_values(array_filter($names, fn ($n) => str_ends_with($n, '.jpg')));
+        $this->assertCount(1, $derivativeEntries);
+        $this->assertContains('SESSION-REPORT.md', $names);
+
+        /** @var \PharFileInfo $report */
+        $report = $phar['SESSION-REPORT.md'] ?? null;
+        $this->assertNotFalse($report);
+        $reportBody = file_get_contents($report->getPathname());
+        $this->assertStringContainsString('# Session Report — Golden Hour', $reportBody);
+        $this->assertStringContainsString('Deliverables: 1 active (1 reverted)', $reportBody);
+
+        // The derivative bytes are the exact stored bytes (JPEG marker).
+        $derivativePath = null;
+        foreach (new \RecursiveIteratorIterator($phar) as $file) {
+            if (str_ends_with($file->getFilename(), '.jpg')) {
+                $derivativePath = $file->getPathname();
+            }
+        }
+        $derivativeBytes = file_get_contents((string) $derivativePath);
+        $expected = Storage::disk('public')->get('project-1/derivatives/IMG_HERO_v1.jpg');
+        $this->assertSame($expected, $derivativeBytes);
+
+        unlink($tmp);
+    }
+
+    public function test_deliverables_zip_is_honest_when_nothing_was_executed(): void
+    {
+        [$owner, $project] = $this->makeProjectWithOwner();
+
+        $bytes = $this->actingAs($owner)
+            ->get(route('projects.report.deliverables-zip', $project))
+            ->assertOk()
+            ->getContent();
+
+        $this->assertSame("PK\x03\x04", substr((string) $bytes, 0, 4));
+
+        $tmp = tempnam(sys_get_temp_dir(), 'dlv');
+        file_put_contents($tmp, $bytes);
+        $phar = new \PharData($tmp);
+        $names = [];
+        foreach (new \RecursiveIteratorIterator($phar) as $file) {
+            $names[] = $file->getFilename();
+        }
+        $this->assertSame(['SESSION-REPORT.md'], $names);
+        $this->assertStringContainsString(
+            '_No derivatives were executed in this session._',
+            file_get_contents($phar['SESSION-REPORT.md']->getPathname())
+        );
+        unlink($tmp);
+    }
+
+    public function test_agents_and_outsiders_cannot_download_deliverables_zip(): void
+    {
+        [$owner, $project] = $this->makeProjectWithOwner();
+        $agent = User::factory()->agent()->create();
+        $project->members()->attach($agent->id, ['role' => Domain::ROLE_AGENT]);
+        $outsider = User::factory()->create();
+
+        $this->actingAs($agent)
+            ->get(route('projects.report.deliverables-zip', $project))
+            ->assertForbidden();
+
+        $this->actingAs($outsider)
+            ->get(route('projects.report.deliverables-zip', $project))
+            ->assertForbidden();
     }
 
     public function test_agent_members_are_forbidden_from_report_page_and_markdown(): void

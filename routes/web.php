@@ -127,4 +127,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('projects.report.show');
     Route::get('/projects/{project}/report/markdown', [ProjectReportController::class, 'markdown'])
         ->name('projects.report.markdown');
+    Route::get('/projects/{project}/report/deliverables.zip', [ProjectReportController::class, 'deliverablesZip'])
+        ->name('projects.report.deliverables-zip');
 });

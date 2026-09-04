@@ -140,7 +140,7 @@ class AgentConversationTest extends TestCase
         $this->actingAs($this->agent)
             ->getJson(route('api.webmcp.conversation.index', $this->project))
             ->assertOk()
-            ->assertJsonPath('awaiting_reply_since', $firstCreatedAt)
+            ->assertJsonPath('awaiting_reply_since', null)
             ->assertJsonPath('unread_for_agent', 0);
 
         $second = $this->actingAs($this->photographer)
