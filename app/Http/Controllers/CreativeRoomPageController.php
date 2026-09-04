@@ -125,7 +125,11 @@ class CreativeRoomPageController extends Controller
                 'can_chat' => $canChat,
             ],
             'webmcp' => [
-                'available' => true,
+                // Honest evidence: the server cannot know whether THIS client
+                // implements document.modelContext — the frontend probes that
+                // at runtime (registry snapshot). This prop only states that
+                // the deployment ships the WebMCP tool surface.
+                'server_supported' => true,
             ],
             // C15: the dynamic apply_approved_plan tool must reconcile with the
             // real proposal lifecycle, not a permanently-null stub.

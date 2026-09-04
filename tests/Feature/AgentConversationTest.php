@@ -203,4 +203,36 @@ class AgentConversationTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors('before');
     }
+
+    public function test_agent_posting_through_the_web_route_leaves_an_audit_trail(): void
+    {
+        // ProjectPolicy::message allows an agent project member to post here.
+        // The audit trail must match the audited WebMCP reply endpoint so an
+        // agent can never write conversation history without a trace.
+        $this->actingAs($this->agent)
+            ->postJson(route('agent-conversation.store', $this->project), [
+                'body' => 'Draft cull proposal ready for review.',
+                'client_message_id' => (string) Str::uuid(),
+            ])
+            ->assertCreated();
+
+        $this->assertDatabaseHas('agent_tool_calls', [
+            'project_id' => $this->project->id,
+            'agent_id' => $this->agent->id,
+            'tool_name' => 'agent_conversation_web_store',
+            'authority' => Domain::AUTHORITY_PROPOSE,
+        ]);
+    }
+
+    public function test_human_photographer_posts_leave_no_agent_tool_call_row(): void
+    {
+        $this->actingAs($this->photographer)
+            ->postJson(route('agent-conversation.store', $this->project), [
+                'body' => 'Which frame best matches the adopted direction?',
+                'client_message_id' => (string) Str::uuid(),
+            ])
+            ->assertCreated();
+
+        $this->assertDatabaseCount('agent_tool_calls', 0);
+    }
 }

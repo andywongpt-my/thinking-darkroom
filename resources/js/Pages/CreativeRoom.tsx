@@ -51,7 +51,7 @@ interface PageProps extends Record<string, unknown> {
     permissions?: {
         can_chat?: boolean;
     };
-    webmcp: { available: boolean };
+    webmcp: { server_supported: boolean };
     eligible_proposal_id?: number | null;
 }
 

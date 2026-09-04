@@ -198,7 +198,11 @@ class WorkspacePageController extends Controller
                 'can_chat' => $canChat,
             ],
             'webmcp' => [
-                'available' => true,
+                // Honest evidence: the server cannot know whether THIS client
+                // implements document.modelContext — the frontend probes that
+                // at runtime (registry snapshot). This prop only states that
+                // the deployment ships the WebMCP tool surface.
+                'server_supported' => true,
             ],
             // Sprint 3 — server-rendered context-aware culling state so the
             // first paint already carries recommendations (no extra fetch).

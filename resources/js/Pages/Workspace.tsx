@@ -154,7 +154,7 @@ interface PageProps extends Record<string, unknown> {
         can_execute: boolean;
         can_chat?: boolean;
     };
-    webmcp: { available: boolean };
+    webmcp: { server_supported: boolean };
     initialCulling?: CullingContext | null;
     flash?: { success?: string };
     /** P4 — photos still awaiting VLM evidence after this request's batch. */
