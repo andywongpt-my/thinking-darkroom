@@ -50,21 +50,54 @@ class ContextAwareCullingService
      * Existing evidence stays stable except the explicit signature of a prior
      * unavailable asset: all technical fields are unknown at zero confidence
      * and every creative field is unobserved despite demo pixel provenance.
+     *
+     * Serverless budget (P4): when the bound provider is the VLM, at most
+     * VLM_BATCH_LIMIT photos use the vision model per invocation; every
+     * photo BEYOND the limit is still analyzed by the deterministic GD
+     * fallback provider so a batch upload always produces honest evidence
+     * inside one lambda window. Callers receive ->remaining so the client
+     * can loop until every photo has VLM-grade observations.
      */
-    public function analyzeProject(Project $project): CullingAnalysisRun
+    public function analyzeProject(Project $project, ?User $actingUser = null): CullingAnalysisRun
     {
         $created = 0;
         $refreshed = 0;
+        $vlmBudgetLeft = $this->vlmBatchLimit();
 
         $photos = $project->photos()->orderBy('id')->get();
 
         foreach ($photos as $photo) {
             $existing = PhotoObservationRecord::where('photo_id', $photo->id)->first();
-            if ($existing && ! $this->isUnavailableAssetObservation($existing)) {
+
+            // Skip final evidence. A row is re-analyzable when it carries the
+            // unavailable-asset signature, or — with the VLM enabled — when
+            // it is a deterministic GD row upgradeable to VLM evidence.
+            if ($existing
+                && ! $this->isUnavailableAssetObservation($existing)
+                && ! $this->isVlmUpgradeCandidate($existing, $actingUser)) {
                 continue;
             }
 
-            $observation = $this->provider->observe($photo);
+            // P4 budget: the VLM observes at most vlmBatchLimit photos per
+            // invocation. When the budget is exhausted on an upgradeable row,
+            // keep the honest GD row untouched (it is already final-quality
+            // evidence for THIS pass) and leave it eligible for the next
+            // invocation; brand-new rows still get an immediate GD
+            // observation so no photo ever lacks evidence.
+            $useVlm = $vlmBudgetLeft > 0;
+            if (! $useVlm && $existing && ! $this->isUnavailableAssetObservation($existing)) {
+                continue;
+            }
+
+            $observation = $useVlm
+                ? ($this->provider instanceof VlmPhotoAnalysisProvider
+                    ? $this->provider->observeAs($actingUser, $photo)
+                    : $this->provider->observe($photo))
+                : $this->gdFallbackProvider()->observe($photo);
+
+            if ($useVlm) {
+                $vlmBudgetLeft--;
+            }
             $attributes = [
                 'payload' => $observation->toArray(),
                 'provider' => $observation->provider,
@@ -96,7 +129,65 @@ class ContextAwareCullingService
             $created++;
         }
 
-        return new CullingAnalysisRun($created, $refreshed);
+        return new CullingAnalysisRun($created, $refreshed, $this->countVlmEligible($project, $vlmBudgetLeft, $actingUser));
+    }
+
+    /**
+     * VLM observations allowed per analyze invocation (P4 serverless budget:
+     * a 60s lambda fits roughly 4 vision calls with retry headroom).
+     */
+    private function vlmBatchLimit(): int
+    {
+        return max(1, (int) config('services.vlm.batch_limit', 4));
+    }
+
+    /**
+     * A deterministic GD observation row becomes re-analyzable when the VLM
+     * is enabled: its evidence upgrades to external_vision_model. Only the
+     * bound provider decides whether the VLM is on — no config peeking.
+     */
+    private function isVlmUpgradeCandidate(PhotoObservationRecord $record, ?User $actingUser = null): bool
+    {
+        return $record->provider === Domain::OBSERVATION_PROVIDER_DEMO
+            && $this->provider instanceof VlmPhotoAnalysisProvider
+            && $this->vlmSettingsAvailableFor($actingUser);
+    }
+
+    /** Whether the VLM has a usable key+model for the acting user (or env). */
+    private function vlmSettingsAvailableFor(?User $actingUser): bool
+    {
+        if (! $this->provider instanceof VlmPhotoAnalysisProvider) {
+            return false;
+        }
+
+        $settings = $this->provider->settingsFor($actingUser);
+
+        return $settings['key'] !== '' && $settings['model'] !== '';
+    }
+
+    /**
+     * The deterministic GD provider, used for budget-overflow rows so every
+     * photo always carries honest evidence after an analyze invocation.
+     */
+    private function gdFallbackProvider(): PhotoAnalysisProvider
+    {
+        return app(DemoPhotoAnalysisProvider::class);
+    }
+
+    /**
+     * How many photos still lack a VLM observation and would be eligible on
+     * the next invocation. Zero means the project is fully VLM-observed (or
+     * the VLM is disabled entirely — then GD rows are already final).
+     */
+    private function countVlmEligible(Project $project, int $budgetLeft, ?User $actingUser = null): int
+    {
+        if (! $this->vlmSettingsAvailableFor($actingUser)) {
+            return 0;
+        }
+
+        return PhotoObservationRecord::where('project_id', $project->id)
+            ->where('provider', Domain::OBSERVATION_PROVIDER_DEMO)
+            ->count();
     }
 
     /**
@@ -784,11 +875,17 @@ class ContextAwareCullingService
 /**
  * Outcome of one explicit ANALYZE run. Created observations and corrected
  * prior asset-unavailable observations stay distinct for an honest UI/API.
+ *
+ * remaining > 0 means the serverless VLM budget (services.vlm.batch_limit)
+ * was exhausted before every photo got vision evidence: photos beyond the
+ * budget keep their deterministic GD row (or none yet) and are eligible on
+ * the NEXT analyze invocation — clients loop until remaining === 0.
  */
 final readonly class CullingAnalysisRun
 {
     public function __construct(
         public int $created,
         public int $refreshed,
+        public int $remaining = 0,
     ) {}
 }

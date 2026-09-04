@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Services\Retouch\DemoRetouchRenderer;
+use App\Services\Retouch\ProRetouchRenderer;
 use App\Services\Retouch\RetouchRenderer;
 use App\Support\GdAvailability;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -18,11 +19,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        // Sprint 4 — the retouch renderer binding. The demo ships the
-        // deterministic GD DemoRetouchRenderer; a real engine later is a
-        // one-line swap here.
+        // Sprint 4 — the retouch renderer binding. Production runs the
+        // upgraded ProRetouchRenderer (same six-key contract, better
+        // algorithms); the deterministic DemoRetouchRenderer stays one line
+        // away for A/B and fixture parity.
         $this->app->singleton(RetouchRenderer::class, function ($app) {
-            return new DemoRetouchRenderer($app->make(GdAvailability::class));
+            return new ProRetouchRenderer($app->make(GdAvailability::class));
         });
     }
 

@@ -3,6 +3,7 @@
 namespace App\Services\Retouch;
 
 use App\Domain\Culling\PhotoObservation;
+use App\Domain\Domain;
 use App\Models\Project;
 use App\Services\CreativeRoomService;
 use App\Services\Culling\ContextAwareCullingService;
@@ -100,6 +101,13 @@ class ContextAwareRetouchService
         // ---- base adjustments from measured technical state ----
         $adjustments = [];
         $influencedBy = [];
+
+        // P3b provenance: when the observation came from the vision model,
+        // stamp it — the audit trail must show a VLM-sourced recommendation
+        // apart from a deterministic-pixel one.
+        if ($observation->provider === Domain::OBSERVATION_PROVIDER_VLM) {
+            $influencedBy[] = 'vlm.vision_observation';
+        }
 
         // Exposure correction is driven by the MEAN LUMINANCE the provider
         // measured, not by the label alone — the same measurement always

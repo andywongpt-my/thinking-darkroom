@@ -226,6 +226,9 @@ final class Domain
     /** Honest renderer attribution stored on every derivative. */
     public const RENDERER_PROVENANCE_DEMO = 'demo_gd_renderer_deterministic';
 
+    /** Production renderer: same 6-key contract, upgraded algorithms. */
+    public const RENDERER_PROVENANCE_PRO = 'pro_gd_renderer_v1';
+
     /* ---------------------------------- misc ----------------------------------- */
 
     public const QA_SEVERITIES = ['info', 'warning', 'error', 'critical'];

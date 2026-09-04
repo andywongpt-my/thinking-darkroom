@@ -54,6 +54,34 @@ return [
         'key' => env('AGENT_LLM_API_KEY'),
         'model' => env('AGENT_LLM_MODEL'),
         'timeout' => (int) env('AGENT_LLM_TIMEOUT', 20),
+        // Multimodal agent turns: when true and the bound model supports
+        // vision, the agent LLM also SEES thumbnails of the top candidate
+        // frames instead of reasoning over JSON labels alone.
+        'vision' => (bool) env('AGENT_LLM_VISION', true),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Vision analysis provider (photo observations)
+    |--------------------------------------------------------------------------
+    |
+    | Production photo analysis: an OpenAI-compatible vision-language model
+    | (OpenRouter by default, sharing the agent_llm key unless overridden)
+    | turns real uploaded pixels into structured technical + creative
+    | observations. Server-side validation coerces the model's JSON against
+    | the PhotoObservation contract; failures fall back to the deterministic
+    | GD pixel-statistics provider with honest provenance either way.
+    |
+    | Leaving VLM_API_KEY (or AGENT_LLM_API_KEY) empty disables the VLM
+    | entirely — analysis then uses only on-device pixel statistics.
+    |
+    */
+
+    'vlm' => [
+        'base_url' => env('VLM_BASE_URL', env('AGENT_LLM_BASE_URL', 'https://openrouter.ai/api/v1')),
+        'key' => env('VLM_API_KEY', env('AGENT_LLM_API_KEY')),
+        'model' => env('VLM_MODEL', 'google/gemini-2.5-flash'),
+        'timeout' => (int) env('VLM_TIMEOUT', 25),
     ],
 
 ];

@@ -125,7 +125,7 @@ class CullingController extends Controller
 
         $start = hrtime(true);
 
-        $run = $this->culling->analyzeProject($project);
+        $run = $this->culling->analyzeProject($project, $request->user());
         $observations = $this->culling->observationsFor($project);
 
         // ANALYZE authority: this run PERSISTS photo_observations (non-final
@@ -138,6 +138,7 @@ class CullingController extends Controller
                 'newly_analyzed' => $run->created,
                 'refreshed_observations' => $run->refreshed,
                 'total_observed' => count($observations),
+                'vlm_remaining' => $run->remaining,
                 'duration_ms' => (hrtime(true) - $start) / 1e6,
             ],
         );
@@ -148,6 +149,9 @@ class CullingController extends Controller
             'newly_analyzed' => $run->created,
             'refreshed_observations' => $run->refreshed,
             'total_observed' => count($observations),
+            // P4 budget protocol: >0 → the serverless VLM batch limit was hit;
+            // call analyze again to upgrade the remaining photos.
+            'vlm_remaining' => $run->remaining,
             'observations' => collect($observations)
                 ->map(fn (PhotoObservation $o) => $this->observationPayload($o))
                 ->values(),

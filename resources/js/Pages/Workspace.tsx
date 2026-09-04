@@ -157,6 +157,8 @@ interface PageProps extends Record<string, unknown> {
     webmcp: { available: boolean };
     initialCulling?: CullingContext | null;
     flash?: { success?: string };
+    /** P4 — photos still awaiting VLM evidence after this request's batch. */
+    vlm_remaining?: number;
     /** Sprint 4 — retouch truth card (three-layer history + real before/after). */
     retouchCard?: RetouchCard | null;
     /** Sprint 4 — persisted consistency-QA findings. */
@@ -1624,7 +1626,19 @@ export default function Workspace({
     const runAnalyze = async () => {
         setBusy('analyze');
         try {
-            const res = await webmcpApi.analyzeProjectPhotos(project.id);
+            // P4 budget loop: each invocation vision-analyzes up to the
+            // serverless batch limit; vlm_remaining > 0 → keep going until
+            // every photo carries VLM-grade evidence.
+            let res = await webmcpApi.analyzeProjectPhotos(project.id);
+            let loops = 0;
+            while (res.ok && res.data && (res.data as { vlm_remaining?: number }).vlm_remaining !== undefined
+                && ((res.data as { vlm_remaining?: number }).vlm_remaining ?? 0) > 0 && loops < 25) {
+                loops += 1;
+                // Stay clear of the per-minute analysis rate limit when the
+                // loop runs fast (e.g. the VLM degraded to instant GD rows).
+                await new Promise((resolve) => setTimeout(resolve, 200));
+                res = await webmcpApi.analyzeProjectPhotos(project.id);
+            }
             if (res.ok && res.data) {
                 addActivity({
                     tool_name: 'analyze_project_photos',
@@ -1638,11 +1652,14 @@ export default function Workspace({
                 });
                 await loadCulling();
                 setAnalysisRefresh((version) => version + 1);
+                const remaining = (res.data as { vlm_remaining?: number }).vlm_remaining ?? 0;
                 setNotify({
                     kind: 'ok',
-                    text: res.data.refreshed_observations > 0
-                        ? `Analysis refreshed ${res.data.refreshed_observations} prior unavailable observation(s)${res.data.newly_analyzed > 0 ? ` and created ${res.data.newly_analyzed} new observation(s)` : ''}.`
-                        : `Analysis complete: ${res.data.newly_analyzed} new observation(s).`,
+                    text: remaining > 0
+                        ? `Analysis paused: ${remaining} photo(s) awaiting vision analysis — press Analyze again to continue.`
+                        : res.data.refreshed_observations > 0
+                            ? `Analysis refreshed ${res.data.refreshed_observations} prior unavailable observation(s)${res.data.newly_analyzed > 0 ? ` and created ${res.data.newly_analyzed} new observation(s)` : ''}.`
+                            : `Analysis complete: ${res.data.newly_analyzed} new observation(s).`,
                 });
             } else {
                 addActivity({
@@ -2061,6 +2078,13 @@ export default function Workspace({
             onSuccess: () => {
                 setBusy(null);
                 router.reload({ only: ['photos', 'proposals', 'retouchCard', 'activity', 'decisions', 'qaFindings', 'creativeMemories'] });
+                // P1b — upload auto-analysis: the backend already gave every
+                // photo a first observation; kick the vision-upgrade loop for
+                // whatever exceeded the serverless batch budget.
+                const rem = (page.props.vlm_remaining ?? 0) as number;
+                if (rem > 0) {
+                    void runAnalyze();
+                }
             },
             onError: (errors) => {
                 setBusy(null);

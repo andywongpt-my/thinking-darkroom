@@ -370,6 +370,16 @@ class DemoPhotoAnalysisProvider implements PhotoAnalysisProvider
         self::$runFingerprints = [];
     }
 
+    /**
+     * Public similarity-group entry for delegating providers (e.g. the VLM
+     * provider keeps grouping deterministic on-device). Reads the photo's
+     * pixels directly; the sidecar may override for unrenderable assets.
+     */
+    public function similarityGroupFor(Photo $photo): ?string
+    {
+        return $this->similarityGroupFromPixels($photo, $this->technicalFromPixels($photo));
+    }
+
     private function hammingDistance(string $a, string $b): int
     {
         $d = 0;

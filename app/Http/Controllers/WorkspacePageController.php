@@ -451,7 +451,26 @@ class WorkspacePageController extends Controller
             }
         }
 
-        return back()->with('flash', ['success' => 'Photos uploaded.']);
+        // P1b — auto-analysis on upload: every freshly uploaded photo gets an
+        // honest observation row in the SAME request (deterministic GD when
+        // the VLM budget is exhausted — still real pixel statistics). The
+        // flash tells the photographer what actually ran; the client then
+        // loops `analyze` while vlm_remaining > 0 to upgrade to VLM evidence.
+        try {
+            $run = app(ContextAwareCullingService::class)->analyzeProject($project, $request->user());
+            $vlmRemaining = $run->remaining;
+            $flash = 'Photos uploaded. Analysis started.';
+            if ($run->remaining > 0) {
+                $flash .= " Vision analysis continuing for {$run->remaining} more photo(s)…";
+            }
+        } catch (Throwable) {
+            // Never fail the upload over an analysis hiccup — the photos are
+            // safely stored; analysis retries on the next explicit call.
+            $flash = 'Photos uploaded.';
+            $vlmRemaining = 0;
+        }
+
+        return back()->with('flash', ['success' => $flash])->with('vlm_remaining', $vlmRemaining ?? 0);
     }
 
     /** DELETE /projects/{project}/photos/{photo} — remove one original and its derivatives. */
