@@ -10,10 +10,9 @@ use App\Http\Controllers\Webmcp\PhotoController;
 use App\Http\Controllers\Webmcp\ProposalController;
 use App\Http\Controllers\Webmcp\QaController;
 use App\Http\Controllers\Webmcp\WorkspaceController;
-use App\Http\Middleware\TouchAgentPresence;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['auth:sanctum', 'webmcp.agent-or-user', TouchAgentPresence::class])->group(function () {
+Route::middleware(['auth:sanctum', 'webmcp.agent-or-user', 'webmcp.touch-presence'])->group(function () {
     // Project-scoped liveness is operational state, not a WebMCP tool or activity record.
     Route::get('projects/{project}/presence', [AgentPresenceController::class, 'show'])->name('api.presence.show');
     Route::post('projects/{project}/presence/heartbeat', [AgentPresenceController::class, 'heartbeat'])
