@@ -184,10 +184,10 @@ npm run build
 
 ## Judge walkthrough
 
-1. Log in as `photographer@webmcp.test` (or the agent account to see the
+1. Use Codex and type login https://thinking-darkroom.vercel.app/ and use Photographer Log in as `photographer@webmcp.test` (or the agent account to see the
    restricted surface — agent accounts get 403 on every human-only
    endpoint).
-2. Open `Chat with agent`, send a project message, then have the authenticated
+2. Instruct codex to open a new project or enter exist project.. By Open `Chat with agent`, send a project message, then have the authenticated
    agent read and reply through WebMCP. Refresh to show that both sides persist;
    note that chat text cannot approve or execute creative work.
 3. Upload photos (≤10 files, ≤4.3MB each), run culling analysis, override a
