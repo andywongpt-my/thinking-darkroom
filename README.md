@@ -6,11 +6,6 @@ project for the WebMCP Challenge on Laravel 13 + Inertia v2 + React 18.
 
 **Live demo:** https://thinking-darkroom.vercel.app
 
-**Demo credentials:**
-
-- Photographer (human decision-maker): `photographer@webmcp.test` / `password`
-- Agent (WebMCP agent account): `agent@webmcp.test` / `password`
-
 ## What it demonstrates
 
 ### Context-Aware Culling
