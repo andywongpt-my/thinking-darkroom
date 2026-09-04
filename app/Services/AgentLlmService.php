@@ -3,9 +3,11 @@
 namespace App\Services;
 
 use App\Domain\Domain;
+use App\Models\Photo;
 use App\Models\Project;
 use App\Models\User;
 use App\Services\Culling\ContextAwareCullingService;
+use App\Services\Media\MediaStore;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -66,15 +68,73 @@ TXT;
     }
 
     /**
+     * P2c — whether reasoning is available for THIS trigger's photographer:
+     * their BYO key (encrypted DB) activates the LLM even when the
+     * deployment env has none. Deployment env keeps working as-is.
+     */
+    public function enabledFor(?User $user): bool
+    {
+        if ($user !== null && $user->aiApiKey() !== null) {
+            return true;
+        }
+
+        return $this->enabled();
+    }
+
+    /**
+     * P2c — effective reasoning settings for the acting photographer. A BYO
+     * key (encrypted DB) wins over deployment env; without any key the
+     * service stays disabled and the caller falls back to the deterministic
+     * composer. `source` lands in the audit ledger for honest provenance.
+     *
+     * @return array{key: string, model: string, base_url: string, source: string}|null
+     */
+    private function settingsFor(?User $user): ?array
+    {
+        if ($user !== null && $user->aiApiKey() !== null) {
+            $ai = $user->effectiveAiSettings();
+
+            return [
+                'key' => $ai['key'],
+                'model' => $ai['model'] !== '' ? $ai['model'] : self::DEFAULT_MODEL,
+                'base_url' => $ai['base_url'],
+                'source' => 'photographer_bring_your_own',
+            ];
+        }
+
+        $key = (string) config('services.agent_llm.key', '');
+
+        if ($key === '' || (string) config('services.agent_llm.model', '') === '') {
+            return null;
+        }
+
+        return [
+            'key' => $key,
+            'model' => (string) (config('services.agent_llm.model') ?: self::DEFAULT_MODEL),
+            'base_url' => (string) config('services.agent_llm.base_url', 'https://openrouter.ai/api/v1'),
+            'source' => 'deployment_env',
+        ];
+    }
+
+    /**
      * Produce one grounded LLM reply for a conversation turn. Returns null
      * when the LLM is disabled or fails — the caller falls back to the
      * deterministic composer so the turn never blocks on the model.
      *
+     * Multimodal (P2b): when services.agent_llm.vision is enabled the user
+     * message also carries downscaled inline images of the top candidate
+     * frames (by recommendation confidence), so the model reasons over the
+     * actual pixels IN ADDITION to the persisted evidence JSON. The images
+     * are extra context, never extra authority: the JSON evidence stays the
+     * only source of truth for claims.
+     *
      * @param  array{photos: int, selected: int, culled: int, unreviewed: int, observations: int, qa_open: int, pending_proposals: int, adopted_brief_title: string|null, has_intent: bool, provenance: string, soft_frames: int}  $summary
      */
-    public function reply(Project $project, string $message, array $summary, ?string $directionQuery): ?string
+    public function reply(Project $project, string $message, array $summary, ?string $directionQuery, ?User $actingUser = null): ?string
     {
-        if (! $this->enabled()) {
+        $settings = $this->settingsFor($actingUser);
+
+        if ($settings === null) {
             return null;
         }
 
@@ -84,8 +144,19 @@ TXT;
 
         $startedAt = hrtime(true);
 
+        $userContent = [['type' => 'text', 'text' => $userPrompt]];
+
+        // P2b — attach real thumbnails of the strongest candidate frames so
+        // the model can compare actual pixels, not just labels.
+        foreach ($this->topCandidateThumbnails($project, 4) as $thumb) {
+            $userContent[] = ['type' => 'image_url', 'image_url' => [
+                'url' => 'data:image/jpeg;base64,'.base64_encode($thumb['jpeg']),
+            ]];
+            $userContent[] = ['type' => 'text', 'text' => "Image: {$thumb['filename']} (photo #{$thumb['id']})"];
+        }
+
         try {
-            $response = Http::withToken((string) config('services.agent_llm.key'))
+            $response = Http::withToken($settings['key'])
                 ->withHeaders([
                     // OpenRouter attribution headers (optional but recommended).
                     'HTTP-Referer' => (string) config('app.url'),
@@ -94,11 +165,13 @@ TXT;
                 ->timeout((int) config('services.agent_llm.timeout', 20))
                 ->retry(1, 300)
                 ->acceptJson()
-                ->post(rtrim((string) config('services.agent_llm.base_url'), '/').'/chat/completions', [
-                    'model' => (string) (config('services.agent_llm.model') ?: self::DEFAULT_MODEL),
+                ->post(rtrim($settings['base_url'], '/').'/chat/completions', [
+                    'model' => $settings['model'],
                     'messages' => [
                         ['role' => 'system', 'content' => self::SYSTEM_PROMPT],
-                        ['role' => 'user', 'content' => $userPrompt],
+                        ['role' => 'user', 'content' => config('services.agent_llm.vision', true)
+                            ? $userContent
+                            : $userPrompt],
                     ],
                     'temperature' => 0.2,
                     'max_tokens' => 700,
@@ -135,9 +208,10 @@ TXT;
             'llm_reasoning',
             Domain::AUTHORITY_ANALYZE,
             [
-                'model' => (string) (config('services.agent_llm.model') ?: self::DEFAULT_MODEL),
+                'model' => $settings['model'],
                 'context_chars' => mb_strlen($context),
                 'direction_query' => $directionQuery,
+                'settings_source' => $settings['source'],
             ],
             [
                 'reply_chars' => mb_strlen($content),
@@ -248,5 +322,81 @@ TXT;
         // fallback keeps the audit write total if a race removed membership.
         /** @var User */
         return $agent ?? User::query()->where('is_agent', true)->orderBy('id')->firstOrFail();
+    }
+
+    /**
+     * P2b — downscaled JPEG thumbnails (longest edge 384, quality 72) of the
+     * top candidate frames, strongest recommendation confidence first. The
+     * model SEES these alongside the evidence JSON. Returns [] when GD is
+     * unavailable or no photo bytes are readable — vision context degrades
+     * to text-only, never blocks the turn.
+     *
+     * @return list<array{id: int, filename: string, jpeg: string}>
+     */
+    private function topCandidateThumbnails(Project $project, int $limit): array
+    {
+        if (! config('services.agent_llm.vision', true) || ! function_exists('imagecreatefromstring')) {
+            return [];
+        }
+
+        $recommendations = $this->culling->recommendForProject($project)['recommendations'] ?? [];
+
+        usort($recommendations, fn (array $a, array $b) => ($b['confidence'] ?? 0) <=> ($a['confidence'] ?? 0));
+
+        $thumbs = [];
+        $media = app(MediaStore::class);
+
+        foreach (array_slice($recommendations, 0, $limit) as $rec) {
+            $photoData = (array) ($rec['photo'] ?? []);
+            $photoId = $photoData['id'] ?? null;
+
+            if ($photoId === null) {
+                continue;
+            }
+
+            $photo = Photo::find($photoId);
+
+            if ($photo === null || ! $photo->path) {
+                continue;
+            }
+
+            try {
+                $bytes = $media->read($photo->path);
+            } catch (\Throwable) {
+                continue;
+            }
+
+            if ($bytes === '') {
+                continue;
+            }
+
+            $image = @imagecreatefromstring($bytes);
+
+            if ($image === false) {
+                continue;
+            }
+
+            $width = imagesx($image);
+            $height = imagesy($image);
+            $scale = min(1.0, 384 / max($width, $height));
+            $small = imagecreatetruecolor(max(1, (int) round($width * $scale)), max(1, (int) round($height * $scale)));
+            imagecopyresampled($small, $image, 0, 0, 0, 0, imagesx($small), imagesy($small), $width, $height);
+
+            ob_start();
+            imagejpeg($small, null, 72);
+            $jpeg = (string) ob_get_clean();
+            imagedestroy($small);
+            imagedestroy($image);
+
+            if ($jpeg !== '') {
+                $thumbs[] = [
+                    'id' => (int) $photoId,
+                    'filename' => (string) ($photoData['original_name'] ?? $photoData['filename'] ?? "photo #{$photoId}"),
+                    'jpeg' => $jpeg,
+                ];
+            }
+        }
+
+        return $thumbs;
     }
 }

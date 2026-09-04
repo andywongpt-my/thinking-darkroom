@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AgentConversationController;
 use App\Http\Controllers\AgentConversationTurnController;
+use App\Http\Controllers\AiSettingsController;
 use App\Http\Controllers\CreativeMemoryController;
 use App\Http\Controllers\CreativeRoomPageController;
 use App\Http\Controllers\CreativeRoomReviewController;
@@ -107,4 +108,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    // P2c — per-photographer BYO-key AI settings (key encrypted at rest,
+    // never echoed back). Human-only: agents are rejected in the controller.
+    Route::patch('/profile/ai-settings', [AiSettingsController::class, 'update'])
+        ->middleware('throttle:10,1')
+        ->name('profile.ai-settings.update');
 });

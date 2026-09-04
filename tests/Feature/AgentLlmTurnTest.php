@@ -112,12 +112,20 @@ class AgentLlmTurnTest extends TestCase
 
         // The request must have carried a system prompt with the authority
         // constraints and a JSON evidence payload built from real data.
+        // Multimodal turns: the user content is a parts ARRAY whose first
+        // part is the text; the thumbnail image parts follow when photos
+        // are readable. Both shapes must carry the evidence text.
         Http::assertSent(function ($request) {
             $payload = $request->data();
 
+            $userContent = $payload['messages'][1]['content'];
+            $userText = is_string($userContent)
+                ? $userContent
+                : collect($userContent)->where('type', 'text')->pluck('text')->implode("\n");
+
             return str_contains((string) $payload['messages'][0]['content'], 'NEVER claim to have changed')
-                && str_contains((string) $payload['messages'][1]['content'], '"photos"')
-                && str_contains((string) $payload['messages'][1]['content'], 'deterministic_recommendation');
+                && str_contains($userText, '"photos"')
+                && str_contains($userText, 'deterministic_recommendation');
         });
     }
 
@@ -239,6 +247,99 @@ class AgentLlmTurnTest extends TestCase
         $this->assertMatchesRegularExpression('/cull proposal \(#\d+\) is waiting for your approval/', $body);
 
         $this->assertSame(1, $this->project->proposals()->where('type', Domain::TYPE_CULL)->count());
+    }
+
+    /**
+     * P2c — a photographer's BYO key activates LLM reasoning even when the
+     * deployment env has none. The BYO credentials hit their preset
+     * endpoint; the audit ledger honestly records the settings source.
+     */
+    public function test_photographer_bring_your_own_key_activates_reasoning_without_env_key(): void
+    {
+        config([
+            'services.agent_llm.key' => null,
+            'services.agent_llm.model' => null,
+            'services.agent_llm.base_url' => 'https://llm.test/api/v1',
+        ]);
+
+        $this->photographer->setAiApiKey('sk-or-v1-byoooooooooooooooooooooooooooooooooooooooo');
+        $this->photographer->refresh();
+
+        $service = app(AgentLlmService::class);
+        $this->assertFalse($service->enabled());
+        $this->assertTrue($service->enabledFor($this->photographer));
+
+        // BYO settings resolve to the photographer's provider preset
+        // (OpenRouter) because no base_url override is stored — fake that
+        // endpoint, not the deployment env one.
+        Http::fake([
+            'openrouter.ai/api/v1/*' => Http::response([
+                'choices' => [[
+                    'message' => [
+                        'role' => 'assistant',
+                        'content' => 'Compared against the evidence, frame 02 carries the moment; the photographer decides.',
+                    ],
+                ]],
+            ], 200),
+        ]);
+
+        $response = $this->actingAs($this->photographer)
+            ->postJson(route('agent-conversation.turn', $this->project), [
+                'trigger_id' => $this->createHumanTrigger('Which frames carry this burst, and why?'),
+            ])
+            ->assertOk();
+
+        $body = (string) $response->json('message.body');
+        $this->assertStringContainsString('frame 02', $body);
+
+        // The BYO request used the decrypted key and the OpenRouter preset
+        // endpoint (no user base_url override stored).
+        Http::assertSent(function ($request) {
+            return str_contains((string) ($request->header('Authorization')[0] ?? ''), 'sk-or-v1-byo')
+                && str_starts_with($request->url(), 'https://openrouter.ai/api/v1/chat/completions');
+        });
+
+        // Honest provenance in the audit ledger.
+        $audit = AgentToolCall::query()
+            ->where('project_id', $this->project->id)
+            ->where('tool_name', 'llm_reasoning')
+            ->firstOrFail();
+        $this->assertSame('photographer_bring_your_own', $audit->input['settings_source'] ?? null);
+    }
+
+    public function test_env_settings_still_apply_when_photographer_has_no_own_key(): void
+    {
+        config([
+            'services.agent_llm.key' => 'env-key',
+            'services.agent_llm.model' => 'env-model:free',
+            'services.agent_llm.base_url' => 'https://llm.test/api/v1',
+        ]);
+
+        Http::fake([
+            'llm.test/api/v1/*' => Http::response([
+                'choices' => [[
+                    'message' => ['role' => 'assistant', 'content' => 'Deterministic evidence says frame 02 is strongest.'],
+                ]],
+            ], 200),
+        ]);
+
+        $response = $this->actingAs($this->photographer)
+            ->postJson(route('agent-conversation.turn', $this->project), [
+                'trigger_id' => $this->createHumanTrigger('Which frames stand out?'),
+            ])
+            ->assertOk();
+
+        $this->assertStringContainsString('frame 02', (string) $response->json('message.body'));
+
+        Http::assertSent(function ($request) {
+            return str_contains((string) $request->header('Authorization')[0] ?? '', 'env-key');
+        });
+
+        $audit = AgentToolCall::query()
+            ->where('project_id', $this->project->id)
+            ->where('tool_name', 'llm_reasoning')
+            ->firstOrFail();
+        $this->assertSame('deployment_env', $audit->input['settings_source'] ?? null);
     }
 
     private function createHumanTrigger(string $body = 'Please review this project.'): int

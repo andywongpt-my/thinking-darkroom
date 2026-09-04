@@ -90,7 +90,7 @@ class AgentTurnService
         $summary = $this->workspaceSummary($project);
 
         if ($summary['observations'] === 0 && $summary['photos'] > 0) {
-            $this->culling->analyzeProject($project);
+            $this->culling->analyzeProject($project, $trigger->user_id !== null ? User::find($trigger->user_id) : null);
         }
 
         // QA is an ANALYZE-stage persistence operation. It records findings,
@@ -104,6 +104,10 @@ class AgentTurnService
         // PROPOSAL the photographer still has to approve. Authority stays
         // intact: the turn only ever ANALYZEs and PROPOSEs.
         $intent = $this->detectIntent((string) $trigger->body);
+        // P2c — the trigger's human author brings their own BYO key when one
+        // is stored; agent accounts and guests fall back to deployment env.
+        $actingUser = $trigger->user_id !== null ? User::find($trigger->user_id) : null;
+        $actingUser = ($actingUser !== null && ! $actingUser->isAgent()) ? $actingUser : null;
         $proposalId = null;
         if ($intent['keepers'] || $intent['cull']) {
             $recommendations = $this->culling->recommendForProject($project);
@@ -121,7 +125,7 @@ class AgentTurnService
             // able to answer "why" and compare frames across the set. The
             // deterministic composer stays as the contract-preserving
             // fallback when the LLM is disabled or unreachable.
-            $reply = $this->llm->reply($project, (string) $trigger->body, $summary, $intent['direction_query']);
+            $reply = $this->llm->reply($project, (string) $trigger->body, $summary, $intent['direction_query'], $actingUser);
 
             if ($reply === null) {
                 $reply = $this->composeKeeperReply($summary, $recommendations, $intent, $proposalId);
@@ -129,7 +133,7 @@ class AgentTurnService
                 $reply .= "\nA cull proposal (#".$proposalId.') is waiting for your approval in the Proposals panel.';
             }
         } else {
-            $reply = $this->llm->reply($project, (string) $trigger->body, $summary, $intent['direction_query'])
+            $reply = $this->llm->reply($project, (string) $trigger->body, $summary, $intent['direction_query'], $actingUser)
                 ?? $this->composeReply($summary);
         }
 

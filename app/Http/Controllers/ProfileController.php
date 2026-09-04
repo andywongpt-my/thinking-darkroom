@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ProfileUpdateRequest;
+use App\Models\User;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,9 +19,21 @@ class ProfileController extends Controller
      */
     public function edit(Request $request): Response
     {
+        $user = $request->user();
+
         return Inertia::render('Profile/Edit', [
             'mustVerifyEmail' => $request->user() instanceof MustVerifyEmail,
             'status' => session('status'),
+            // P2c — BYO AI settings. The key NEVER round-trips: the client
+            // only learns whether one is stored (boolean), never its value.
+            'aiSettings' => [
+                'ai_provider' => $user->ai_provider,
+                'ai_model' => $user->ai_model,
+                'ai_base_url' => $user->ai_base_url,
+                'has_key' => $user->aiApiKey() !== null,
+                'providers' => User::AI_PROVIDER_PRESETS,
+                'default_models' => User::AI_PROVIDER_DEFAULT_MODELS,
+            ],
         ]);
     }
 
