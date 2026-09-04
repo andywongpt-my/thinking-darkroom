@@ -39,8 +39,11 @@ vi.mock('@/Layouts/AuthenticatedLayout', () => ({
         ),
 }));
 
-(globalThis as Record<string, unknown>).route = (name: string, id?: number) =>
-    name === 'projects.report.show' ? `/projects/${id}/report` : `/${name}`;
+(globalThis as Record<string, unknown>).route = (name: string, id?: number) => {
+    if (name === 'projects.report.show') return `/projects/${id}/report`;
+    if (name === 'workspace.show') return `/projects/${id}`;
+    return `/${name}`;
+};
 
 /* -------------------------------------------------------------- fixture */
 
@@ -202,9 +205,9 @@ describe('ProjectReport page', () => {
         // source and rendered images both render
         expect(html).toContain('src="https://blob.example/src.jpg"');
         expect(html).toContain('src="https://blob.example/retouched.jpg"');
-        // export affordance + back link
+        // export affordance + back-to-workspace link (route() mock: workspace.show → /projects/{id})
         expect(html).toContain('data-testid="report-export-md"');
-        expect(html).toContain('/projects/7/report');
+        expect(html).toContain('href="/projects/7"');
     });
 
     it('renders honest empty states when the session has no work yet', () => {
