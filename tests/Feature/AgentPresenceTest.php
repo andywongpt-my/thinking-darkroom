@@ -244,6 +244,30 @@ class AgentPresenceTest extends TestCase
         }
     }
 
+    public function test_external_agent_bearer_token_tool_call_touches_presence(): void
+    {
+        // The competition-harness path: a standalone agent (e.g. Codex) calls
+        // the WebMCP API with a personal access token, no browser session.
+        $agent = User::factory()->agent()->create(['name' => 'Darkroom Agent']);
+        $this->project->members()->attach($agent->id, ['role' => Domain::ROLE_AGENT]);
+        $token = $agent->createToken('agent-cli')->plainTextToken;
+
+        $touchedAt = CarbonImmutable::parse('2026-09-04 11:00:00');
+        CarbonImmutable::setTestNow($touchedAt);
+        try {
+            $this->withToken($token)
+                ->getJson(route('api.webmcp.context', [$this->project->id]))
+                ->assertOk();
+
+            $this->assertDatabaseHas('agent_presences', [
+                'project_id' => $this->project->id,
+                'user_id' => $agent->id,
+            ]);
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
     public function test_agent_tool_call_touch_does_not_create_activity_ledger_rows(): void
     {
         $agent = User::factory()->agent()->create(['name' => 'Darkroom Agent']);
