@@ -43,15 +43,15 @@ class TouchAgentPresence
             return $response;
         }
 
-        $role = $project->members()
-            ->where('project_members.user_id', $user->id)
-            ->value('project_members.role');
-
-        if ($role !== Domain::ROLE_AGENT) {
-            return $response;
-        }
-
         try {
+            $role = $project->members()
+                ->where('project_members.user_id', $user->id)
+                ->value('project_members.role');
+
+            if ($role !== Domain::ROLE_AGENT) {
+                return $response;
+            }
+
             AgentPresence::query()->upsert(
                 values: [[
                     'project_id' => $project->id,
