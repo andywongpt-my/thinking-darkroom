@@ -14,6 +14,7 @@ use App\Services\CreativeRoomService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Ramsey\Uuid\Uuid;
 use Tests\TestCase;
 
@@ -59,6 +60,22 @@ class AgentLlmTurnTest extends TestCase
             'services.agent_llm.model' => 'test-model:free',
             'services.agent_llm.timeout' => 5,
         ]);
+
+        // Real JPEG bytes behind every photo path so the P2b multimodal
+        // thumbnail builder can produce image parts (otherwise thumbnails
+        // are empty and no vision request shape is ever exercised).
+        if (function_exists('imagecreatetruecolor')) {
+            $img = imagecreatetruecolor(64, 48);
+            imagefilledrectangle($img, 0, 0, 63, 47, imagecolorallocate($img, 120, 120, 120));
+            ob_start();
+            imagejpeg($img, null, 80);
+            $jpeg = (string) ob_get_clean();
+            imagedestroy($img);
+
+            foreach ($this->project->photos()->get() as $photo) {
+                Storage::disk('public')->put($photo->path, $jpeg);
+            }
+        }
     }
 
     public function test_enabled_requires_key_and_model(): void
@@ -340,6 +357,55 @@ class AgentLlmTurnTest extends TestCase
             ->where('tool_name', 'llm_reasoning')
             ->firstOrFail();
         $this->assertSame('deployment_env', $audit->input['settings_source'] ?? null);
+    }
+
+    /**
+     * 2026-09-04 AGY LOW — self-healing multimodal degradation: a text-only
+     * bound model rejects image parts with HTTP 400. The SAME turn must be
+     * retried over the evidence JSON alone (reasoning survives), and the
+     * model must be remembered text-only so later turns send a single
+     * text-only request instead of repeating the doomed multimodal one.
+     */
+    public function test_text_only_model_400_degrades_to_text_and_is_remembered(): void
+    {
+        // First call (multimodal) → 400; retry (text-only) → 200; the
+        // remembered text-only flag makes the second turn text-only too.
+        Http::fake([
+            'llm.test/api/v1/*' => Http::sequence()
+                ->push(['error' => ['message' => 'model does not support image parts']], 400)
+                ->push([
+                    'choices' => [['message' => ['role' => 'assistant', 'content' => 'Frame 02 reads strongest from the evidence.']]],
+                ])
+                ->push([
+                    'choices' => [['message' => ['role' => 'assistant', 'content' => 'Second turn replies from evidence too.']]],
+                ]),
+        ]);
+
+        $first = $this->actingAs($this->photographer)
+            ->postJson(route('agent-conversation.turn', $this->project), [
+                'trigger_id' => $this->createHumanTrigger('Which frame stands out?'),
+            ])
+            ->assertOk();
+
+        $this->assertStringContainsString('Frame 02', (string) $first->json('message.body'));
+
+        // The recovered request must have been the text-only retry.
+        Http::assertSent(function ($request) {
+            $payload = $request->data();
+            $content = $payload['messages'][1]['content'];
+
+            return is_string($content) && str_contains($content, '"photos"');
+        });
+
+        // Second turn: no multimodal attempt at all — exactly one request.
+        $second = $this->actingAs($this->photographer)
+            ->postJson(route('agent-conversation.turn', $this->project), [
+                'trigger_id' => $this->createHumanTrigger('And now?'),
+            ])
+            ->assertOk();
+
+        $this->assertStringContainsString('Second turn', (string) $second->json('message.body'));
+        $this->assertSame(3, count(Http::recorded()), 'turn 1 = 400 + retry; turn 2 = single text-only request');
     }
 
     private function createHumanTrigger(string $body = 'Please review this project.'): int

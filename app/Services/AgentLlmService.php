@@ -8,6 +8,7 @@ use App\Models\Project;
 use App\Models\User;
 use App\Services\Culling\ContextAwareCullingService;
 use App\Services\Media\MediaStore;
+use Illuminate\Http\Client\Response;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -48,6 +49,15 @@ TXT;
 
     /** OpenRouter free-tier model used when AGENT_LLM_MODEL is not set. */
     private const DEFAULT_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
+
+    /**
+     * Models proven text-only in this process: the provider rejected image
+     * parts with HTTP 400. Later turns skip the doomed multimodal round-trip
+     * and go straight to evidence-JSON-only reasoning.
+     *
+     * @var array<string, true>
+     */
+    private array $textOnlyModels = [];
 
     /**
      * Why the most recent reply() returned null (null when it succeeded or
@@ -155,44 +165,63 @@ TXT;
 
         $startedAt = hrtime(true);
 
+        $visionEnabled = (bool) config('services.agent_llm.vision', true)
+            && ! isset($this->textOnlyModels[$settings['model']]);
+
         $userContent = [['type' => 'text', 'text' => $userPrompt]];
 
         // P2b — attach real thumbnails of the strongest candidate frames so
         // the model can compare actual pixels, not just labels.
-        foreach ($this->topCandidateThumbnails($project, 4) as $thumb) {
-            $userContent[] = ['type' => 'image_url', 'image_url' => [
-                'url' => 'data:image/jpeg;base64,'.base64_encode($thumb['jpeg']),
-            ]];
-            $userContent[] = ['type' => 'text', 'text' => "Image: {$thumb['filename']} (photo #{$thumb['id']})"];
+        if ($visionEnabled) {
+            foreach ($this->topCandidateThumbnails($project, 4) as $thumb) {
+                $userContent[] = ['type' => 'image_url', 'image_url' => [
+                    'url' => 'data:image/jpeg;base64,'.base64_encode($thumb['jpeg']),
+                ]];
+                $userContent[] = ['type' => 'text', 'text' => "Image: {$thumb['filename']} (photo #{$thumb['id']})"];
+            }
         }
 
+        $sentMultimodal = $visionEnabled && count($userContent) > 1;
+
+        $payload = fn (bool $withImages): array => [
+            'model' => $settings['model'],
+            'messages' => [
+                ['role' => 'system', 'content' => self::SYSTEM_PROMPT],
+                ['role' => 'user', 'content' => $withImages ? $userContent : $userPrompt],
+            ],
+            'temperature' => 0.2,
+            'max_tokens' => 700,
+        ];
+
         try {
-            $response = Http::withToken($settings['key'])
-                ->withHeaders([
-                    // OpenRouter attribution headers (optional but recommended).
-                    'HTTP-Referer' => (string) config('app.url'),
-                    'X-Title' => 'Thinking Darkroom',
-                ])
-                ->timeout((int) config('services.agent_llm.timeout', 20))
-                ->retry(1, 300)
-                ->acceptJson()
-                ->post(rtrim($settings['base_url'], '/').'/chat/completions', [
-                    'model' => $settings['model'],
-                    'messages' => [
-                        ['role' => 'system', 'content' => self::SYSTEM_PROMPT],
-                        ['role' => 'user', 'content' => config('services.agent_llm.vision', true)
-                            ? $userContent
-                            : $userPrompt],
-                    ],
-                    'temperature' => 0.2,
-                    'max_tokens' => 700,
-                ]);
+            $response = $this->postCompletion($settings, $payload(true));
         } catch (\Throwable $e) {
             Log::warning('agent_llm.request_failed', ['error' => $e->getMessage()]);
             $this->lastFailure = 'llm_request_failed';
             $this->recordFailureAudit($project, $settings, 'llm_request_failed', $startedAt);
 
             return null;
+        }
+
+        // Self-healing multimodal degradation (2026-09-04 AGY LOW): a
+        // text-only deployment model (or a photographer's BYO text model)
+        // rejects image parts with HTTP 400. Retry the SAME turn over the
+        // evidence JSON alone — reasoning survives; only the pixels are
+        // dropped. The model is remembered text-only for this process so
+        // later turns skip the doomed multimodal round-trip entirely.
+        if ($response->status() === 400 && $sentMultimodal) {
+            Log::info('agent_llm.multimodal_rejected', ['model' => $settings['model']]);
+            $this->textOnlyModels[$settings['model']] = true;
+
+            try {
+                $response = $this->postCompletion($settings, $payload(false));
+            } catch (\Throwable $e) {
+                Log::warning('agent_llm.request_failed', ['error' => $e->getMessage()]);
+                $this->lastFailure = 'llm_request_failed';
+                $this->recordFailureAudit($project, $settings, 'llm_request_failed', $startedAt);
+
+                return null;
+            }
         }
 
         $durationMs = (hrtime(true) - $startedAt) / 1_000_000;
@@ -250,6 +279,28 @@ TXT;
     public function lastFailure(): ?string
     {
         return $this->lastFailure;
+    }
+
+    /**
+     * Send one chat-completions request with the deployment's attribution
+     * headers and timeout. Centralized so the multimodal retry reuses the
+     * exact same transport configuration as the first attempt.
+     *
+     * @param  array{key: string, model: string, base_url: string, source: string}  $settings
+     * @param  array<string, mixed>  $payload
+     */
+    private function postCompletion(array $settings, array $payload): Response
+    {
+        return Http::withToken($settings['key'])
+            ->withHeaders([
+                // OpenRouter attribution headers (optional but recommended).
+                'HTTP-Referer' => (string) config('app.url'),
+                'X-Title' => 'Thinking Darkroom',
+            ])
+            ->timeout((int) config('services.agent_llm.timeout', 20))
+            ->retry(1, 300)
+            ->acceptJson()
+            ->post(rtrim($settings['base_url'], '/').'/chat/completions', $payload);
     }
 
     /**
