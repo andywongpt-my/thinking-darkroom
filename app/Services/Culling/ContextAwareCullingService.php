@@ -57,12 +57,18 @@ class ContextAwareCullingService
      * fallback provider so a batch upload always produces honest evidence
      * inside one lambda window. Callers receive ->remaining so the client
      * can loop until every photo has VLM-grade observations.
+     *
+     * $withVision = false forces the deterministic GD provider for this
+     * invocation. Agent turns use it: a turn already spends up to 20s on the
+     * reasoning LLM inside ONE synchronous web request, and VLM analysis on
+     * top of that can exceed the Vercel 60s lambda ceiling. GD rows stay
+     * VLM-upgradeable later via the client-driven analyze loop.
      */
-    public function analyzeProject(Project $project, ?User $actingUser = null): CullingAnalysisRun
+    public function analyzeProject(Project $project, ?User $actingUser = null, bool $withVision = true): CullingAnalysisRun
     {
         $created = 0;
         $refreshed = 0;
-        $vlmBudgetLeft = $this->vlmBatchLimit();
+        $vlmBudgetLeft = $withVision ? $this->vlmBatchLimit() : 0;
 
         $photos = $project->photos()->orderBy('id')->get();
 
@@ -74,7 +80,7 @@ class ContextAwareCullingService
             // it is a deterministic GD row upgradeable to VLM evidence.
             if ($existing
                 && ! $this->isUnavailableAssetObservation($existing)
-                && ! $this->isVlmUpgradeCandidate($existing, $actingUser)) {
+                && ! $this->isVlmUpgradeCandidate($existing, $actingUser, $withVision)) {
                 continue;
             }
 
@@ -129,7 +135,7 @@ class ContextAwareCullingService
             $created++;
         }
 
-        return new CullingAnalysisRun($created, $refreshed, $this->countVlmEligible($project, $vlmBudgetLeft, $actingUser));
+        return new CullingAnalysisRun($created, $refreshed, $withVision ? $this->countVlmEligible($project, $vlmBudgetLeft, $actingUser) : 0);
     }
 
     /**
@@ -146,9 +152,10 @@ class ContextAwareCullingService
      * is enabled: its evidence upgrades to external_vision_model. Only the
      * bound provider decides whether the VLM is on — no config peeking.
      */
-    private function isVlmUpgradeCandidate(PhotoObservationRecord $record, ?User $actingUser = null): bool
+    private function isVlmUpgradeCandidate(PhotoObservationRecord $record, ?User $actingUser = null, bool $withVision = true): bool
     {
-        return $record->provider === Domain::OBSERVATION_PROVIDER_DEMO
+        return $withVision
+            && $record->provider === Domain::OBSERVATION_PROVIDER_DEMO
             && $this->provider instanceof VlmPhotoAnalysisProvider
             && $this->vlmSettingsAvailableFor($actingUser);
     }

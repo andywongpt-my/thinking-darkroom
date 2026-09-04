@@ -52,7 +52,11 @@ return [
     'agent_llm' => [
         'base_url' => env('AGENT_LLM_BASE_URL', 'https://openrouter.ai/api/v1'),
         'key' => env('AGENT_LLM_API_KEY'),
-        'model' => env('AGENT_LLM_MODEL'),
+        // Default keeps the service enabled with the OpenRouter free-tier
+        // model when only a key is configured — a model-less key previously
+        // disabled reasoning entirely (AgentLlmService::DEFAULT_MODEL was
+        // unreachable dead code).
+        'model' => env('AGENT_LLM_MODEL', 'meta-llama/llama-3.3-70b-instruct:free'),
         'timeout' => (int) env('AGENT_LLM_TIMEOUT', 20),
         // Multimodal agent turns: when true and the bound model supports
         // vision, the agent LLM also SEES thumbnails of the top candidate

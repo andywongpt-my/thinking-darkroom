@@ -150,7 +150,11 @@ export default function UpdateAiSettingsForm({ className = '' }: { className?: s
                         className="mt-1 block w-full"
                         value={data.ai_base_url}
                         onChange={(e) => setData('ai_base_url', e.target.value)}
-                        placeholder="https://openrouter.ai/api/v1"
+                        placeholder={
+                            data.ai_provider && aiSettings?.providers?.[data.ai_provider]
+                                ? aiSettings.providers[data.ai_provider]
+                                : 'https://openrouter.ai/api/v1'
+                        }
                         autoComplete="off"
                     />
 

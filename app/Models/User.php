@@ -88,8 +88,16 @@ class User extends Authenticatable
         $key = $this->aiApiKey()
             ?? (string) (config('services.vlm.key') ?: '');
 
+        // Model precedence: explicit user override → provider preset default
+        // (when the photographer selected a provider) → deployment env →
+        // OpenRouter default. Env goes LAST for models: services.vlm.model
+        // describes the ENV deployment's model, so an env Gemini default
+        // must never be sent to a provider the photographer picked (an
+        // NVIDIA NIM endpoint rejects it with "model not found").
         $model = (string) ($this->ai_model ?: '')
-            ?: (string) (config('services.vlm.model') ?: self::AI_PROVIDER_DEFAULT_MODELS[$provider]);
+            ?: ($this->ai_provider !== null
+                ? self::AI_PROVIDER_DEFAULT_MODELS[$provider]
+                : (string) (config('services.vlm.model') ?: self::AI_PROVIDER_DEFAULT_MODELS[$provider]));
 
         // Base URL precedence: explicit user override → provider preset →
         // deployment env (self-hosted gateways) → OpenRouter preset. The env

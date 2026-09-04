@@ -49,6 +49,14 @@ TXT;
     /** OpenRouter free-tier model used when AGENT_LLM_MODEL is not set. */
     private const DEFAULT_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
 
+    /**
+     * Why the most recent reply() returned null (null when it succeeded or
+     * the service was simply disabled). Lets the turn composer tell the
+     * photographer WHY they are reading a deterministic summary instead of
+     * AI reasoning — a silently swallowed provider failure hides broken keys.
+     */
+    private ?string $lastFailure = null;
+
     public function __construct(
         private readonly ContextAwareCullingService $culling,
         private readonly ToolCallAuditService $audit,
@@ -132,9 +140,12 @@ TXT;
      */
     public function reply(Project $project, string $message, array $summary, ?string $directionQuery, ?User $actingUser = null): ?string
     {
+        $this->lastFailure = null;
         $settings = $this->settingsFor($actingUser);
 
         if ($settings === null) {
+            $this->lastFailure = 'llm_not_configured';
+
             return null;
         }
 
@@ -178,6 +189,8 @@ TXT;
                 ]);
         } catch (\Throwable $e) {
             Log::warning('agent_llm.request_failed', ['error' => $e->getMessage()]);
+            $this->lastFailure = 'llm_request_failed';
+            $this->recordFailureAudit($project, $settings, 'llm_request_failed', $startedAt);
 
             return null;
         }
@@ -186,6 +199,8 @@ TXT;
 
         if ($response->failed()) {
             Log::warning('agent_llm.http_error', ['status' => $response->status()]);
+            $this->lastFailure = 'llm_http_'.$response->status();
+            $this->recordFailureAudit($project, $settings, $this->lastFailure, $startedAt);
 
             return null;
         }
@@ -194,6 +209,9 @@ TXT;
         $content = trim($content);
 
         if ($content === '') {
+            $this->lastFailure = 'llm_empty_reply';
+            $this->recordFailureAudit($project, $settings, 'llm_empty_reply', $startedAt);
+
             return null;
         }
 
@@ -222,6 +240,44 @@ TXT;
         );
 
         return $content;
+    }
+
+    /**
+     * Why the most recent reply() returned null (null on success or when the
+     * service was never configured). AgentTurnService appends this to the
+     * deterministic fallback reply so a broken BYO key is never silent.
+     */
+    public function lastFailure(): ?string
+    {
+        return $this->lastFailure;
+    }
+
+    /**
+     * Record a FAILED reasoning attempt in the audit ledger. Mirrors the
+     * success-path llm_reasoning entry with RESULT_ERROR so judges see that
+     * reasoning was ATTEMPTED and why it produced no output — a silent
+     * provider failure would otherwise look like "the agent chose not to".
+     *
+     * @param  array{key: string, model: string, base_url: string, source: string}  $settings
+     */
+    private function recordFailureAudit(Project $project, array $settings, string $reason, int $startedAt): void
+    {
+        $durationMs = (hrtime(true) - $startedAt) / 1_000_000;
+
+        $this->audit->record(
+            $this->request,
+            $project,
+            $this->agentMember($project),
+            'llm_reasoning',
+            Domain::AUTHORITY_ANALYZE,
+            [
+                'model' => $settings['model'],
+                'settings_source' => $settings['source'],
+            ],
+            ['failure' => $reason],
+            Domain::RESULT_ERROR,
+            $durationMs,
+        );
     }
 
     /**

@@ -9,7 +9,9 @@ use App\Models\Project;
 use App\Models\User;
 use App\Services\Culling\ContextAwareCullingService;
 use App\Services\Qa\ConsistencyQaService;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Ramsey\Uuid\Uuid;
 
 /**
@@ -55,6 +57,29 @@ class AgentTurnService
             return $this->skipped('non_human_trigger');
         }
 
+        // Serialize turns per trigger: without a lock, two concurrent POSTs
+        // for the same trigger both pass the idempotency lookup before either
+        // persists, creating duplicate cull proposals and duplicate audit
+        // records. The lock owner itself re-checks nothing — the deterministic
+        // reply idempotency below is what makes the second execution a no-op
+        // once the first has persisted its reply.
+        try {
+            $lockWait = max(0, (int) config('services.agent_turn.lock_wait', 5));
+
+            return Cache::lock(
+                'agent-turn:'.$project->id.':'.$trigger->id,
+                30,
+            )->block($lockWait, fn () => $this->runLocked($project, $trigger));
+        } catch (LockTimeoutException) {
+            // Another request is already answering this exact trigger; its
+            // reply lands in the conversation within seconds. The panel's
+            // 8s polling will surface it — no duplicate work needed here.
+            return $this->skipped('another_turn_in_progress');
+        }
+    }
+
+    private function runLocked(Project $project, AgentConversationMessage $trigger): array
+    {
         // The idempotency key must be a valid UUID: the column is a Postgres
         // uuid type and any non-UUID literal makes the dedup lookup fail with
         // SQLSTATE 22P02 before a reply can be persisted. A name-based UUIDv5
@@ -90,7 +115,16 @@ class AgentTurnService
         $summary = $this->workspaceSummary($project);
 
         if ($summary['observations'] === 0 && $summary['photos'] > 0) {
-            $this->culling->analyzeProject($project, $trigger->user_id !== null ? User::find($trigger->user_id) : null);
+            // withVision=false: a turn is ONE synchronous web request that
+            // still has to fit the 20s reasoning-LLM call inside Vercel's 60s
+            // lambda ceiling. VLM analysis (25s per photo, sequential) on top
+            // of it can blow the budget — the turn analyses deterministic GD
+            // only, and rows stay VLM-upgradeable via the client analyze loop.
+            $this->culling->analyzeProject(
+                $project,
+                $trigger->user_id !== null ? User::find($trigger->user_id) : null,
+                withVision: false,
+            );
         }
 
         // QA is an ANALYZE-stage persistence operation. It records findings,
@@ -128,13 +162,16 @@ class AgentTurnService
             $reply = $this->llm->reply($project, (string) $trigger->body, $summary, $intent['direction_query'], $actingUser);
 
             if ($reply === null) {
-                $reply = $this->composeKeeperReply($summary, $recommendations, $intent, $proposalId);
+                $reply = $this->withLlmFailureNote(
+                    $this->composeKeeperReply($summary, $recommendations, $intent, $proposalId),
+                    $actingUser,
+                );
             } elseif ($proposalId !== null) {
                 $reply .= "\nA cull proposal (#".$proposalId.') is waiting for your approval in the Proposals panel.';
             }
         } else {
             $reply = $this->llm->reply($project, (string) $trigger->body, $summary, $intent['direction_query'], $actingUser)
-                ?? $this->composeReply($summary);
+                ?? $this->withLlmFailureNote($this->composeReply($summary), $actingUser);
         }
 
         $persisted = $this->conversation->send(
@@ -168,6 +205,31 @@ class AgentTurnService
         return [
             'message' => $persisted['message'],
         ];
+    }
+
+    /**
+     * Append an honest fallback note when LLM reasoning was ATTEMPTED but
+     * failed (bad key, provider 4xx/5xx, timeout, empty reply). Without it a
+     * broken BYO key silently degrades to the deterministic composer and the
+     * photographer never learns their key was rejected. Only fires when the
+     * acting photographer actually carries settings — a deployment with no
+     * LLM configured at all keeps its original copy.
+     */
+    private function withLlmFailureNote(string $reply, ?User $actingUser): string
+    {
+        if ($actingUser === null || $actingUser->aiApiKey() === null) {
+            return $reply;
+        }
+
+        $failure = $this->llm->lastFailure();
+
+        if ($failure === null) {
+            return $reply;
+        }
+
+        return $reply."\n\n[Note: your custom AI provider could not be reached (".
+            str_replace('_', ' ', $failure).
+            '). This reply came from the built-in deterministic summary — check your API key in Profile settings.]';
     }
 
     /**
