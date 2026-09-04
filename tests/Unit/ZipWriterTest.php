@@ -100,11 +100,17 @@ class ZipWriterTest extends TestCase
         $bytes = $zip->toBytes();
 
         $this->assertSame("PK\x05\x06", substr($bytes, -22, 4));
-        $tmp = sys_get_temp_dir().'/'.uniqid('zipw').'.zip';
-        file_put_contents($tmp, $bytes);
-        $phar = new \PharData($tmp);
-        $this->assertCount(0, iterator_to_array(new \RecursiveIteratorIterator($phar)));
-        unlink($tmp);
+        // Phar cannot read an empty ZIP (it treats any file without
+        // __HALT_COMPILER as a plain phar), so validate the 22-byte EOCD
+        // record field-by-field instead: sig, disk counts, entry counts, size.
+        $eocd = unpack('Vsig/vdisk/vcddisk/vcount/vtotal/Vsize/Voffset/vcomment', substr($bytes, -22));
+        $this->assertSame(0x06054B50, $eocd['sig']);
+        $this->assertSame(0, $eocd['count']);
+        $this->assertSame(0, $eocd['total']);
+        $this->assertSame(0, $eocd['size']);
+        $this->assertSame(0, $eocd['offset']);
+        // The EOCD is the whole archive: offset 0 means no local data at all.
+        $this->assertSame(22, strlen($bytes));
     }
 
     public function test_count_reflects_added_entries(): void

@@ -22,11 +22,11 @@ namespace App\Services\Reports;
  */
 final class ZipWriter
 {
-    private const LOCAL_FILE_HEADER_SIG = 0x04034b50;
+    private const LOCAL_FILE_HEADER_SIG = 0x04034B50;
 
-    private const CENTRAL_DIR_HEADER_SIG = 0x02014b50;
+    private const CENTRAL_DIR_HEADER_SIG = 0x02014B50;
 
-    private const END_OF_CENTRAL_DIR_SIG = 0x06054b50;
+    private const END_OF_CENTRAL_DIR_SIG = 0x06054B50;
 
     private const VERSION_NEEDED = 20; // 2.0 — folders + stored files
 

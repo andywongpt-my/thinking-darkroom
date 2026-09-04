@@ -88,6 +88,13 @@ class ProjectReportTest extends TestCase
         $heroPhoto = $selected[0];
         $secondPhoto = $selected[1];
 
+        // Real derivative bytes on the test public disk so zip packaging can
+        // read them back byte-for-byte.
+        $heroBytes = "\xFF\xD8\xFF\xE0\x00\x10JFIF".str_repeat('hero-derivative-bytes', 50)."\xFF\xD9";
+        $secondBytes = "\xFF\xD8\xFF\xE0\x00\x10JFIF".str_repeat('second-derivative-bytes', 50)."\xFF\xD9";
+        Storage::disk('public')->put('project-1/derivatives/IMG_HERO_v1.jpg', $heroBytes);
+        Storage::disk('public')->put('project-1/derivatives/IMG_SECOND_v0.jpg', $secondBytes);
+
         PhotoDerivative::create([
             'project_id' => $project->id,
             'photo_id' => $heroPhoto->id,
@@ -196,14 +203,14 @@ class ProjectReportTest extends TestCase
 
         $response->assertOk();
         $this->assertSame('application/zip', $response->headers->get('Content-Type'));
-        $this->assertSame('attachment', substr((string) $response->headers->get('Content-Disposition'), 0, 11));
+        $this->assertStringStartsWith('attachment;', (string) $response->headers->get('Content-Disposition'));
 
         $bytes = $response->getContent();
         $this->assertSame("PK\x03\x04", substr((string) $bytes, 0, 4));
 
         // Parse the archive with PharData (the strongest available oracle —
         // php-zip is absent on this host) and verify entries byte-for-byte.
-        $tmp = tempnam(sys_get_temp_dir(), 'dlv');
+        $tmp = sys_get_temp_dir().'/'.uniqid('dlv').'.zip';
         file_put_contents($tmp, $bytes);
         $phar = new \PharData($tmp);
         $names = [];
@@ -249,7 +256,7 @@ class ProjectReportTest extends TestCase
 
         $this->assertSame("PK\x03\x04", substr((string) $bytes, 0, 4));
 
-        $tmp = tempnam(sys_get_temp_dir(), 'dlv');
+        $tmp = sys_get_temp_dir().'/'.uniqid('dlv').'.zip';
         file_put_contents($tmp, $bytes);
         $phar = new \PharData($tmp);
         $names = [];
