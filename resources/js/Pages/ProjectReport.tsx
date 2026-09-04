@@ -244,15 +244,13 @@ export default function ProjectReport() {
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
-                        {report.counts.derivatives_active > 0 ? (
-                            <a
-                                href={route('projects.report.deliverables-zip', projectId)}
-                                data-testid="report-download-zip"
-                                className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-400 hover:bg-emerald-500/20"
-                            >
-                                Download deliverables (.zip)
-                            </a>
-                        ) : null}
+                        <a
+                            href={route('projects.report.deliverables-zip', projectId)}
+                            data-testid="report-download-zip"
+                            className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs font-semibold text-zinc-200 hover:bg-zinc-800"
+                        >
+                            Export package (.zip)
+                        </a>
                         <button
                             type="button"
                             data-testid="report-export-md"

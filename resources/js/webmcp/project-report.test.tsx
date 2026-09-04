@@ -205,7 +205,11 @@ describe('ProjectReport page', () => {
         // source and rendered images both render
         expect(html).toContain('src="https://blob.example/src.jpg"');
         expect(html).toContain('src="https://blob.example/retouched.jpg"');
-        // export affordance + back-to-workspace link (route() mock: workspace.show → /projects/{id})
+        // export affordances + back-to-workspace link (route() mock: workspace.show → /projects/{id})
+        // zip is ALWAYS offered — even with 0 active deliverables the archive
+        // still carries the SESSION-REPORT.md audit trail (honest empty zip).
+        expect(html).toContain('data-testid="report-download-zip"');
+        expect(html).toContain('Export package (.zip)');
         expect(html).toContain('data-testid="report-export-md"');
         expect(html).toContain('href="/projects/7"');
     });
@@ -239,6 +243,9 @@ describe('ProjectReport page', () => {
         expect(html).toContain('No decisions recorded.');
         expect(html).toContain('No QA findings.');
         expect(html).toContain('No derivatives were executed in this session');
+        // zip export stays available even with nothing executed — the
+        // archive still contains the SESSION-REPORT.md audit trail.
+        expect(html).toContain('data-testid="report-download-zip"');
     });
 
     it('buildReportMarkdown mirrors the server payload as a portable artifact', () => {
