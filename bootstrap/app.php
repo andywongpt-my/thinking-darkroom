@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\AgentOrUser;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\TouchAgentPresence;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -49,6 +50,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // WebMCP agent tool endpoints: authenticated session user OR agent token.
         $middleware->alias([
             'webmcp.agent-or-user' => AgentOrUser::class,
+            'webmcp.touch-presence' => TouchAgentPresence::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

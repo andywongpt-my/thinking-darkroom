@@ -208,4 +208,93 @@ class AgentPresenceTest extends TestCase
 
         return $page;
     }
+
+    /* ------------------------------------------------------------------ */
+    /*  Tool-call presence touch (Option A) */
+    /* ------------------------------------------------------------------ */
+
+    public function test_agent_tool_call_touches_presence_and_reads_back_online(): void
+    {
+        $agent = User::factory()->agent()->create(['name' => 'Darkroom Agent']);
+        $this->project->members()->attach($agent->id, ['role' => Domain::ROLE_AGENT]);
+
+        $touchedAt = CarbonImmutable::parse('2026-09-04 10:00:00');
+        CarbonImmutable::setTestNow($touchedAt);
+        try {
+            // Any WebMCP tool endpoint refreshes presence as a side effect.
+            $this->actingAs($agent)
+                ->getJson(route('api.webmcp.context', [$this->project->id]))
+                ->assertOk();
+
+            $this->assertDatabaseHas('agent_presences', [
+                'project_id' => $this->project->id,
+                'user_id' => $agent->id,
+            ]);
+
+            // The photographer's dashboard/strip sees the agent online.
+            $this->actingAs($this->photographer)
+                ->getJson(route('api.presence.show', [$this->project->id]))
+                ->assertOk()
+                ->assertJsonPath('online', true)
+                ->assertJsonPath('agents.0.id', $agent->id)
+                ->assertJsonPath('agents.0.status', 'online')
+                ->assertJsonPath('agents.0.last_seen_at', $touchedAt->toISOString());
+        } finally {
+            CarbonImmutable::setTestNow();
+        }
+    }
+
+    public function test_agent_tool_call_touch_does_not_create_activity_ledger_rows(): void
+    {
+        $agent = User::factory()->agent()->create(['name' => 'Darkroom Agent']);
+        $this->project->members()->attach($agent->id, ['role' => Domain::ROLE_AGENT]);
+
+        $this->actingAs($agent)
+            ->getJson(route('api.webmcp.context', [$this->project->id]))
+            ->assertOk();
+
+        // Liveness is operational state, exactly like the explicit heartbeat:
+        // it must never surface as creative-tool activity.
+        $this->assertDatabaseCount('agent_tool_calls', 1);
+    }
+
+    public function test_repeated_tool_calls_leave_one_presence_row_per_agent(): void
+    {
+        $agent = User::factory()->agent()->create(['name' => 'Darkroom Agent']);
+        $this->project->members()->attach($agent->id, ['role' => Domain::ROLE_AGENT]);
+
+        $this->actingAs($agent)
+            ->getJson(route('api.webmcp.context', [$this->project->id]))
+            ->assertOk();
+        $this->actingAs($agent)
+            ->getJson(route('api.webmcp.decisions.index', [$this->project->id]))
+            ->assertOk();
+
+        $this->assertDatabaseCount('agent_presences', 1);
+    }
+
+    public function test_tool_calls_by_humans_or_non_member_agents_do_not_touch_presence(): void
+    {
+        $viewer = User::factory()->create(['name' => 'Viewer']);
+        $roleAgentHuman = User::factory()->create(['name' => 'Human Agent Role', 'is_agent' => false]);
+        $outsiderAgent = User::factory()->agent()->create(['name' => 'Outsider Agent']);
+        $this->project->members()->attach([
+            $viewer->id => ['role' => Domain::ROLE_VIEWER],
+            $roleAgentHuman->id => ['role' => Domain::ROLE_AGENT],
+        ]);
+
+        foreach ([$this->photographer, $viewer, $roleAgentHuman] as $member) {
+            $this->actingAs($member)
+                ->getJson(route('api.webmcp.context', [$this->project->id]))
+                ->assertOk();
+        }
+
+        // Outsider agent: not a member of this project — tool call must 403
+        // AND must not write a presence row.
+        $this->actingAs($outsiderAgent)
+            ->getJson(route('api.webmcp.context', [$this->project->id]))
+            ->assertForbidden();
+
+        $this->assertDatabaseCount('agent_presences', 0);
+    }
 }
