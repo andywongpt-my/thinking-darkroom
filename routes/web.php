@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AgentActivityController;
 use App\Http\Controllers\AgentConversationController;
 use App\Http\Controllers\AgentConversationTurnController;
 use App\Http\Controllers\AiSettingsController;
@@ -12,6 +13,7 @@ use App\Http\Controllers\PhotographerReviewController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectAgentController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\ProjectReportController;
 use App\Http\Controllers\QaFindingReviewController;
 use App\Http\Controllers\WebmcpDiagnosticsController;
 use App\Http\Controllers\WorkspacePageController;
@@ -43,6 +45,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // never approve, execute, or bypass the photographer authority boundary.
     Route::get('/projects/{project}/agent-conversation/messages', [AgentConversationController::class, 'index'])
         ->name('agent-conversation.index');
+    Route::get('/projects/{project}/agent-activity', [AgentActivityController::class, 'index'])
+        ->name('agent-activity.index');
     Route::post('/projects/{project}/agent-conversation/messages', [AgentConversationController::class, 'store'])
         ->middleware('throttle:30,1')
         ->name('agent-conversation.store');
@@ -114,4 +118,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('/profile/ai-settings', [AiSettingsController::class, 'update'])
         ->middleware('throttle:10,1')
         ->name('profile.ai-settings.update');
+
+    // Session Report — post-execution handback: human-readable summary of
+    // proposals → decisions → executed deliverables, plus a Markdown export.
+    // HUMAN-ONLY (controller 403s agents); never a WebMCP tool.
+    // [meow-session-report]
+    Route::get('/projects/{project}/report', [ProjectReportController::class, 'show'])
+        ->name('projects.report.show');
+    Route::get('/projects/{project}/report/markdown', [ProjectReportController::class, 'markdown'])
+        ->name('projects.report.markdown');
 });

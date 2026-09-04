@@ -179,6 +179,7 @@ class AgentTurnService
             $agent,
             $reply,
             $clientMessageId,
+            AgentConversationMessage::ORIGIN_AGENT_TURN,
         );
         $durationMs = (hrtime(true) - $startedAt) / 1_000_000;
 

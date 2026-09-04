@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Domain\Domain;
 use App\Http\Requests\StoreAgentConversationMessageRequest;
+use App\Models\AgentConversationMessage;
 use App\Models\Project;
 use App\Models\User;
 use App\Services\AgentConversationService;
@@ -47,6 +48,7 @@ class AgentConversationController extends Controller
             $user,
             $request->validated('body'),
             $request->validated('client_message_id'),
+            $user->isAgent() ? AgentConversationMessage::ORIGIN_EXTERNAL : null,
         );
 
         // An agent account posting through this web route (allowed by

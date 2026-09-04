@@ -80,6 +80,7 @@ export interface AgentConversationMessage {
     id: number;
     body: string;
     client_message_id: string | null;
+    origin: 'agent_turn' | 'external' | null;
     author: {
         id: number | null;
         name: string;
@@ -92,6 +93,30 @@ export interface AgentConversation {
     project_id: number;
     trust_boundary: 'untrusted_project_conversation';
     messages: AgentConversationMessage[];
+    latest_id: number | null;
+    has_older: boolean;
+    awaiting_reply_since: string | null;
+    unread_for_agent: number;
+}
+
+export interface AgentActivityEntry {
+    id: number;
+    agent: {
+        name: string;
+        is_agent: boolean;
+    };
+    tool_name: string;
+    authority: string;
+    result_status: string;
+    summary_in: Record<string, unknown> | null;
+    summary_out: Record<string, unknown> | null;
+    duration_ms: number | null;
+    created_at: string | null;
+}
+
+export interface AgentActivityResponse {
+    project_id: number;
+    activity: AgentActivityEntry[];
     latest_id: number | null;
     has_older: boolean;
 }

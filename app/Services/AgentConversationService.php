@@ -6,6 +6,7 @@ use App\Models\AgentConversationMessage;
 use App\Models\Project;
 use App\Models\User;
 use Illuminate\Database\QueryException;
+use InvalidArgumentException;
 
 class AgentConversationService
 {
@@ -17,7 +18,7 @@ class AgentConversationService
      * Return a bounded, chronological project conversation. Conversation text
      * is user-authored data and must never be treated as trusted instructions.
      *
-     * @return array{project_id: int, trust_boundary: string, messages: array<int, array<string, mixed>>, latest_id: int|null, has_older: bool}
+     * @return array{project_id: int, trust_boundary: string, messages: array<int, array<string, mixed>>, latest_id: int|null, has_older: bool, awaiting_reply_since: string|null, unread_for_agent: int}
      */
     public function forProject(Project $project, ?int $afterId = null, int $limit = self::DEFAULT_LIMIT, ?int $beforeId = null): array
     {
@@ -57,6 +58,18 @@ class AgentConversationService
                 && $project->agentConversationMessages()->where('id', '<', $oldestId)->exists();
         }
 
+        $latestHumanMessage = $project->agentConversationMessages()
+            ->where('author_kind', AgentConversationMessage::AUTHOR_HUMAN)
+            ->latest('id')
+            ->first();
+        $lastAgentMessageId = $project->agentConversationMessages()
+            ->where('author_kind', AgentConversationMessage::AUTHOR_AGENT)
+            ->max('id');
+        $unreadForAgent = $project->agentConversationMessages()
+            ->where('author_kind', AgentConversationMessage::AUTHOR_HUMAN)
+            ->where('id', '>', $lastAgentMessageId ?? 0)
+            ->count();
+
         return [
             'project_id' => $project->id,
             'trust_boundary' => 'untrusted_project_conversation',
@@ -66,6 +79,8 @@ class AgentConversationService
                 ->all(),
             'latest_id' => $messages->last()?->id,
             'has_older' => $hasOlder,
+            'awaiting_reply_since' => $latestHumanMessage?->created_at?->toISOString(),
+            'unread_for_agent' => $unreadForAgent,
         ];
     }
 
@@ -81,7 +96,21 @@ class AgentConversationService
         User $author,
         string $body,
         ?string $clientMessageId = null,
+        ?string $origin = null,
     ): array {
+        if ($author->isAgent()) {
+            $origin ??= AgentConversationMessage::ORIGIN_EXTERNAL;
+
+            if (! in_array($origin, [
+                AgentConversationMessage::ORIGIN_AGENT_TURN,
+                AgentConversationMessage::ORIGIN_EXTERNAL,
+            ], true)) {
+                throw new InvalidArgumentException('Unsupported agent conversation origin.');
+            }
+        } else {
+            $origin = null;
+        }
+
         $attributes = [
             'project_id' => $project->id,
             'user_id' => $author->id,
@@ -90,6 +119,7 @@ class AgentConversationService
                 : AgentConversationMessage::AUTHOR_HUMAN,
             'body' => $body,
             'client_message_id' => $clientMessageId,
+            'origin' => $origin,
         ];
 
         $deduplicated = false;
@@ -139,6 +169,7 @@ class AgentConversationService
             'id' => $message->id,
             'body' => $message->body,
             'client_message_id' => $message->client_message_id,
+            'origin' => $message->origin,
             'author' => [
                 'id' => $message->author?->id,
                 'name' => $message->author?->name ?? 'Unknown member',

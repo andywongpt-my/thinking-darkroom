@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Webmcp;
 use App\Domain\Domain;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreAgentConversationMessageRequest;
+use App\Models\AgentConversationMessage;
 use App\Models\Project;
 use App\Models\User;
 use App\Services\AgentConversationService;
@@ -62,6 +63,7 @@ class AgentConversationController extends Controller
             $user,
             $request->validated('body'),
             $request->validated('client_message_id'),
+            AgentConversationMessage::ORIGIN_EXTERNAL,
         );
 
         $this->audit->record(

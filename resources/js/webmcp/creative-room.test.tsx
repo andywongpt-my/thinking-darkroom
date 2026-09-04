@@ -229,6 +229,7 @@ describe('Sprint 2 — Creative Room page (Task 10)', () => {
                     id: 42,
                     body: 'The agent has context.',
                     client_message_id: null,
+                    origin: null,
                     author: { id: 2, name: 'WebMCP Agent', kind: 'agent' },
                     created_at: '2026-09-02T01:00:00.000Z',
                 }],

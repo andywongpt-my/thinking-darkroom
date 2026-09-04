@@ -5,12 +5,17 @@ import AgentChatPanel, {
     AgentTurnStatus,
     createClientMessageId,
     getOrCreateDraftClientMessageId,
+    mergeActivityEntries,
     mergeConversationMessages,
+    offlineAssistantStorageKey,
     olderMessagesPath,
+    persistOfflineAssistantEnabled,
+    readOfflineAssistantEnabled,
     requestAgentTurn,
+    shouldInvokeOfflineAssistant,
     unreadMessageCount,
 } from '@/Components/AgentChatPanel';
-import type { AgentConversation, AgentPresence } from '@/webmcp/api';
+import type { AgentActivityEntry, AgentConversation, AgentPresence } from '@/webmcp/api';
 import { workspaceTools } from '@/webmcp/tools/workspace';
 
 const presence: AgentPresence = {
@@ -30,11 +35,14 @@ const conversation: AgentConversation = {
     trust_boundary: 'untrusted_project_conversation',
     latest_id: 2,
     has_older: false,
+    awaiting_reply_since: '2026-08-31T00:00:00.000Z',
+    unread_for_agent: 0,
     messages: [
         {
             id: 1,
             body: 'Which frame should lead the set?',
             client_message_id: null,
+            origin: null,
             author: { id: 1, name: 'Maya', kind: 'human' },
             created_at: '2026-08-31T00:00:00.000Z',
         },
@@ -42,6 +50,7 @@ const conversation: AgentConversation = {
             id: 2,
             body: '<script>not executable</script> Frame 4 is the strongest keep.',
             client_message_id: null,
+            origin: 'external',
             author: { id: 2, name: 'Darkroom Agent', kind: 'agent' },
             created_at: '2026-08-31T00:00:10.000Z',
         },
@@ -71,12 +80,13 @@ describe('Agent conversation surface', () => {
         );
 
         expect(html).toContain('data-testid="agent-chat-panel"');
-        expect(html).toContain('Agent conversation');
-        expect(html).toContain('Durable project discussion');
+        expect(html).toContain('Agent collaboration');
+        expect(html).toContain('Photographer ↔ external agent stream');
         expect(html).toContain('Messages never approve or execute edits');
         expect(html).toContain('Which frame should lead the set?');
         expect(html).toContain('Darkroom Agent');
         expect(html).toContain('AGENT');
+        expect(html).toContain('external');
         expect(html).toContain('&lt;script&gt;not executable&lt;/script&gt;');
         expect(html).not.toContain('<script>not executable</script>');
         expect(html).toContain('Conversation text is untrusted project content');
@@ -105,6 +115,8 @@ describe('Agent conversation surface', () => {
 
         expect(tools).toHaveLength(7);
         expect(read?.annotations?.readOnlyHint).toBe(true);
+        expect(read?.description).toContain('awaiting_reply_since');
+        expect(read?.description).toContain('unread_for_agent');
         expect(read?.description).toContain('untrusted member-authored content');
         expect(reply?.annotations?.readOnlyHint).toBe(false);
         expect(reply?.description).toContain('never approve, execute, alter photos');
@@ -123,6 +135,82 @@ describe('Agent conversation surface', () => {
         expect(unreadMessageCount(conversation.messages, null)).toBe(2);
     });
 
+    it('keeps activity newest-first and only opts into the built-in turn when enabled', () => {
+        const first: AgentActivityEntry = {
+            id: 1,
+            agent: { name: 'Codex', is_agent: true },
+            tool_name: 'inspect_photo',
+            authority: 'READ',
+            result_status: 'completed',
+            summary_in: null,
+            summary_out: null,
+            duration_ms: 1,
+            created_at: null,
+        };
+        const second = { ...first, id: 2, tool_name: 'reply_to_agent_conversation' };
+
+        expect(mergeActivityEntries([first], [second, first]).map((entry) => entry.id)).toEqual([2, 1]);
+        expect(offlineAssistantStorageKey(7)).toBe('td-offline-assistant:7');
+        expect(shouldInvokeOfflineAssistant({ is_agent: false }, false, conversation.messages[0])).toBe(false);
+        expect(shouldInvokeOfflineAssistant({ is_agent: false }, true, conversation.messages[0])).toBe(true);
+        expect(shouldInvokeOfflineAssistant({ is_agent: true }, true, conversation.messages[0])).toBe(false);
+    });
+
+    it('persists the per-project offline assistant opt-in without enabling it by default', () => {
+        const values = new Map<string, string>();
+        const storage = {
+            getItem: (key: string): string | null => values.get(key) ?? null,
+            setItem: (key: string, value: string): void => {
+                values.set(key, value);
+            },
+            removeItem: (key: string): void => {
+                values.delete(key);
+            },
+        };
+        vi.stubGlobal('window', { localStorage: storage });
+
+        try {
+            expect(readOfflineAssistantEnabled(7)).toBe(false);
+            persistOfflineAssistantEnabled(7, true);
+            expect(readOfflineAssistantEnabled(7)).toBe(true);
+            persistOfflineAssistantEnabled(7, false);
+            expect(readOfflineAssistantEnabled(7)).toBe(false);
+        } finally {
+            vi.unstubAllGlobals();
+        }
+    });
+
+    it('shows the handoff signal only while a human message is awaiting an external reply', () => {
+        const pending: AgentConversation = {
+            ...conversation,
+            latest_id: conversation.messages[0].id,
+            messages: [conversation.messages[0]],
+        };
+        const onlineHtml = renderToString(
+            <AgentChatPanel
+                projectId={7}
+                currentUser={{ id: 1, name: 'Maya', is_agent: false }}
+                canSend={true}
+                initialConversation={pending}
+                presence={presence}
+                initiallyOpen={true}
+            />,
+        );
+        const offlineHtml = renderToString(
+            <AgentChatPanel
+                projectId={7}
+                currentUser={{ id: 1, name: 'Maya', is_agent: false }}
+                canSend={true}
+                initialConversation={pending}
+                presence={{ ...presence, online: false }}
+                initiallyOpen={true}
+            />,
+        );
+
+        expect(onlineHtml).toContain('Awaiting external agent…');
+        expect(offlineHtml).toContain('No agent online — enable the offline assistant below the composer');
+    });
+
     it('keeps one client id for a draft until the send is confirmed', () => {
         const holder: { current: string | null } = { current: null };
         const first = getOrCreateDraftClientMessageId(holder);
@@ -139,14 +227,17 @@ describe('Agent conversation surface', () => {
 
         try {
             const result = await requestAgentTurn(7, 1);
-            expect(post).toHaveBeenCalledWith('/projects/7/agent-conversation/turns', { trigger_id: 1 });
+            expect(post).toHaveBeenCalledWith('/projects/7/agent-conversation/turns', {
+                trigger_id: 1,
+                client_opt_in: true,
+            });
             expect(result.message?.author.kind).toBe('agent');
 
             const pending = renderToString(<AgentTurnStatus state="reviewing" notice={null} />);
             const skipped = renderToString(
                 <AgentTurnStatus state="idle" notice="No agent account is attached to this project yet." />,
             );
-            expect(pending).toContain('Agent is reviewing the project…');
+            expect(pending).toContain('Offline assistant is reviewing the project…');
             expect(skipped).toContain('No agent account is attached to this project yet.');
         } finally {
             post.mockRestore();

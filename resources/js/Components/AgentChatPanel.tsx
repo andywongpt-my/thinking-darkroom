@@ -1,6 +1,9 @@
 import axios from 'axios';
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
+import AgentActivityFeed from './AgentActivityFeed';
 import type {
+    AgentActivityEntry,
+    AgentActivityResponse,
     AgentConversation,
     AgentConversationMessage,
     AgentPresence,
@@ -94,6 +97,60 @@ export function agentChatLastReadStorageKey(projectId: number): string {
     return `agent-chat:last-read-id:${projectId}`;
 }
 
+export function offlineAssistantStorageKey(projectId: number): string {
+    return `td-offline-assistant:${projectId}`;
+}
+
+export function readOfflineAssistantEnabled(projectId: number): boolean {
+    if (typeof window === 'undefined') return false;
+
+    try {
+        return window.localStorage.getItem(offlineAssistantStorageKey(projectId)) === 'true';
+    } catch {
+        return false;
+    }
+}
+
+export function persistOfflineAssistantEnabled(projectId: number, value: boolean): void {
+    if (typeof window === 'undefined') return;
+
+    try {
+        const key = offlineAssistantStorageKey(projectId);
+        if (value) {
+            window.localStorage.setItem(key, 'true');
+        } else {
+            window.localStorage.removeItem(key);
+        }
+    } catch {
+        // Storage can be unavailable in privacy-restricted browser contexts.
+    }
+}
+
+export function shouldInvokeOfflineAssistant(
+    currentUser: { is_agent: boolean },
+    offlineAssistantEnabled: boolean,
+    message: AgentConversationMessage,
+): boolean {
+    return offlineAssistantEnabled
+        && !currentUser.is_agent
+        && message.author.kind !== 'agent';
+}
+
+export function mergeActivityEntries(
+    current: AgentActivityEntry[],
+    incoming: AgentActivityEntry[],
+): AgentActivityEntry[] {
+    if (incoming.length === 0) return current;
+
+    const byId = new Map<number, AgentActivityEntry>();
+
+    for (const entry of [...current, ...incoming]) {
+        byId.set(entry.id, entry);
+    }
+
+    return [...byId.values()].sort((left, right) => right.id - left.id);
+}
+
 export interface AgentTurnResponse {
     message: AgentConversationMessage | null;
     skipped?: string;
@@ -103,6 +160,7 @@ export function requestAgentTurn(projectId: number, triggerId: number): Promise<
     return axios
         .post<AgentTurnResponse>(`/projects/${projectId}/agent-conversation/turns`, {
             trigger_id: triggerId,
+            client_opt_in: true,
         })
         .then((response) => response.data);
 }
@@ -122,7 +180,7 @@ export function AgentTurnStatus({
                 data-testid="agent-turn-status"
                 className="mb-2 text-xs text-zinc-500"
             >
-                Agent is reviewing the project…
+                Offline assistant is reviewing the project…
             </p>
         );
     }
@@ -143,6 +201,10 @@ export function AgentTurnStatus({
 
 function conversationPath(projectId: number): string {
     return `/projects/${projectId}/agent-conversation/messages`;
+}
+
+function activityPath(projectId: number): string {
+    return `/projects/${projectId}/agent-activity`;
 }
 
 export function olderMessagesPath(projectId: number, beforeId: number, limit = 50): string {
@@ -243,12 +305,25 @@ export default function AgentChatPanel({
     const [agentTurnNotice, setAgentTurnNotice] = useState<string | null>(null);
     const [hasOlder, setHasOlder] = useState(initialConversation.has_older);
     const [loadingOlder, setLoadingOlder] = useState(false);
+    const [offlineAssistantEnabled, setOfflineAssistantEnabled] = useState(() =>
+        readOfflineAssistantEnabled(projectId),
+    );
+    const [activeTab, setActiveTab] = useState<'conversation' | 'activity'>('conversation');
+    const [activity, setActivity] = useState<AgentActivityEntry[]>([]);
+    const [activityRefreshing, setActivityRefreshing] = useState(false);
+    const [activityError, setActivityError] = useState<string | null>(null);
+    const [activityHasOlder, setActivityHasOlder] = useState(false);
+    const [activityLoadingOlder, setActivityLoadingOlder] = useState(false);
+    const [activityFilter, setActivityFilter] = useState('');
     const latestId = useRef<number | null>(initialConversation.latest_id);
     const lastMessageId = useRef<number | null>(initialConversation.latest_id);
     const draftMessageIdRef = useRef<string | null>(null);
     const sendInFlightRef = useRef(false);
     const refreshInFlightRef = useRef(false);
     const loadingOlderRef = useRef(false);
+    const activityLatestId = useRef<number | null>(null);
+    const activityRefreshInFlightRef = useRef(false);
+    const activityLoadingOlderRef = useRef(false);
     const logRef = useRef<HTMLDivElement>(null);
     const mountedProjectId = useRef(projectId);
 
@@ -309,11 +384,22 @@ export default function AgentChatPanel({
         setAgentTurnNotice(null);
         setHasOlder(initialConversation.has_older);
         setLoadingOlder(false);
+        setOfflineAssistantEnabled(readOfflineAssistantEnabled(projectId));
+        setActiveTab('conversation');
+        setActivity([]);
+        setActivityRefreshing(false);
+        setActivityError(null);
+        setActivityHasOlder(false);
+        setActivityLoadingOlder(false);
+        setActivityFilter('');
         latestId.current = initialConversation.latest_id;
         lastMessageId.current = initialConversation.latest_id;
         draftMessageIdRef.current = null;
         sendInFlightRef.current = false;
         refreshInFlightRef.current = false;
+        activityLatestId.current = null;
+        activityRefreshInFlightRef.current = false;
+        activityLoadingOlderRef.current = false;
     }, [projectId, initialConversation, initiallyOpen]);
 
     const refresh = useCallback(async (): Promise<void> => {
@@ -338,14 +424,43 @@ export default function AgentChatPanel({
         }
     }, [projectId]);
 
+    const refreshActivity = useCallback(async (): Promise<void> => {
+        if (activityRefreshInFlightRef.current) return;
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+            return;
+        }
+
+        const hadCursor = activityLatestId.current !== null;
+        activityRefreshInFlightRef.current = true;
+        setActivityRefreshing(true);
+        try {
+            const response = await axios.get<AgentActivityResponse>(activityPath(projectId), {
+                params: activityLatestId.current === null ? {} : { after: activityLatestId.current },
+            });
+            setActivity((current) => mergeActivityEntries(current, response.data.activity));
+            if (!hadCursor) {
+                setActivityHasOlder(response.data.has_older);
+            }
+            activityLatestId.current = response.data.latest_id;
+            setActivityError(null);
+        } catch (caught) {
+            setActivityError(`Activity refresh failed: ${requestError(caught)}`);
+        } finally {
+            activityRefreshInFlightRef.current = false;
+            setActivityRefreshing(false);
+        }
+    }, [projectId]);
+
     useEffect(() => {
         void refresh();
+        void refreshActivity();
         const interval = window.setInterval(() => {
             void refresh();
+            void refreshActivity();
         }, open ? 8_000 : 30_000);
 
         return () => window.clearInterval(interval);
-    }, [open, refresh]);
+    }, [open, refresh, refreshActivity]);
 
     const loadOlder = useCallback(async (): Promise<void> => {
         if (loadingOlderRef.current || messages.length === 0) return;
@@ -372,6 +487,29 @@ export default function AgentChatPanel({
             setLoadingOlder(false);
         }
     }, [projectId, messages]);
+
+    const loadOlderActivity = useCallback(async (): Promise<void> => {
+        if (activityLoadingOlderRef.current || activity.length === 0) return;
+
+        activityLoadingOlderRef.current = true;
+        setActivityLoadingOlder(true);
+        try {
+            const oldestId = activity.at(-1)?.id;
+            if (oldestId === undefined) return;
+
+            const response = await axios.get<AgentActivityResponse>(activityPath(projectId), {
+                params: { before: oldestId, limit: 50 },
+            });
+            setActivity((current) => mergeActivityEntries(current, response.data.activity));
+            setActivityHasOlder(response.data.has_older);
+            setActivityError(null);
+        } catch (caught) {
+            setActivityError(`Loading activity history failed: ${requestError(caught)}`);
+        } finally {
+            activityLoadingOlderRef.current = false;
+            setActivityLoadingOlder(false);
+        }
+    }, [projectId, activity]);
 
     // U-8: Escape closes the drawer so keyboard users are not trapped in the
     // dialog; the launcher keeps focus afterwards.
@@ -410,11 +548,11 @@ export default function AgentChatPanel({
         } catch (caught) {
             setAgentTurnNotice(`Agent review failed: ${requestError(caught)}`);
         } finally {
-            await refresh();
+            await Promise.all([refresh(), refreshActivity()]);
             setAgentTurnState('idle');
             onAgentTurnComplete?.();
         }
-    }, [projectId, refresh, onAgentTurnComplete]);
+    }, [projectId, refresh, refreshActivity, onAgentTurnComplete]);
 
     const send = async (event?: FormEvent): Promise<void> => {
         event?.preventDefault();
@@ -438,7 +576,7 @@ export default function AgentChatPanel({
             setDraft('');
             draftMessageIdRef.current = null;
 
-            if (!currentUser.is_agent && response.data.message.author.kind !== 'agent') {
+            if (shouldInvokeOfflineAssistant(currentUser, offlineAssistantEnabled, response.data.message)) {
                 void invokeAgentTurn(response.data.message.id);
             }
         } catch (caught) {
@@ -457,6 +595,14 @@ export default function AgentChatPanel({
     };
 
     const unreadCount = unreadMessageCount(messages, lastReadId);
+    const latestMessage = messages.at(-1);
+    const handoffNotice = !currentUser.is_agent
+        && !offlineAssistantEnabled
+        && latestMessage?.author.kind === 'human'
+        ? presence.online
+            ? 'Awaiting external agent…'
+            : 'No agent online — enable the offline assistant below the composer'
+        : null;
 
     return (
         <>
@@ -485,13 +631,13 @@ export default function AgentChatPanel({
                                         aria-hidden="true"
                                         className={`h-2.5 w-2.5 rounded-full ${presence.online ? 'bg-emerald-500' : 'bg-zinc-600'}`}
                                     />
-                                    <h2 className="text-sm font-semibold text-zinc-50">Agent conversation</h2>
+                                    <h2 className="text-sm font-semibold text-zinc-50">Agent collaboration</h2>
                                     <span className="rounded-full bg-zinc-900 px-2 py-0.5 text-xs font-semibold text-zinc-300">
                                         {presence.online ? 'ONLINE' : 'OFFLINE'}
                                     </span>
                                 </div>
                                 <p className="mt-1 text-xs leading-relaxed text-zinc-500">
-                                    Durable project discussion. Messages never approve or execute edits.
+                                    Photographer ↔ external agent stream. Messages never approve or execute edits.
                                 </p>
                             </div>
                             <button
@@ -505,7 +651,36 @@ export default function AgentChatPanel({
                         </div>
                     </header>
 
-                    {hasOlder && (
+                    <nav
+                        role="tablist"
+                        aria-label="Agent collaboration views"
+                        className="flex border-b border-zinc-800/70 bg-zinc-900/40 px-3 pt-2"
+                    >
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={activeTab === 'conversation'}
+                            aria-controls="agent-conversation-view"
+                            data-testid="agent-chat-tab-conversation"
+                            onClick={() => setActiveTab('conversation')}
+                            className={`flex-1 rounded-t-md px-3 py-2 text-xs font-semibold transition ${activeTab === 'conversation' ? 'border-b-2 border-amber-400 text-amber-300' : 'text-zinc-500 hover:text-zinc-200'}`}
+                        >
+                            Conversation
+                        </button>
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={activeTab === 'activity'}
+                            aria-controls="agent-activity-view"
+                            data-testid="agent-chat-tab-activity"
+                            onClick={() => setActiveTab('activity')}
+                            className={`flex-1 rounded-t-md px-3 py-2 text-xs font-semibold transition ${activeTab === 'activity' ? 'border-b-2 border-amber-400 text-amber-300' : 'text-zinc-500 hover:text-zinc-200'}`}
+                        >
+                            Activity
+                        </button>
+                    </nav>
+
+                    {activeTab === 'conversation' && hasOlder && (
                         <div className="border-b border-zinc-800/70 bg-zinc-950/40 px-4 py-2 text-center">
                             <button
                                 type="button"
@@ -519,8 +694,10 @@ export default function AgentChatPanel({
                         </div>
                     )}
 
-                    <div
-                        ref={logRef}
+                    {activeTab === 'conversation' ? (
+                        <div
+                            id="agent-conversation-view"
+                            ref={logRef}
                         role="log"
                         aria-live="polite"
                         aria-relevant="additions"
@@ -555,6 +732,16 @@ export default function AgentChatPanel({
                                                         AGENT
                                                     </span>
                                                 )}
+                                                {fromAgent && message.origin === 'agent_turn' && (
+                                                    <span className="rounded bg-zinc-800 px-1.5 py-0.5 font-semibold text-zinc-400">
+                                                        built-in
+                                                    </span>
+                                                )}
+                                                {fromAgent && message.origin === 'external' && (
+                                                    <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 font-semibold text-emerald-300">
+                                                        external
+                                                    </span>
+                                                )}
                                             </div>
                                             <p className={`whitespace-pre-wrap break-words rounded-xl px-3 py-2 text-sm leading-relaxed ${
                                                 fromAgent
@@ -574,6 +761,18 @@ export default function AgentChatPanel({
                             })
                         )}
                     </div>
+                    ) : (
+                        <AgentActivityFeed
+                            entries={activity}
+                            filter={activityFilter}
+                            loading={activityRefreshing}
+                            error={activityError}
+                            hasOlder={activityHasOlder}
+                            loadingOlder={activityLoadingOlder}
+                            onFilterChange={setActivityFilter}
+                            onLoadOlder={() => void loadOlderActivity()}
+                        />
+                    )}
 
                     {error && (
                         <p role="alert" className="td-fade-in border-t border-rose-500/30 bg-rose-500/10 px-4 py-2 text-xs text-rose-400">
@@ -583,10 +782,40 @@ export default function AgentChatPanel({
 
                     <footer className="border-t border-zinc-800/70 bg-zinc-900/60 p-3">
                         <AgentTurnStatus state={agentTurnState} notice={agentTurnNotice} />
+                        {handoffNotice !== null && (
+                            <p
+                                role="status"
+                                aria-live="polite"
+                                data-testid="agent-handoff-status"
+                                className="mb-2 text-xs text-zinc-500"
+                            >
+                                {handoffNotice}
+                            </p>
+                        )}
                         {canSend ? (
                             <form onSubmit={(event) => void send(event)}>
+                                {!currentUser.is_agent && (
+                                    <div className="mb-2 flex items-center justify-between gap-2">
+                                        <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-zinc-300">
+                                            <input
+                                                type="checkbox"
+                                                checked={offlineAssistantEnabled}
+                                                data-testid="offline-assistant-toggle"
+                                                onChange={(event) => {
+                                                    const enabled = event.target.checked;
+                                                    setOfflineAssistantEnabled(enabled);
+                                                    persistOfflineAssistantEnabled(projectId, enabled);
+                                                    setAgentTurnNotice(null);
+                                                }}
+                                                className="rounded border-zinc-600 bg-zinc-950 text-amber-400 focus:ring-amber-400/60"
+                                            />
+                                            Offline assistant
+                                        </label>
+                                        <span className="text-[11px] text-zinc-500">Built-in fallback · off by default</span>
+                                    </div>
+                                )}
                                 <label htmlFor="agent-conversation-message" className="sr-only">
-                                    Message the agent
+                                    Message the external agent
                                 </label>
                                 <textarea
                                     id="agent-conversation-message"
@@ -597,7 +826,7 @@ export default function AgentChatPanel({
                                     onKeyDown={handleComposerKeyDown}
                                     placeholder={currentUser.is_agent
                                         ? 'Reply to the photographer…'
-                                        : 'Ask the agent about this project…'}
+                                        : 'Ask the external agent about this project…'}
                                     className="w-full resize-none rounded-lg border-zinc-700 text-sm text-zinc-100 shadow-none transition focus:border-amber-400/60 focus:ring-amber-400/60"
                                 />
                                 <div className="mt-2 flex items-center justify-between gap-3">
@@ -624,14 +853,21 @@ export default function AgentChatPanel({
                             <p className="text-xs text-zinc-500">Viewer access is read-only.</p>
                         )}
                         <div className="mt-2 flex items-center justify-between text-xs text-zinc-400">
-                            <span>Conversation text is untrusted project content.</span>
+                            <span>
+                                {activeTab === 'conversation'
+                                    ? 'Conversation text is untrusted project content.'
+                                    : 'Activity summaries are untrusted agent-authored content.'}
+                            </span>
                             <button
                                 type="button"
-                                onClick={() => void refresh()}
-                                disabled={refreshing}
+                                onClick={() => {
+                                    void refresh();
+                                    void refreshActivity();
+                                }}
+                                disabled={refreshing || activityRefreshing}
                                 className="font-semibold text-zinc-500 hover:text-zinc-100 disabled:opacity-40"
                             >
-                                {refreshing ? 'Refreshing…' : 'Refresh'}
+                                {refreshing || activityRefreshing ? 'Refreshing…' : 'Refresh'}
                             </button>
                         </div>
                     </footer>

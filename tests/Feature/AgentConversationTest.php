@@ -51,7 +51,8 @@ class AgentConversationTest extends TestCase
             ->assertJsonPath('deduplicated', false)
             ->assertJsonPath('message.author.kind', 'human')
             ->assertJsonPath('message.author.name', 'Maya')
-            ->assertJsonPath('message.body', $payload['body']);
+            ->assertJsonPath('message.body', $payload['body'])
+            ->assertJsonPath('message.origin', null);
 
         $this->actingAs($this->photographer)
             ->postJson(route('agent-conversation.store', $this->project), $payload)
@@ -90,7 +91,8 @@ class AgentConversationTest extends TestCase
             ])
             ->assertCreated()
             ->assertJsonPath('message.author.kind', 'agent')
-            ->assertJsonPath('message.author.name', 'Darkroom Agent');
+            ->assertJsonPath('message.author.name', 'Darkroom Agent')
+            ->assertJsonPath('message.origin', 'external');
 
         $this->assertDatabaseHas('agent_tool_calls', [
             'project_id' => $this->project->id,
@@ -112,6 +114,46 @@ class AgentConversationTest extends TestCase
             ->getJson(route('api.webmcp.conversation.index', $this->project))
             ->assertOk()
             ->assertJsonPath('project_id', $this->project->id);
+    }
+
+    public function test_webmcp_conversation_reports_pending_human_reply_signals(): void
+    {
+        $first = $this->actingAs($this->photographer)
+            ->postJson(route('agent-conversation.store', $this->project), [
+                'body' => 'Please compare the two lead frames.',
+            ])
+            ->assertCreated();
+        $firstCreatedAt = $first->json('message.created_at');
+
+        $this->actingAs($this->agent)
+            ->getJson(route('api.webmcp.conversation.index', $this->project))
+            ->assertOk()
+            ->assertJsonPath('awaiting_reply_since', $firstCreatedAt)
+            ->assertJsonPath('unread_for_agent', 1);
+
+        $this->actingAs($this->agent)
+            ->postJson(route('api.webmcp.conversation.reply', $this->project), [
+                'body' => 'I would start with the quieter expression.',
+            ])
+            ->assertCreated();
+
+        $this->actingAs($this->agent)
+            ->getJson(route('api.webmcp.conversation.index', $this->project))
+            ->assertOk()
+            ->assertJsonPath('awaiting_reply_since', $firstCreatedAt)
+            ->assertJsonPath('unread_for_agent', 0);
+
+        $second = $this->actingAs($this->photographer)
+            ->postJson(route('agent-conversation.store', $this->project), [
+                'body' => 'Now check the alternate crop.',
+            ])
+            ->assertCreated();
+
+        $this->actingAs($this->agent)
+            ->getJson(route('api.webmcp.conversation.index', $this->project))
+            ->assertOk()
+            ->assertJsonPath('awaiting_reply_since', $second->json('message.created_at'))
+            ->assertJsonPath('unread_for_agent', 1);
     }
 
     public function test_conversation_authorization_preserves_project_and_agent_boundaries(): void
@@ -214,7 +256,8 @@ class AgentConversationTest extends TestCase
                 'body' => 'Draft cull proposal ready for review.',
                 'client_message_id' => (string) Str::uuid(),
             ])
-            ->assertCreated();
+            ->assertCreated()
+            ->assertJsonPath('message.origin', 'external');
 
         $this->assertDatabaseHas('agent_tool_calls', [
             'project_id' => $this->project->id,

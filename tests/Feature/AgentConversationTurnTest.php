@@ -38,12 +38,30 @@ class AgentConversationTurnTest extends TestCase
         ]);
     }
 
+    public function test_turn_requires_explicit_offline_assistant_opt_in(): void
+    {
+        $triggerId = $this->createHumanTrigger();
+
+        $this->actingAs($this->photographer)
+            ->postJson(route('agent-conversation.turn', $this->project), [
+                'trigger_id' => $triggerId,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath(
+                'errors.client_opt_in.0',
+                'The built-in offline assistant is opt-in; pass client_opt_in=true',
+            );
+
+        $this->assertDatabaseCount('agent_conversation_messages', 1);
+    }
+
     public function test_photographer_turn_creates_a_deterministic_agent_reply_and_audit_row(): void
     {
         $triggerId = $this->createHumanTrigger();
 
         $response = $this->actingAs($this->photographer)
             ->postJson(route('agent-conversation.turn', $this->project), [
+                'client_opt_in' => true,
                 'trigger_id' => $triggerId,
             ]);
 
@@ -52,6 +70,7 @@ class AgentConversationTurnTest extends TestCase
             ->assertJsonPath('message.author.kind', AgentConversationMessage::AUTHOR_AGENT)
             ->assertJsonPath('message.author.name', 'Darkroom Agent')
             ->assertJsonPath('message.client_message_id', $this->expectedTurnKey($triggerId))
+            ->assertJsonPath('message.origin', 'agent_turn')
             ->assertJsonMissingPath('skipped');
 
         $this->assertStringContainsString('I reviewed the project: 2 photos', $response->json('message.body'));
@@ -78,7 +97,10 @@ class AgentConversationTurnTest extends TestCase
     public function test_replaying_the_same_trigger_returns_the_same_reply_without_a_duplicate(): void
     {
         $triggerId = $this->createHumanTrigger();
-        $payload = ['trigger_id' => $triggerId];
+        $payload = [
+            'trigger_id' => $triggerId,
+            'client_opt_in' => true,
+        ];
 
         $first = $this->actingAs($this->photographer)
             ->postJson(route('agent-conversation.turn', $this->project), $payload)
@@ -136,6 +158,7 @@ class AgentConversationTurnTest extends TestCase
 
         $response = $this->actingAs($this->photographer)
             ->postJson(route('agent-conversation.turn', $project), [
+                'client_opt_in' => true,
                 'trigger_id' => $trigger->id,
             ]);
 
@@ -150,6 +173,7 @@ class AgentConversationTurnTest extends TestCase
 
         $this->actingAs($this->agent)
             ->postJson(route('agent-conversation.turn', $this->project), [
+                'client_opt_in' => true,
                 'trigger_id' => $triggerId,
             ])
             ->assertForbidden();

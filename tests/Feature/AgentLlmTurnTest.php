@@ -109,6 +109,7 @@ class AgentLlmTurnTest extends TestCase
 
         $response = $this->actingAs($this->photographer)
             ->postJson(route('agent-conversation.turn', $this->project), [
+                'client_opt_in' => true,
                 'trigger_id' => $this->createHumanTrigger('Which frames carry this burst, and why?'),
             ])
             ->assertOk();
@@ -154,6 +155,7 @@ class AgentLlmTurnTest extends TestCase
 
         $response = $this->actingAs($this->photographer)
             ->postJson(route('agent-conversation.turn', $this->project), [
+                'client_opt_in' => true,
                 'trigger_id' => $this->createHumanTrigger('Any thoughts?'),
             ])
             ->assertOk();
@@ -170,6 +172,7 @@ class AgentLlmTurnTest extends TestCase
 
         $response = $this->actingAs($this->photographer)
             ->postJson(route('agent-conversation.turn', $this->project), [
+                'client_opt_in' => true,
                 'trigger_id' => $this->createHumanTrigger('Hello?'),
             ])
             ->assertOk();
@@ -189,7 +192,10 @@ class AgentLlmTurnTest extends TestCase
         ]);
 
         $triggerId = $this->createHumanTrigger('What should I look at first?');
-        $payload = ['trigger_id' => $triggerId];
+        $payload = [
+            'trigger_id' => $triggerId,
+            'client_opt_in' => true,
+        ];
 
         $first = $this->actingAs($this->photographer)
             ->postJson(route('agent-conversation.turn', $this->project), $payload)
@@ -253,6 +259,7 @@ class AgentLlmTurnTest extends TestCase
 
         $response = $this->actingAs($this->photographer)
             ->postJson(route('agent-conversation.turn', $this->project), [
+                'client_opt_in' => true,
                 'trigger_id' => $this->createHumanTrigger('Please propose a cull for the weak frames.'),
             ])
             ->assertOk();
@@ -302,6 +309,7 @@ class AgentLlmTurnTest extends TestCase
 
         $response = $this->actingAs($this->photographer)
             ->postJson(route('agent-conversation.turn', $this->project), [
+                'client_opt_in' => true,
                 'trigger_id' => $this->createHumanTrigger('Which frames carry this burst, and why?'),
             ])
             ->assertOk();
@@ -342,6 +350,7 @@ class AgentLlmTurnTest extends TestCase
 
         $response = $this->actingAs($this->photographer)
             ->postJson(route('agent-conversation.turn', $this->project), [
+                'client_opt_in' => true,
                 'trigger_id' => $this->createHumanTrigger('Which frames stand out?'),
             ])
             ->assertOk();
@@ -383,6 +392,7 @@ class AgentLlmTurnTest extends TestCase
 
         $first = $this->actingAs($this->photographer)
             ->postJson(route('agent-conversation.turn', $this->project), [
+                'client_opt_in' => true,
                 'trigger_id' => $this->createHumanTrigger('Which frame stands out?'),
             ])
             ->assertOk();
@@ -400,6 +410,7 @@ class AgentLlmTurnTest extends TestCase
         // Second turn: no multimodal attempt at all — exactly one request.
         $second = $this->actingAs($this->photographer)
             ->postJson(route('agent-conversation.turn', $this->project), [
+                'client_opt_in' => true,
                 'trigger_id' => $this->createHumanTrigger('And now?'),
             ])
             ->assertOk();

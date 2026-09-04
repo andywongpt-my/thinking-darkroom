@@ -118,7 +118,10 @@ class AgentTurnDemoChainTest extends TestCase
             ->json('message.id');
 
         return $this->actingAs($photographer)
-            ->postJson(route('agent-conversation.turn', $project), ['trigger_id' => $triggerId]);
+            ->postJson(route('agent-conversation.turn', $project), [
+                'trigger_id' => $triggerId,
+                'client_opt_in' => true,
+            ]);
     }
 
     public function test_keeper_intent_lists_top_keepers_without_touching_selections(): void

@@ -299,6 +299,19 @@ export function CreativeRoomLink({ projectId }: { projectId: number }) {
     );
 }
 
+/** Session report — post-execution handback surface (human-only). */
+export function ReportLink({ projectId }: { projectId: number }) {
+    return (
+        <Link
+            href={route('projects.report.show', projectId)}
+            data-testid="workspace-report-link"
+            className="rounded-md border border-zinc-600 px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:bg-zinc-800"
+        >
+            Session report
+        </Link>
+    );
+}
+
 export function PhotoDeleteDialog({
     show,
     photoName,
@@ -1129,6 +1142,8 @@ export default function Workspace({
         messages: [],
         latest_id: null,
         has_older: false,
+        awaiting_reply_since: null,
+        unread_for_agent: 0,
     };
     const canPhotographerAct = permissions.can_photographer_act;
 
@@ -2185,6 +2200,7 @@ export default function Workspace({
                         <h2 className="truncate text-xl font-semibold leading-tight text-zinc-100">{project.name}</h2>
                     </div>
                     <CreativeRoomLink projectId={project.id} />
+                    <ReportLink projectId={project.id} />
                 </div>
             }
         >

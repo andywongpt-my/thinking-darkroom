@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Services\AgentTurnService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class AgentConversationTurnController extends Controller
 {
@@ -20,7 +21,15 @@ class AgentConversationTurnController extends Controller
         $actor = $request->user();
         $validated = $request->validate([
             'trigger_id' => ['required', 'integer', 'min:1'],
+            'client_opt_in' => ['sometimes', 'boolean'],
         ]);
+
+        if (($validated['client_opt_in'] ?? false) !== true) {
+            throw ValidationException::withMessages([
+                'client_opt_in' => 'The built-in offline assistant is opt-in; pass client_opt_in=true',
+            ]);
+        }
+
         $trigger = $project->agentConversationMessages()
             ->whereKey((int) $validated['trigger_id'])
             ->firstOrFail();

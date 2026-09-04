@@ -186,6 +186,8 @@ export default function CreativeRoom() {
         messages: [],
         latest_id: null,
         has_older: false,
+        awaiting_reply_since: null,
+        unread_for_agent: 0,
     };
     const presence = pagePresence ?? {
         project_id: project.id,
